@@ -3,7 +3,8 @@ import { Design, InventoryItem, RecipeItem, DesignLaborCost } from '../types';
 import { 
   Palette, Search, Plus, Filter, 
   MoreHorizontal, ArrowLeft, Save, ChevronLeft, ChevronRight,
-  List, ShieldCheck, Camera, X, Check, Trash2, Settings, Download
+  List, ShieldCheck, Camera, X, Check, Trash2, Settings, Download,
+  Grid, Sparkles, RefreshCw, Sliders
 } from 'lucide-react';
 import { commitImage } from '../utils/imageUtils';
 import { jsPDF } from 'jspdf';
@@ -36,6 +37,139 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
     processLossPercent: 2, hsnCode: '', shrinkage: '2-4%', finishedWidth: '44',
     tags: []
   });
+
+  const [variantTab, setVariantTab] = useState<'GRID' | 'LIST'>('LIST');
+  const [newValueInput, setNewValueInput] = useState<Record<string, string>>({});
+
+  // Cartesian product helper for ERPNext variant generator
+  const generateCartesianProduct = (optionsList: { id: string; name: string; values: string[] }[]) => {
+    const validOptions = (optionsList || []).filter(o => o.name && o.values && o.values.length > 0);
+    if (validOptions.length === 0) return [];
+    
+    let results: Record<string, string>[] = [{}];
+    for (let opt of validOptions) {
+      let temp: Record<string, string>[] = [];
+      for (let res of results) {
+        for (let val of opt.values) {
+          temp.push({
+            ...res,
+            [opt.name]: val
+          });
+        }
+      }
+      results = temp;
+    }
+    return results;
+  };
+
+  const handleGenerateVariants = () => {
+    const combs = generateCartesianProduct(formData.options || []);
+    if (combs.length === 0) return;
+    
+    const existingVariants = formData.variants || [];
+    const newVariants = combs.map(comb => {
+      // Find matches in existing variants list to preserve info
+      const match = existingVariants.find(ev => {
+        return Object.entries(comb).every(([k, v]) => ev.optionValues?.[k] === v);
+      });
+      
+      if (match) {
+        return match;
+      } else {
+        // Create a brand new variant
+        const titles = Object.values(comb).join(' / ');
+        const skuSuffix = Object.values(comb).join('-').replace(/\s+/g, '');
+        const parentSku = formData.sku || formData.name?.substring(0, 3).toUpperCase() || 'DES';
+        const landCost = calculatedCosting.totalLanded || 0;
+        const targetPrice = Math.round(landCost * (1 + (formData.targetMargin || 20) / 100));
+        
+        return {
+          id: `VAR-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+          title: titles,
+          sku: `${parentSku}-${skuSuffix}`.toUpperCase(),
+          openingStock: 0,
+          price: targetPrice,
+          optionValues: comb,
+          consumptionMultiplier: 1.0
+        };
+      }
+    });
+    
+    setFormData(prev => ({
+      ...prev,
+      variants: newVariants
+    }));
+  };
+
+  const updateVariantValue = (variantId: string, field: string, value: any) => {
+    setFormData(prev => {
+      const updatedVars = (prev.variants || []).map(v => {
+        if (v.id === variantId) {
+          return { ...v, [field]: value };
+        }
+        return v;
+      });
+      return { ...prev, variants: updatedVars };
+    });
+  };
+
+  const removeVariant = (variantId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      variants: (prev.variants || []).filter(v => v.id !== variantId)
+    }));
+  };
+
+  const addOption = () => {
+    const newOpt = { id: `OPT-${Date.now()}`, name: 'New Attribute', values: [] };
+    setFormData(prev => ({
+      ...prev,
+      hasVariants: true,
+      options: [...(prev.options || []), newOpt]
+    }));
+  };
+
+  const updateOptionName = (idx: number, name: string) => {
+    setFormData(prev => {
+      const opts = [...(prev.options || [])];
+      opts[idx] = { ...opts[idx], name };
+      return { ...prev, options: opts };
+    });
+  };
+
+  const addOptionValue = (optIdx: number) => {
+    const value = (newValueInput[optIdx] || '').trim();
+    if (!value) return;
+    
+    setFormData(prev => {
+      const opts = [...(prev.options || [])];
+      const vals = [...(opts[optIdx].values || [])];
+      if (!vals.includes(value)) {
+        vals.push(value);
+      }
+      opts[optIdx] = { ...opts[optIdx], values: vals };
+      return { ...prev, options: opts };
+    });
+    
+    setNewValueInput(prev => ({ ...prev, [optIdx]: '' }));
+  };
+
+  const removeOptionValue = (optIdx: number, valIdx: number) => {
+    setFormData(prev => {
+      const opts = [...(prev.options || [])];
+      const vals = (opts[optIdx].values || []).filter((_, i) => i !== valIdx);
+      opts[optIdx] = { ...opts[optIdx], values: vals };
+      return { ...prev, options: opts };
+    });
+  };
+
+  const removeOption = (idx: number) => {
+    setFormData(prev => {
+      const opts = (prev.options || []).filter((_, i) => i !== idx);
+      const stillHas = opts.length > 0;
+      return { ...prev, options: opts, hasVariants: stillHas };
+    });
+  };
 
   const filteredDesigns = useMemo(() => {
     const searchLower = (filter || '').toLowerCase();
@@ -382,12 +516,320 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
                                            <ChevronRight className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8d99a6] pointer-events-none rotate-90"/>
                                         </div>
                                     </div>
+                                    <div className="space-y-1.5 flex items-center pt-4">
+                                        <input 
+                                          type="checkbox"
+                                          id="hasVariants"
+                                          checked={formData.hasVariants || false} 
+                                          onChange={e => setFormData({...formData, hasVariants: e.target.checked})}
+                                          className="rounded border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef] bg-white w-4 h-4 cursor-pointer mr-2"
+                                        />
+                                        <label htmlFor="hasVariants" className="text-xs text-[#1c2126] font-medium cursor-pointer">Has Multiple Product Variants</label>
+                                    </div>
                                 </div>
                              </div>
                          </div>
                      </div>
 
-                     {/* Bill of Materials */}
+                     {formData.hasVariants && (
+                         <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px] space-y-6 mb-6">
+                             <div className="flex justify-between items-center border-b border-[#d1d8dd] pb-2">
+                                 <div>
+                                     <h4 className="font-semibold text-sm text-[#1c2126]">Attributes & Variants Manager</h4>
+                                     <p className="text-xs text-[#525c66] mt-0.5">Define variant attributes such as Size or Color, then click generate to establish your product matrix.</p>
+                                 </div>
+                                 <button 
+                                    type="button" 
+                                    onClick={addOption} 
+                                    className="h-7 px-3 flex items-center gap-1 bg-[#f4f5f6] hover:bg-[#e2e6ea] border border-[#d1d8dd] rounded text-xs text-[#1c2126] transition-colors"
+                                 >
+                                     <Plus className="w-3.5 h-3.5" /> Add Attribute
+                                 </button>
+                             </div>
+
+                             {/* Option attributes editor list */}
+                             <div className="space-y-4">
+                                 {(formData.options || []).map((opt, optIdx) => (
+                                     <div key={opt.id} className="p-4 bg-[#f4f5f6]/50 border border-[#d1d8dd] rounded flex flex-col md:flex-row gap-4 items-start relative group">
+                                         <button 
+                                             type="button" 
+                                             onClick={() => removeOption(optIdx)} 
+                                             className="absolute top-2.5 right-2.5 text-[#ef4444] p-1 bg-white hover:bg-[#fef2f2] border border-[#d1d8dd]/60 rounded hidden group-hover:block transition-all"
+                                             title="Delete Attribute"
+                                         >
+                                             <Trash2 className="w-3.5 h-3.5" />
+                                         </button>
+
+                                         <div className="w-[180px] space-y-1.5 shrink-0">
+                                             <label className="text-xs text-[#525c66]">Attribute Name</label>
+                                             <input 
+                                                 type="text" 
+                                                 placeholder="e.g. Size, Color, Fabric"
+                                                 value={opt.name || ''}
+                                                 onChange={e => updateOptionName(optIdx, e.target.value)}
+                                                 className="w-full px-2 py-1 bg-white border border-[#d1d8dd] rounded text-xs text-[#1c2126] font-semibold focus:outline-none focus:border-[#2490ef]"
+                                             />
+                                         </div>
+
+                                         <div className="flex-1 space-y-1.5">
+                                             <label className="text-xs text-[#525c66]">Attribute Values</label>
+                                             <div className="flex flex-wrap gap-1.5 items-center mb-2">
+                                                 {(opt.values || []).map((val, valIdx) => (
+                                                     <span key={valIdx} className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd] rounded-full text-xs font-medium">
+                                                         {val}
+                                                         <button 
+                                                             type="button" 
+                                                             onClick={() => removeOptionValue(optIdx, valIdx)} 
+                                                             className="text-[#ef4444] hover:text-[#b91c1c] ml-0.5"
+                                                         >
+                                                             <X className="w-3.5 h-3.5" />
+                                                         </button>
+                                                     </span>
+                                                 ))}
+                                                 {(opt.values || []).length === 0 && (
+                                                     <span className="text-xs text-[#8d99a6] italic">No values defined.</span>
+                                                 )}
+                                             </div>
+
+                                             <div className="flex gap-1 max-w-[280px]">
+                                                 <input 
+                                                     type="text" 
+                                                     placeholder="Add value (e.g. XL, Navy)..."
+                                                     value={newValueInput[optIdx] || ''}
+                                                     onChange={e => setNewValueInput(prev => ({ ...prev, [optIdx]: e.target.value }))}
+                                                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOptionValue(optIdx); } }}
+                                                     className="px-2 py-1 bg-white border border-[#d1d8dd] rounded text-xs flex-1 focus:outline-none focus:border-[#2490ef]"
+                                                 />
+                                                 <button 
+                                                     type="button" 
+                                                     onClick={() => addOptionValue(optIdx)} 
+                                                     className="px-2.5 py-1 bg-[#2490ef] hover:bg-[#2081d6] font-medium text-white rounded text-xs transition-colors"
+                                                 >
+                                                     Add
+                                                 </button>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 ))}
+
+                                 {(formData.options || []).length === 0 && (
+                                     <div className="py-6 border border-dashed border-[#d1d8dd] rounded flex flex-col items-center justify-center text-[#525c66] bg-[#fdfdfd]">
+                                         <Sliders className="w-6 h-6 text-[#d1d8dd] mb-2" />
+                                         <p className="text-xs">No attributes defined. Click "Add Attribute" above to construct variants.</p>
+                                     </div>
+                                 )}
+                             </div>
+
+                             {/* Generate Matrix Call to Action */}
+                             <div className="flex justify-between items-center bg-[#f0f9ff] border border-[#bae6fd] rounded p-4">
+                                 <div className="flex items-center gap-3">
+                                     <Sparkles className="w-5 h-5 text-[#0284c7] shrink-0" />
+                                     <div>
+                                         <span className="font-bold text-xs text-[#0369a1]">ERP Combinatorial Variant Engine</span>
+                                         <p className="text-[11px] text-[#0284c7] mt-0.5">Clicking "Generate Combinations" will run a fast Cartesian generator to create all unique pairs of your configured attributes.</p>
+                                     </div>
+                                 </div>
+                                 <button 
+                                     type="button" 
+                                     onClick={handleGenerateVariants}
+                                     className="h-8 px-4 flex items-center gap-1.5 bg-[#0284c7] hover:bg-[#0369a1] text-white rounded text-xs font-semibold shadow-sm transition-all"
+                                 >
+                                     <RefreshCw className="w-3.5 h-3.5" /> Generate Combinations
+                                 </button>
+                             </div>
+
+                             {/* Variants Viewer/Editor Matrix or List Tabs */}
+                             {formData.variants && formData.variants.length > 0 ? (
+                                 <div className="space-y-4">
+                                     <div className="flex justify-between items-center border-b border-[#d1d8dd] pb-2">
+                                         <div className="flex bg-[#f4f5f6] border border-[#d1d8dd] p-0.5 rounded gap-0.5">
+                                             <button 
+                                                 type="button" 
+                                                 onClick={() => setVariantTab('LIST')} 
+                                                 className={`px-3 py-1 text-xs font-semibold rounded flex items-center gap-1 transition-colors ${variantTab === 'LIST' ? 'bg-white text-[#1c2126] shadow-sm' : 'text-[#525c66] hover:bg-slate-200/50'}`}
+                                             >
+                                                 <List className="w-3.5 h-3.5" /> Variants List
+                                             </button>
+                                             <button 
+                                                 type="button" 
+                                                 onClick={() => setVariantTab('GRID')} 
+                                                 className={`px-3 py-1 text-xs font-semibold rounded flex items-center gap-1 transition-colors ${variantTab === 'GRID' ? 'bg-white text-[#1c2126] shadow-sm' : 'text-[#525c66] hover:bg-slate-200/50'}`}
+                                             >
+                                                 <Grid className="w-3.5 h-3.5" /> ERP Size-Color Matrix Grid
+                                             </button>
+                                         </div>
+                                         <div className="text-xs text-[#525c66] font-medium">Running <span className="font-bold text-[#1c2126]">{formData.variants.length}</span> active variant entries</div>
+                                     </div>
+
+                                     {/* TAB A: DETAILED GROUP LIST */}
+                                     {variantTab === 'LIST' && (
+                                         <div className="border border-[#d1d8dd] rounded overflow-hidden max-h-[380px] overflow-y-auto">
+                                             <table className="w-full text-left border-collapse text-xs bg-white">
+                                                 <thead>
+                                                     <tr className="bg-[#f4f5f6] text-[#525c66] border-b border-[#d1d8dd] sticky top-0 z-10">
+                                                         <th className="py-2 px-3 font-medium">Variant Combination</th>
+                                                         <th className="py-2 px-3 font-medium">Variant Code / SKU</th>
+                                                         <th className="py-2 px-3 font-medium">Selling Price</th>
+                                                         <th className="py-2 px-3 font-medium w-24">Intro Stock</th>
+                                                         <th className="py-2 px-3 font-medium w-24">BOM Scaling</th>
+                                                         <th className="py-2 px-3"></th>
+                                                     </tr>
+                                                 </thead>
+                                                 <tbody className="divide-y divide-[#d1d8dd]/60">
+                                                     {formData.variants.map((v) => (
+                                                         <tr key={v.id} className="hover:bg-[#fcfdfd] transition-colors">
+                                                             <td className="py-2 px-3 text-[#1c2126] font-semibold">{v.title}</td>
+                                                             <td className="py-2 px-3">
+                                                                 <input 
+                                                                     type="text" 
+                                                                     value={v.sku || ''} 
+                                                                     onChange={e => updateVariantValue(v.id, 'sku', e.target.value)}
+                                                                     className="px-2 py-0.5 bg-white border border-[#d1d8dd] rounded w-full font-mono text-[11px] focus:outline-none focus:border-[#2490ef]"
+                                                                 />
+                                                             </td>
+                                                             <td className="py-2 px-3">
+                                                                 <div className="flex items-center gap-1">
+                                                                     <span className="text-slate-400">{currency}</span>
+                                                                     <input 
+                                                                         type="number" 
+                                                                         value={v.price || 0} 
+                                                                         onChange={e => updateVariantValue(v.id, 'price', Number(e.target.value))}
+                                                                         className="px-2 py-0.5 bg-white border border-[#d1d8dd] rounded w-20 text-[11px] focus:outline-none focus:border-[#2490ef] tabular-nums"
+                                                                     />
+                                                                 </div>
+                                                             </td>
+                                                             <td className="py-2 px-3">
+                                                                 <input 
+                                                                     type="number" 
+                                                                     value={v.openingStock || 0} 
+                                                                     onChange={e => updateVariantValue(v.id, 'openingStock', Number(e.target.value))}
+                                                                     className="px-2 py-0.5 bg-white border border-[#d1d8dd] rounded w-16 text-[11px] focus:outline-none focus:border-[#2490ef] tabular-nums"
+                                                                 />
+                                                             </td>
+                                                             <td className="py-2 px-3">
+                                                                 <input 
+                                                                     type="number" 
+                                                                     step="0.05"
+                                                                     value={v.consumptionMultiplier || 1.0} 
+                                                                     onChange={e => updateVariantValue(v.id, 'consumptionMultiplier', Number(e.target.value))}
+                                                                     className="px-2 py-0.5 bg-white border border-[#d1d8dd] rounded w-16 text-[11px] focus:outline-none focus:border-[#2490ef] tabular-nums"
+                                                                     title="Fabric scaling multiplier (e.g. Size XL fabric = 1.1x base recipe)"
+                                                                 />
+                                                             </td>
+                                                             <td className="py-2 pr-3 text-right">
+                                                                 <button 
+                                                                     type="button" 
+                                                                     onClick={() => removeVariant(v.id)} 
+                                                                     className="text-[#ef4444] hover:bg-[#fef2f2] p-1 rounded font-semibold text-xs"
+                                                                 >
+                                                                     <Trash2 className="w-3.5 h-3.5" />
+                                                                 </button>
+                                                             </td>
+                                                         </tr>
+                                                     ))}
+                                                 </tbody>
+                                             </table>
+                                         </div>
+                                     )}
+
+                                     {/* TAB B: HIGH-DENSITY COLOR/SIZE ERP MATRIX GRID */}
+                                     {variantTab === 'GRID' && (() => {
+                                         const sizeOpt = (formData.options || []).find(o => o.name?.toLowerCase() === 'size' || o.name?.toLowerCase() === 'sizes');
+                                         const colorOpt = (formData.options || []).find(o => o.name?.toLowerCase() === 'color' || o.name?.toLowerCase() === 'colors');
+
+                                         if (!sizeOpt || !colorOpt) {
+                                             return (
+                                                 <div className="py-8 bg-slate-50 border border-dashed border-[#d1d8dd] rounded flex flex-col items-center justify-center text-center text-[#525c66] px-4 space-y-2">
+                                                     <Grid className="w-7 h-7 text-[#8d99a6]" />
+                                                     <span className="font-bold text-xs text-[#1c2126]">Grid matrix unavailable</span>
+                                                     <p className="text-[11px] max-w-md text-center">Please ensure your attributes contain one exactly named "Size" and another named "Color" (case-insensitive) with matching values to generate classic fashion grid.</p>
+                                                 </div>
+                                             );
+                                         }
+
+                                         return (
+                                             <div className="border border-[#d1d8dd] rounded overflow-x-auto bg-[#fafbfc]">
+                                                 <table className="w-full text-center border-collapse text-xs min-w-[600px]">
+                                                     <thead>
+                                                         <tr className="bg-[#f0f4f8] border-b border-[#d1d8dd] text-slate-700">
+                                                             <th className="py-3 px-3 font-semibold text-left border-r border-[#d1d8dd] bg-[#e2e8f0] w-32">
+                                                                 <span className="text-slate-500 text-[10px] uppercase font-bold">Color \ Size</span>
+                                                             </th>
+                                                             {sizeOpt.values.map(sz => (
+                                                                 <th key={sz} className="py-3 px-2 font-bold border-r border-[#d1d8dd]/80 text-[#1c2126] last:border-r-0">
+                                                                     {sz}
+                                                                 </th>
+                                                             ))}
+                                                         </tr>
+                                                     </thead>
+                                                     <tbody className="divide-y divide-[#d1d8dd]/60">
+                                                         {colorOpt.values.map(col => (
+                                                             <tr key={col} className="hover:bg-[#fcfdfd] bg-white text-center">
+                                                                 <td className="py-3 px-3 font-bold text-left border-r border-[#d1d8dd] bg-[#f8fafc] text-[#1c2126]">
+                                                                     {col}
+                                                                 </td>
+                                                                 {sizeOpt.values.map(sz => {
+                                                                     const matchingVariant = (formData.variants || []).find(v => {
+                                                                         const values = v.optionValues || {};
+                                                                         const hasSizeMatch = Object.entries(values).some(([k,val]) => (k.toLowerCase() === 'size' || k.toLowerCase() === 'sizes') && val === sz);
+                                                                         const hasColorMatch = Object.entries(values).some(([k,val]) => (k.toLowerCase() === 'color' || k.toLowerCase() === 'colors') && val === col);
+                                                                         return hasSizeMatch && hasColorMatch;
+                                                                     });
+
+                                                                     if (!matchingVariant) {
+                                                                         return (
+                                                                             <td key={sz} className="py-3 px-2 text-[#8d99a6] font-medium border-r border-[#d1d8dd]/45 italic bg-[#f4f5f6]/20 bg-opacity-70 last:border-r-0">
+                                                                                 -
+                                                                             </td>
+                                                                         );
+                                                                     }
+
+                                                                     return (
+                                                                         <td key={sz} className="py-2 px-2 border-r border-[#d1d8dd]/45 last:border-r-0 align-middle">
+                                                                              <div className="flex flex-col gap-1 items-center justify-center p-1 rounded border border-[#d1d8dd]/30 bg-[#f1f5f9]/20 hover:bg-[#f1f5f9]/60 hover:border-slate-300">
+                                                                                  <div className="flex items-center gap-1 justify-center">
+                                                                                      <span className="text-slate-400 scale-90">{currency}</span>
+                                                                                      <input 
+                                                                                          type="number" 
+                                                                                          value={matchingVariant.price || 0} 
+                                                                                          onChange={e => updateVariantValue(matchingVariant.id, 'price', Number(e.target.value))}
+                                                                                          className="w-14 px-1 py-0.5 bg-white border border-[#d1d8dd] rounded text-[10px] text-center focus:outline-none focus:border-[#2490ef] tabular-nums"
+                                                                                          title="Selling Price"
+                                                                                      />
+                                                                                  </div>
+                                                                                  <div className="flex items-center gap-1 justify-center">
+                                                                                      <span className="text-[#8d99a6] text-[9px] uppercase font-bold shrink-0">Qty</span>
+                                                                                      <input 
+                                                                                          type="number" 
+                                                                                          value={matchingVariant.openingStock || 0} 
+                                                                                          onChange={e => updateVariantValue(matchingVariant.id, 'openingStock', Number(e.target.value))}
+                                                                                          className="w-10 px-1 py-0.5 bg-white border border-[#d1d8dd] rounded text-[10px] text-center focus:outline-none focus:border-[#2490ef] tabular-nums"
+                                                                                          title="Opening Stock"
+                                                                                      />
+                                                                                  </div>
+                                                                              </div>
+                                                                         </td>
+                                                                     );
+                                                                 })}
+                                                             </tr>
+                                                         ))}
+                                                     </tbody>
+                                                 </table>
+                                             </div>
+                                         );
+                                     })()}
+                                 </div>
+                             ) : (
+                                 <div className="py-8 bg-slate-50 border border-dashed border-[#d1d8dd] rounded flex flex-col items-center justify-center text-center text-[#525c66] px-4 space-y-2">
+                                     <Sparkles className="w-7 h-7 text-[#bae6fd]" />
+                                     <span className="font-bold text-xs text-[#1c2126]">No combinations generated yet</span>
+                                     <p className="text-[11px] max-w-sm">Press "Generate Combinations" above to quickly prefetch and list child variations.</p>
+                                 </div>
+                             )}
+                         </div>
+                      )}
+
+                      {/* Bill of Materials */}
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
                          <div className="flex justify-between items-center border-b border-[#d1d8dd] pb-2 mb-5">
                              <h4 className="font-semibold text-sm text-[#1c2126]">Bill of Materials (BOM)</h4>

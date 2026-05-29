@@ -375,6 +375,43 @@ const Customers: React.FC<CustomersProps> = ({
                          </div>
                      </div>
 
+                      {/* Custom Fields (DocType Integration) */}
+                      {customFields.length > 0 && (
+                         <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px] animate-fade-in mt-4">
+                              <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Custom Information</h4>
+                              <div className="grid grid-cols-2 gap-x-16 gap-y-6">
+                                {customFields.map((f: any) => (
+                                  <div key={f.id} className="space-y-1.5 flex flex-col">
+                                      <label className="text-xs text-[#525c66]">{f.label} {f.required && <span className="text-[#ef4444] ml-0.5">*</span>}</label>
+                                      {f.type === 'select' ? (
+                                         <div className="relative">
+                                            <select 
+                                               required={f.required}
+                                               value={(formData as any)[f.key] || ''}
+                                               onChange={e => setFormData({...formData, [f.key]: e.target.value})}
+                                               className="w-full px-2.5 py-[6px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126] appearance-none"
+                                            >
+                                                <option value="">{f.placeholder}</option>
+                                                {f.options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                            </select>
+                                            <ChevronRight className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8d99a6] pointer-events-none rotate-90"/>
+                                         </div>
+                                      ) : (
+                                         <input 
+                                            required={f.required}
+                                            type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
+                                            value={(formData as any)[f.key] || ''}
+                                            onChange={e => setFormData({...formData, [f.key]: e.target.value})}
+                                            className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                            placeholder={f.placeholder}
+                                         />
+                                      )}
+                                  </div>
+                                ))}
+                              </div>
+                         </div>
+                      )}
+
                      {/* Hidden button to capture enter press */}
                      <button type="submit" className="hidden">Submit</button>
                  </form>

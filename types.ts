@@ -44,7 +44,6 @@ export type ViewState =
   | 'YARN_MANAGEMENT'
   | 'DYEING_PROCESSING'
   | 'FABRIC_COSTING'
-  | 'DISPATCH_PLANNER'
   | 'QUOTATION'
   | 'MATERIAL_REQUEST'
   | 'SUPPLIER_QUOTATION'
@@ -128,6 +127,7 @@ export interface DesignVariant {
     availableQuantity?: number; 
     imageUrl?: string; 
     optionValues: Record<string, string>; 
+    consumptionMultiplier?: number; 
 }
 
 export interface RecipeItem { materialId?: string; materialName: string; quantity: number; unit: Unit | string; estimatedCost?: number; wastagePercent?: number; }
@@ -485,175 +485,4 @@ export interface Budget extends BaseEntity {
   category: string;
 }
 
-// ─── YARN MANAGEMENT ──────────────────────────────────────────────────────────
-export type YarnType = 'COTTON' | 'POLYESTER' | 'SILK' | 'WOOL' | 'VISCOSE' | 'LINEN' | 'NYLON' | 'ACRYLIC' | 'BLENDED';
-export type YarnStatus = 'AVAILABLE' | 'ISSUED' | 'CONSUMED' | 'REJECTED' | 'HOLD';
 
-export interface YarnLot extends BaseEntity {
-  lotNumber: string;
-  type: YarnType | string;
-  count: string;           // e.g. '30s', '40s'
-  twist: string;           // 'S-Twist' | 'Z-Twist'
-  shade?: string;
-  supplierName?: string;
-  supplierId?: string;
-  receivedQty: number;     // kg
-  currentQty: number;      // kg remaining
-  pricePerKg: number;
-  receivedDate: string;
-  location?: string;
-  notes?: string;
-  status: YarnStatus;
-  dyeLotRef?: string;
-  tenacity?: number;       // cN/tex
-  elongation?: number;     // %
-  moisture?: number;       // %
-  evenness?: number;       // Uster %
-  batchCertificate?: string;
-}
-
-export interface YarnBlendComponent {
-  yarnType: string;
-  percentage: number;
-  lotId?: string;
-}
-
-export interface YarnBlend extends BaseEntity {
-  name: string;           // e.g. 'PC 65/35'
-  components: YarnBlendComponent[];
-  targetCount?: string;
-  twist?: string;
-  status: 'ACTIVE' | 'ARCHIVED';
-  notes?: string;
-  description?: string;
-}
-
-// ─── DYEING & PROCESSING ─────────────────────────────────────────────────────
-export type DyeingProcess = 'YARN_DYEING' | 'FABRIC_DYEING' | 'PIECE_DYEING' | 'PRINTING' | 'BLEACHING' | 'MERCERIZING' | 'CALENDERING' | 'SANFORIZING';
-export type DyeClass = 'REACTIVE' | 'VATS' | 'DIRECT' | 'ACID' | 'DISPERSE' | 'PIGMENT' | 'INDIGO';
-
-export interface DyeingChemical {
-  name: string;
-  quantity: number;
-  unit: string;
-  costPerUnit: number;
-}
-
-export interface DyeingJob extends BaseEntity {
-  jobNumber: string;
-  process: DyeingProcess;
-  dyeClass?: DyeClass;
-  shade: string;
-  pantoneRef?: string;
-  fabricName?: string;
-  yarnLotId?: string;
-  inputQty: number;       // meters or kg
-  inputUnit: 'METER' | 'KG';
-  outputQty?: number;
-  shrinkagePercent?: number;
-  lotId?: string;
-  machineId?: string;
-  machineName?: string;
-  operatorId?: string;
-  operatorName?: string;
-  vendorId?: string;
-  vendorName?: string;    // for job-work dyeing
-  isJobWork: boolean;
-  issueDate: string;
-  expectedDate: string;
-  completedDate?: string;
-  status: 'PENDING' | 'IN_PROCESS' | 'COMPLETED' | 'FAILED' | 'RE-PROCESS';
-  chemicals?: DyeingChemical[];
-  temperature?: number;   // °C
-  duration?: number;      // minutes
-  ph?: number;
-  fastness?: {
-    washing?: number;     // 1-5
-    rubbing?: number;
-    light?: number;
-  };
-  laborCost?: number;
-  chemicalCost?: number;
-  machineCost?: number;
-  totalCost?: number;
-  remarks?: string;
-  colorMatchStatus?: 'PASS' | 'FAIL' | 'PENDING';
-}
-
-// ─── FABRIC COSTING ───────────────────────────────────────────────────────────
-export interface FabricCostingItem {
-  id: string;
-  name: string;           // e.g. 'Warp Yarn', 'Weft Yarn'
-  category: 'YARN' | 'DYEING' | 'WEAVING' | 'FINISHING' | 'PACKING' | 'OVERHEAD' | 'OTHER';
-  qty: number;
-  unit: string;
-  ratePerUnit: number;
-  wastagePercent: number;
-  amount: number;
-}
-
-export interface FabricCosting extends BaseEntity {
-  name: string;           // e.g. 'Saree Costing - Banarasi 2024'
-  designId?: string;
-  designName?: string;
-  fabricType: string;
-  width: number;          // cm
-  gsm?: number;
-  construction?: string;  // e.g. '60x60 / 40x40'
-  items: FabricCostingItem[];
-  overheadPercent: number;
-  profitPercent: number;
-  taxPercent: number;
-  rawMaterialCost: number;
-  processingCost: number;
-  totalCost: number;
-  sellingPrice: number;
-  marginPercent: number;
-  currency?: string;
-  status: 'DRAFT' | 'APPROVED' | 'ARCHIVED';
-  notes?: string;
-  version?: number;
-}
-
-// ─── DISPATCH PLANNER ────────────────────────────────────────────────────────
-export type DispatchMode = 'ROAD' | 'RAIL' | 'AIR' | 'COURIER' | 'HAND_DELIVERY';
-export type DispatchStatus = 'PENDING' | 'PACKED' | 'DISPATCHED' | 'IN_TRANSIT' | 'DELIVERED' | 'RETURNED' | 'CANCELLED';
-
-export interface DispatchItem {
-  orderId: string;
-  orderNumber?: string;
-  customerName: string;
-  productName: string;
-  qty: number;
-  unit: string;
-  weight?: number;        // kg
-  value?: number;
-  packed?: boolean;
-}
-
-export interface DispatchEntry extends BaseEntity {
-  dispatchNumber: string;
-  date: string;
-  mode: DispatchMode;
-  status: DispatchStatus;
-  items: DispatchItem[];
-  totalQty: number;
-  totalWeight?: number;   // kg
-  totalValue?: number;
-  carrierName?: string;
-  vehicleNumber?: string;
-  driverName?: string;
-  driverPhone?: string;
-  lrNumber?: string;      // Lorry Receipt
-  ewayBillNumber?: string;
-  expectedDelivery?: string;
-  actualDelivery?: string;
-  fromAddress?: string;
-  toAddress?: string;
-  freightCost?: number;
-  insuranceCost?: number;
-  challanRef?: string;
-  invoiceRef?: string;
-  remarks?: string;
-  trackingEvents?: { timestamp: string; location: string; status: string }[];
-}

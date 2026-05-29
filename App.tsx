@@ -468,7 +468,7 @@ const App: React.FC = () => {
             currentStage: 'PLANNING',
             qualityStatus: 'PENDING',
          };
-         handleCollection('production', production, setProduction).add(productionBase);
+         handleCollection('production', production, setProduction).add(productionBase as any);
          setCurrentView('PRODUCTION');
          break;
        case 'CONVERT_TO_JOB_CARD':
@@ -520,7 +520,7 @@ const App: React.FC = () => {
             currentStage: 'PLANNING',
             qualityStatus: 'PENDING',
          };
-         handleCollection('production', production, setProduction).add(productionBaseRec);
+         handleCollection('production', production, setProduction).add(productionBaseRec as any);
          setCurrentView('PRODUCTION');
          break;
        case 'CONVERT_TO_PO':
@@ -652,7 +652,10 @@ const App: React.FC = () => {
                             {currentView === 'DELIVERY_CHALLAN' && <DeliveryChallan orders={active(orders)} customers={active(customers)} onAddChallan={ordMgr.add} onUpdateChallan={ordMgr.update} currency={currencySymbol} companyInfo={companyInfo} />}
 
                             {/* Production & Inventory */}
-                            {currentView === 'PRODUCTION' && <Production jobs={active(production)} karigars={active(karigars)} designs={active(designs)} machines={active(machines)} samples={active(samples)} orders={active(orders)} onAddJob={prodMgr.add} onUpdateJob={handleJobUpdate} onAddMachine={machineMgr.add} onUpdateMachine={machineMgr.update} onDeleteMachine={machineMgr.remove} onAction={handleAction} currency={currencySymbol} />}
+                            {null}
+                            {null}
+                            {null}
+                            {currentView === 'PRODUCTION' && <Production jobs={active(production)} karigars={active(karigars)} designs={active(designs)} machines={active(machines)} samples={active(samples)} orders={active(orders)} onAddJob={prodMgr.add} onUpdateJob={handleJobUpdate} onAddMachine={machineMgr.add} onUpdateMachine={machineMgr.update} onDeleteMachine={(m) => machineMgr.remove(m.id)} onAction={handleAction} currency={currencySymbol} />}
                             {currentView === 'SAMPLING' && <Sampling samples={active(samples)} designs={active(designs)} karigars={active(karigars)} customers={active(customers)} onAdd={sampleMgr.add} onUpdate={sampleMgr.update} onDelete={sampleMgr.remove} currency={currencySymbol} />}
                             {currentView === 'TRACK_LOTS' && <TrackLots jobs={active(production)} onUpdateJob={handleJobUpdate} />}
                             {currentView === 'QUALITY' && <QualityControl reports={active(qualityReports)} inspections={active(inspections)} onAddReport={qualityMgr.add} onUpdateReport={qualityMgr.update} onAddInspection={inspectionMgr.add} currency={currencySymbol} />}

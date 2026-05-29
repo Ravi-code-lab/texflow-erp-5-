@@ -39,6 +39,41 @@ const Orders: React.FC<OrdersProps> = ({
   
   const [newItem, setNewItem] = useState<OrderItem>({ productName: '', quantity: 0, unitPrice: 0, unit: 'PIECE', sizeWise: {} });
 
+  const allSelectableItems = useMemo(() => {
+    const list: { id: string; name: string; price: number; isVariant?: boolean; parentName?: string; variantTitle?: string }[] = [];
+    
+    (inventory || []).forEach(inv => {
+      list.push({
+        id: inv.id,
+        name: inv.name,
+        price: inv.pricePerUnit || 0
+      });
+    });
+
+    (designs || []).forEach(des => {
+      if (des.hasVariants && des.variants && des.variants.length > 0) {
+        des.variants.forEach(v => {
+          list.push({
+            id: v.id,
+            name: `${des.name} - ${v.title}`,
+            price: v.price || (des.processCostPerPiece ? des.processCostPerPiece * 1.5 : 0),
+            isVariant: true,
+            parentName: des.name,
+            variantTitle: v.title
+          });
+        });
+      } else {
+        list.push({
+          id: des.id,
+          name: des.name,
+          price: des.processCostPerPiece ? des.processCostPerPiece * 1.5 : 0
+        });
+      }
+    });
+
+    return list;
+  }, [designs, inventory]);
+
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
       const name = o.customerName || '';
@@ -307,17 +342,30 @@ const Orders: React.FC<OrdersProps> = ({
                                 placeholder="Select Product..."
                                 value={newItem.productName || ''}
                                 onChange={e => {
-                                  const d = designs.find(des => des.name === e.target.value) || inventory.find(i => i.name === e.target.value);
-                                  setNewItem({...newItem, productName: e.target.value, unitPrice: (d as any)?.processCostPerPiece ? (d as any).processCostPerPiece * 1.5 : (d as any)?.pricePerUnit || 0});
+                                  const selectedName = e.target.value;
+                                  const match = allSelectableItems.find(x => x.name === selectedName);
+                                  setNewItem({
+                                    ...newItem,
+                                    productName: selectedName,
+                                    unitPrice: match ? match.price : 0,
+                                    quantity: newItem.quantity || 1
+                                  });
                                 }}
                             />
-                            <datalist id="prod-list">{[...designs, ...inventory].map(x => <option key={x.id} value={x.name}/>)}</datalist>
+                            <datalist id="prod-list">{allSelectableItems.map(x => <option key={x.id} value={x.name}/>)}</datalist>
+                             <input 
+                                 type="number" 
+                                 className="px-2.5 py-1.5 bg-[#fdfdfd] border border-[#d1d8dd] rounded w-24 focus:outline-none focus:border-[#2490ef] font-semibold text-right tabular-nums text-slate-800" 
+                                 placeholder="Rate" 
+                                 value={newItem.unitPrice || ''} 
+                                 onChange={e => setNewItem({...newItem, unitPrice: Number(e.target.value)})}
+                             />
                             <input 
                                 type="number" 
                                 className="px-2.5 py-1.5 bg-[#fdfdfd] border border-[#d1d8dd] rounded w-20 focus:outline-none focus:border-[#2490ef]" 
                                 placeholder="Qty" 
                                 value={newItem.quantity || ''} 
-                                readOnly 
+                                onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})} 
                             />
                             <button 
                                 type="button" 

@@ -47,7 +47,7 @@ const QualityControl: React.FC<QualityControlProps> = ({ reports, inspections = 
 
   // Report Modal State
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [reportData, setReportData] = useState<Partial<QualityReport>>({
+  const [reportData, setReportData] = useState<any>({
     date: new Date().toISOString().split('T')[0],
     defects: []
   });
@@ -58,9 +58,9 @@ const QualityControl: React.FC<QualityControlProps> = ({ reports, inspections = 
      const newReport = {
         ...reportData,
         id: reportData.id || `QC-${Date.now().toString().slice(-4)}`,
-        defectsFound: reportData.defects?.length || 0,
-        defectTypes: reportData.defects?.map(d => d.type) || [],
-        issueSeverity: reportData.defects?.some(d => d.severity === 'CRITICAL') ? 'CRITICAL' : (reportData.defects?.some(d => d.severity === 'HIGH') ? 'HIGH' : 'LOW'),
+        defectsFound: (reportData.defects as any)?.length || 0,
+        defectTypes: (reportData.defects as any)?.map((d: any) => d.type) || [],
+        issueSeverity: (reportData.defects as any)?.some((d: any) => d.severity === 'CRITICAL') ? 'CRITICAL' : ((reportData.defects as any)?.some((d: any) => d.severity === 'HIGH') ? 'HIGH' : 'LOW'),
      } as QualityReport;
      if (reportData.id && onUpdateReport) {
         onUpdateReport(newReport);
@@ -177,7 +177,7 @@ const QualityControl: React.FC<QualityControlProps> = ({ reports, inspections = 
               ))}
           </div>
           {activeTab === 'GARMENT_QC' && (
-            <button onClick={() => { setReportData({ date: new Date().toISOString().split('T')[0], defects: [] }); setIsReportModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-lg active:scale-95">
+            <button onClick={() => { setReportData({ date: new Date().toISOString().split('T')[0], defects: [] } as any); setIsReportModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-lg active:scale-95">
                 <Plus className="w-4 h-4"/> New QC Report
             </button>
           )}

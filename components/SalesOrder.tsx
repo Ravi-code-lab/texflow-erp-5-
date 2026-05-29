@@ -317,6 +317,62 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
              <div className="flex-1 overflow-auto p-5 pb-16 flex justify-center">
                  <form onSubmit={handleCreate} className="w-full max-w-[850px] space-y-4">
                      
+                     {/* ERPNext Workflow Progress Timeline Status Stepper */}
+                     {formData.id && (
+                        <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-5 text-[13px] mb-4 animate-fade-in relative overflow-hidden">
+                           <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-2">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Frappe Workflow Progress</span>
+                              <span className="text-xs text-slate-500 font-medium">State: <span className="font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded ml-1">{formData.status || 'PENDING'}</span></span>
+                           </div>
+                           <div className="flex items-center w-full px-6 py-2 justify-between relative mt-4">
+                              {/* Background Connection Line */}
+                              <div className="absolute top-[16px] left-12 right-12 h-[2px] bg-slate-200 z-0"></div>
+                              
+                              {/* Steps */}
+                              {['PENDING', 'SUBMITTED', 'SHIPPED', 'DELIVERED'].map((step, idx) => {
+                                 const listStates = ['PENDING', 'SUBMITTED', 'SHIPPED', 'DELIVERED'];
+                                 const currentIdx = listStates.indexOf(formData.status || 'PENDING');
+                                 const stepIdx = listStates.indexOf(step);
+                                 
+                                 const isCompleted = stepIdx < currentIdx || formData.status === 'DELIVERED';
+                                 const isActive = stepIdx === currentIdx && formData.status !== 'CANCELLED';
+                                 
+                                 let nodeColor = 'bg-white border-slate-300 text-slate-400 hover:border-[#2490ef] hover:text-[#2490ef]';
+                                 if (isActive) {
+                                    nodeColor = 'bg-[#2490ef] border-[#2490ef] text-white ring-4 ring-[#2490ef]/10 font-bold scale-105';
+                                 } else if (isCompleted) {
+                                    nodeColor = 'bg-[#10b981] border-[#10b981] text-white';
+                                 }
+                                 
+                                 return (
+                                    <div key={step} className="flex flex-col items-center z-10 relative cursor-pointer group" onClick={() => {
+                                       setFormData({...formData, status: step as any});
+                                    }}>
+                                       <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 text-xs font-semibold ${nodeColor}`}>
+                                          {isCompleted && !isActive ? '✓' : idx + 1}
+                                       </div>
+                                       <span className={`mt-2 text-[10px] font-bold tracking-wide transition-colors ${isActive ? 'text-[#1c2126]' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                                          {step}
+                                       </span>
+                                    </div>
+                                 );
+                               })}
+                              
+                              {/* Canceled node if applicable */}
+                              {formData.status === 'CANCELLED' && (
+                                 <div className="flex flex-col items-center z-10 relative">
+                                    <div className="w-8 h-8 rounded-full border-2 bg-rose-50 border-rose-500 text-rose-600 flex items-center justify-center text-xs font-bold ring-4 ring-rose-100">
+                                       ✕
+                                    </div>
+                                    <span className="mt-2 text-[10px] font-bold tracking-wide uppercase text-rose-500">
+                                       CANCELLED
+                                    </span>
+                                 </div>
+                               )}
+                           </div>
+                        </div>
+                     )}
+                     
                      {/* Details Card */}
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
                          <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Sales Order Details</h4>

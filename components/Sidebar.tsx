@@ -6,7 +6,7 @@ import {
   ChevronDown, Scissors, Truck, Receipt, 
   FileText, ClipboardList, Briefcase, 
   Archive, ArrowRightLeft, SearchCheck, Layers, UserCircle, Wallet, Fingerprint, Home, FlaskConical, BookOpen, MapPin, UserCog, Megaphone, ShieldCheck, Banknote, Undo2, ShoppingBag, Activity, FlaskRound, Coins, Landmark,
-  Bell, CheckSquare, Users, Database, Pipette, Ruler, Send, PhoneCall, FileCheck, Car, Monitor
+  Bell, CheckSquare, Users, Database, Send, PhoneCall, FileCheck, Car, Monitor
 } from 'lucide-react';
 import { ViewState, TeamMember, UIPreferences, CompanyInfo } from '../types';
 
@@ -63,6 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       title: 'Sales Matrix',
       icon: ShoppingCart,
       items: [
+        { id: 'CRM', label: 'Leads', icon: Megaphone },
         { id: 'QUOTATION', label: 'Quotation', icon: FileText },
         { id: 'ORDERS', label: 'Sales Order', icon: FileText },
         { id: 'POS', label: 'Point of Sale', icon: Monitor },
@@ -70,7 +71,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'TAX_INVOICE', label: 'Sales Invoice', icon: Receipt },
         { id: 'SALES_RETURN', label: 'Returns', icon: Undo2 },
         { id: 'CREDIT_NOTE', label: 'Credit Notes', icon: Banknote },
-        { id: 'CRM', label: 'Leads', icon: Megaphone },
         { id: 'SUPPORT_TICKET', label: 'Support', icon: PhoneCall },
       ].filter(item => isEnabled(item.id))
     },

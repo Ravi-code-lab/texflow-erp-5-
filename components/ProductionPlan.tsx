@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { SalesOrder, Design, ProductionJob } from '../types';
+import { Order as SalesOrder, Design, ProductionJob } from '../types';
 import { Layers, Plus, Factory, ShoppingCart, ArrowRight, Settings } from 'lucide-react';
 
 interface ProductionPlanProps {
@@ -21,7 +21,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
      setActivePlan({
        id: `PLAN-${Date.now().toString().slice(-4)}`,
        date: new Date().toISOString().split('T')[0],
-       items: pendingOrders.flatMap(o => o.items.map(i => ({
+       items: pendingOrders.flatMap((o: any) => o.items.map((i: any) => ({
          orderId: o.id,
          productName: i.productName,
          quantity: i.quantity,
@@ -91,11 +91,11 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
                    <div key={o.id} className="p-3 border border-[#d1d8dd] rounded bg-[#fdfdfd] flex justify-between items-center text-sm">
                       <div>
                          <p className="font-bold text-[#1c2126]">Order {o.id}</p>
-                         <p className="text-[#525c66] text-xs">Due: {o.deliveryDate ? o.deliveryDate.split('T')[0] : 'N/A'}</p>
+                         <p className="text-[#525c66] text-xs">Due: {o.dueDate ? o.dueDate.split('T')[0] : 'N/A'}</p>
                       </div>
                       <div className="text-right">
                          <span className="bg-[#e2e6ea] px-2 py-0.5 rounded text-xs font-bold text-[#525c66] uppercase">{o.status}</span>
-                         <p className="font-medium text-[#1c2126] mt-1">{o.items.reduce((s,i)=>s+i.quantity,0)} Units</p>
+                         <p className="font-medium text-[#1c2126] mt-1">{o.items.reduce((s: number,i: any)=>s+i.quantity,0)} Units</p>
                       </div>
                    </div>
                  ))}
