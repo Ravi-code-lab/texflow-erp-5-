@@ -1,0 +1,6 @@
+{
+  "name": "TexFlow ERP",
+  "description": "Comprehensive enterprise resource planning solution tailored for manufacturing and standard operations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
