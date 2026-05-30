@@ -1,6 +1,6 @@
 {
-  "name": "TexFlow ERP",
-  "description": "TexFlow ERP v6 — ERPNext-Style Platform Edition",
+  "name": "ERPNext Workspace",
+  "description": "An interactive, high-fidelity ERPNext-style platform for Prestige Textiles including dynamic DocType builders, active workflow automation builders, customizable Chart of Accounts, and system upgrade paths.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
