@@ -1,20 +1,24 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, PieChart, Pie
 } from 'recharts';
-import { 
-  IndianRupee, AlertTriangle, Factory, Users, 
-  History, ShoppingCart, 
-  CheckCircle2, TrendingUp, Package,
-  ArrowUpRight, ArrowDownRight, Activity,
-  ChevronDown, Settings, Plus, LayoutDashboard,
+import {
+  IndianRupee, AlertTriangle, Factory, Users,
+  ShoppingCart, CheckCircle2, TrendingUp, Package,
+  ArrowUpRight, ArrowDownRight, Activity, Settings, Plus,
   Truck, Receipt, FileText, ClipboardList,
-  Briefcase, Archive, BookOpen, Layers,
-  Wallet, Megaphone, ShieldCheck, Mail, Phone,
-  FileSpreadsheet, Sparkles, Filter, CheckCircle, Clock
+  Briefcase, BookOpen, Layers, Wallet, ShieldCheck,
+  FileSpreadsheet, Clock, ChevronRight, Zap,
+  BarChart3, TrendingDown, Box, Scissors, RotateCcw,
+  CheckCheck, Timer, Target, Star, Flame, Sparkles,
+  ChevronDown, Search, Building2, Package2, Bell,
+  LayoutDashboard, Calendar, LineChart, PieChartIcon, LucideIcon,
+  BadgePercent, Coins, Fingerprint, MapPin, FlaskConical, BookMarked,
 } from 'lucide-react';
 import { InventoryItem, ProductionJob, Order, Machine, Karigar, ViewState } from '../types';
+import { ERP_MODULE_GROUPS, MODULE_COLOR_MAP, ERPModuleGroupId } from '../modules/registry';
 
 interface DashboardProps {
   inventory: InventoryItem[];
@@ -27,748 +31,431 @@ interface DashboardProps {
   setView?: (view: ViewState) => void;
 }
 
-type ERPWorkspaceType = 'HOME' | 'SELLING' | 'BUYING' | 'MANUFACTURING' | 'STOCK' | 'ACCOUNTS' | 'HR';
+type WorkspaceTab = 'HOME' | 'SELLING' | 'BUYING' | 'MANUFACTURING' | 'STOCK' | 'ACCOUNTS' | 'HR';
 
-const Dashboard: React.FC<DashboardProps> = ({ 
-  inventory, production, orders, currency = '₹', machines = [], karigars = [], setView 
+const WORKSPACE_TABS: { id: WorkspaceTab; label: string; color: string; dot: string }[] = [
+  { id: 'HOME',          label: 'Home',          color: 'text-slate-600 dark:text-slate-300',   dot: 'bg-slate-400' },
+  { id: 'SELLING',       label: 'Selling',       color: 'text-emerald-700 dark:text-emerald-400', dot: 'bg-emerald-500' },
+  { id: 'BUYING',        label: 'Buying',        color: 'text-amber-700 dark:text-amber-400',   dot: 'bg-amber-500' },
+  { id: 'MANUFACTURING', label: 'Manufacturing', color: 'text-indigo-700 dark:text-indigo-400', dot: 'bg-indigo-500' },
+  { id: 'STOCK',         label: 'Stock',         color: 'text-cyan-700 dark:text-cyan-400',     dot: 'bg-cyan-500' },
+  { id: 'ACCOUNTS',      label: 'Accounts',      color: 'text-violet-700 dark:text-violet-400', dot: 'bg-violet-500' },
+  { id: 'HR',            label: 'HR',            color: 'text-rose-700 dark:text-rose-400',     dot: 'bg-rose-500' },
+];
+
+interface ShortcutItem { label: string; view: ViewState; icon: LucideIcon; desc?: string }
+
+const WORKSPACE_SHORTCUTS: Record<WorkspaceTab, ShortcutItem[]> = {
+  HOME: [
+    { label: 'Sales Order', view: 'ORDERS', icon: ShoppingCart, desc: 'New customer order' },
+    { label: 'Purchase Order', view: 'PURCHASE_ORDER', icon: Package, desc: 'Reorder materials' },
+    { label: 'Work Order', view: 'PRODUCTION', icon: Factory, desc: 'Start production' },
+    { label: 'Material Request', view: 'MATERIAL_REQUEST', icon: ClipboardList, desc: 'Request materials' },
+    { label: 'Quality Check', view: 'QUALITY', icon: ShieldCheck, desc: 'Inspect items' },
+    { label: 'Stock Audit', view: 'STOCK_AUDIT', icon: FileSpreadsheet, desc: 'Physical count' },
+    { label: 'Tax Invoice', view: 'TAX_INVOICE', icon: Receipt, desc: 'Create GST invoice' },
+    { label: 'CRM / Leads', view: 'CRM', icon: Users, desc: 'Manage pipeline' },
+  ],
+  SELLING: [
+    { label: 'Sales Order', view: 'ORDERS', icon: ShoppingCart, desc: 'New sale' },
+    { label: 'Quotation', view: 'QUOTATION', icon: FileText, desc: 'Price quote' },
+    { label: 'Tax Invoice', view: 'TAX_INVOICE', icon: Receipt, desc: 'GST invoice' },
+    { label: 'Delivery Note', view: 'DELIVERY_CHALLAN', icon: Truck, desc: 'Dispatch goods' },
+    { label: 'Sales Return', view: 'SALES_RETURN', icon: RotateCcw, desc: 'Customer return' },
+    { label: 'Credit Note', view: 'CREDIT_NOTE', icon: Wallet, desc: 'Refund credit' },
+    { label: 'Point of Sale', view: 'POS', icon: Zap, desc: 'Walk-in billing' },
+    { label: 'CRM Leads', view: 'CRM', icon: Target, desc: 'Sales pipeline' },
+  ],
+  BUYING: [
+    { label: 'Purchase Order', view: 'PURCHASE_ORDER', icon: Package, desc: 'Order materials' },
+    { label: 'Material Request', view: 'MATERIAL_REQUEST', icon: ClipboardList, desc: 'Request stock' },
+    { label: 'Supplier Quotation', view: 'SUPPLIER_QUOTATION', icon: FileText, desc: 'Get quotes' },
+    { label: 'Purchase Receipt', view: 'PURCHASE_INWARD', icon: Box, desc: 'Receive goods' },
+    { label: 'Purchase Invoice', view: 'PURCHASE_INVOICE', icon: Receipt, desc: 'Supplier bill' },
+    { label: 'Purchase Return', view: 'PURCHASE_RETURN', icon: RotateCcw, desc: 'Return to supplier' },
+    { label: 'Debit Note', view: 'DEBIT_NOTE', icon: Wallet, desc: 'Claim debit' },
+    { label: 'Supplier List', view: 'SUPPLIERS', icon: Users, desc: 'Manage vendors' },
+  ],
+  MANUFACTURING: [
+    { label: 'Work Order', view: 'PRODUCTION', icon: Factory, desc: 'Production job' },
+    { label: 'Job Work', view: 'JOB_WORK', icon: Scissors, desc: 'Subcontract' },
+    { label: 'Bill of Materials', view: 'DESIGN_RECIPE', icon: FlaskConical, desc: 'Material recipe' },
+    { label: 'Sampling', view: 'SAMPLING', icon: Star, desc: 'Sample dev' },
+    { label: 'Track Lots', view: 'TRACK_LOTS', icon: MapPin, desc: 'Lot traceability' },
+    { label: 'Quality Control', view: 'QUALITY', icon: ShieldCheck, desc: 'QC inspection' },
+    { label: 'Design Catalog', view: 'CATALOG', icon: FileSpreadsheet, desc: 'Product catalog' },
+    { label: 'Workstations', view: 'PRODUCTION', icon: Settings, desc: 'Machine setup' },
+  ],
+  STOCK: [
+    { label: 'Stock Entry', view: 'STOCK_TRANSFER', icon: Truck, desc: 'Transfer stock' },
+    { label: 'Opening Stock', view: 'OPENING_STOCK', icon: Box, desc: 'Set balances' },
+    { label: 'Item Master', view: 'INVENTORY', icon: Package, desc: 'Item list' },
+    { label: 'Stock Reconciliation', view: 'STOCK_AUDIT', icon: CheckCheck, desc: 'Physical audit' },
+    { label: 'Product Bundle', view: 'PACK_DESIGN', icon: Layers, desc: 'Bundle / kits' },
+    { label: 'Product Catalog', view: 'CATALOG', icon: Star, desc: 'Design catalog' },
+    { label: 'Lot Tracking', view: 'TRACK_LOTS', icon: Activity, desc: 'Batch trace' },
+    { label: 'Material Request', view: 'MATERIAL_REQUEST', icon: ClipboardList, desc: 'Stock request' },
+  ],
+  ACCOUNTS: [
+    { label: 'Journal Entry', view: 'ACCOUNTING', icon: BookOpen, desc: 'Manual posting' },
+    { label: 'Payment Entry', view: 'CASH_BOOK', icon: Wallet, desc: 'Cash/bank entry' },
+    { label: 'Chart of Accounts', view: 'CHART_OF_ACCOUNTS', icon: BarChart3, desc: 'Account tree' },
+    { label: 'Sales Invoice', view: 'TAX_INVOICE', icon: Receipt, desc: 'GST invoice' },
+    { label: 'Expense Claim', view: 'EXPENSE_CLAIM', icon: FileText, desc: 'Staff expenses' },
+    { label: 'Karigar Ledger', view: 'KARIGAR_KHATA', icon: Coins, desc: 'Worker account' },
+    { label: 'Agent Ledger', view: 'AGENT_KHATA', icon: BadgePercent, desc: 'Agent account' },
+    { label: 'Credit Note', view: 'CREDIT_NOTE', icon: Wallet, desc: 'Refund credit' },
+  ],
+  HR: [
+    { label: 'Attendance', view: 'ATTENDANCE', icon: Fingerprint, desc: 'Mark today' },
+    { label: 'Employees', view: 'TEAM', icon: Users, desc: 'Staff list' },
+    { label: 'Payroll', view: 'PAYROLL', icon: Wallet, desc: 'Salary slips' },
+    { label: 'Karigars', view: 'KARIGARS', icon: Scissors, desc: 'Worker list' },
+    { label: 'Leave Application', view: 'LEAVE_APP', icon: Clock, desc: 'Apply leave' },
+    { label: 'Timesheets', view: 'TIMESHEET', icon: Timer, desc: 'Log hours' },
+    { label: 'Expense Claims', view: 'EXPENSE_CLAIM', icon: Receipt, desc: 'Reimbursements' },
+    { label: 'Agents', view: 'AGENTS', icon: Briefcase, desc: 'Sales agents' },
+  ],
+};
+
+const MODULE_DOCTYPES: Record<WorkspaceTab, { label: string; view: ViewState; icon: LucideIcon }[]> = {
+  HOME: [
+    { label: 'Sales Order', view: 'ORDERS', icon: ShoppingCart },
+    { label: 'Purchase Order', view: 'PURCHASE_ORDER', icon: Package },
+    { label: 'Work Order', view: 'PRODUCTION', icon: Factory },
+    { label: 'Stock Entry', view: 'STOCK_TRANSFER', icon: Truck },
+    { label: 'Journal Entry', view: 'ACCOUNTING', icon: BookOpen },
+    { label: 'Leave Application', view: 'LEAVE_APP', icon: Clock },
+  ],
+  SELLING: [
+    { label: 'Quotation', view: 'QUOTATION', icon: FileText },
+    { label: 'Sales Order', view: 'ORDERS', icon: ShoppingCart },
+    { label: 'Delivery Note', view: 'DELIVERY_CHALLAN', icon: Truck },
+    { label: 'Sales Invoice', view: 'TAX_INVOICE', icon: Receipt },
+    { label: 'Customer', view: 'CUSTOMERS', icon: Users },
+    { label: 'CRM Lead', view: 'CRM', icon: Target },
+  ],
+  BUYING: [
+    { label: 'Material Request', view: 'MATERIAL_REQUEST', icon: ClipboardList },
+    { label: 'Purchase Order', view: 'PURCHASE_ORDER', icon: Package },
+    { label: 'Purchase Receipt', view: 'PURCHASE_INWARD', icon: Box },
+    { label: 'Purchase Invoice', view: 'PURCHASE_INVOICE', icon: Receipt },
+    { label: 'Supplier', view: 'SUPPLIERS', icon: Truck },
+    { label: 'Supplier Quotation', view: 'SUPPLIER_QUOTATION', icon: FileText },
+  ],
+  MANUFACTURING: [
+    { label: 'Work Order', view: 'PRODUCTION', icon: Factory },
+    { label: 'Bill of Materials', view: 'DESIGN_RECIPE', icon: FlaskConical },
+    { label: 'Quality Inspection', view: 'QUALITY', icon: ShieldCheck },
+    { label: 'Subcontracting', view: 'JOB_WORK', icon: Scissors },
+    { label: 'Sample Request', view: 'SAMPLING', icon: Star },
+    { label: 'Lot Tracking', view: 'TRACK_LOTS', icon: MapPin },
+  ],
+  STOCK: [
+    { label: 'Item', view: 'INVENTORY', icon: Package },
+    { label: 'Stock Entry', view: 'STOCK_TRANSFER', icon: Truck },
+    { label: 'Stock Reconciliation', view: 'STOCK_AUDIT', icon: CheckCheck },
+    { label: 'Product Catalog', view: 'CATALOG', icon: Star },
+    { label: 'Product Bundle', view: 'PACK_DESIGN', icon: Layers },
+    { label: 'Fixed Asset', view: 'ASSETS', icon: Activity },
+  ],
+  ACCOUNTS: [
+    { label: 'Journal Entry', view: 'ACCOUNTING', icon: BookOpen },
+    { label: 'Payment Entry', view: 'CASH_BOOK', icon: Wallet },
+    { label: 'Chart of Accounts', view: 'CHART_OF_ACCOUNTS', icon: BarChart3 },
+    { label: 'Expense Claim', view: 'EXPENSE_CLAIM', icon: Receipt },
+    { label: 'Karigar Ledger', view: 'KARIGAR_KHATA', icon: Coins },
+    { label: 'Agent Ledger', view: 'AGENT_KHATA', icon: BadgePercent },
+  ],
+  HR: [
+    { label: 'Employee', view: 'TEAM', icon: Users },
+    { label: 'Attendance', view: 'ATTENDANCE', icon: Fingerprint },
+    { label: 'Salary Slip', view: 'PAYROLL', icon: Wallet },
+    { label: 'Leave Application', view: 'LEAVE_APP', icon: Clock },
+    { label: 'Timesheet', view: 'TIMESHEET', icon: Timer },
+    { label: 'Expense Claim', view: 'EXPENSE_CLAIM', icon: Receipt },
+  ],
+};
+
+// Memoized stat card
+const StatCard = React.memo(({
+  label, value, subValue, icon: Icon, trend, color, onClick
+}: {
+  label: string; value: string | number; subValue?: string; icon: LucideIcon;
+  trend?: 'up' | 'down' | 'neutral'; color: string; onClick?: () => void;
 }) => {
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [activeWorkspace, setActiveWorkspace] = useState<ERPWorkspaceType>('HOME');
-  const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
-
-  // Custom workspace items (Shortcuts or Cards added by user)
-  const [customShortcuts, setCustomShortcuts] = useState<any[]>([]);
-  const [shortcutName, setShortcutName] = useState('');
-  const [shortcutTarget, setShortcutTarget] = useState<ViewState>('ORDERS');
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    // Load custom dashboard items
-    const saved = localStorage.getItem('erpnext_custom_shortcuts');
-    if (saved) {
-      try {
-        setCustomShortcuts(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return () => clearInterval(timer);
-  }, []);
-
-  const handleAddShortcut = () => {
-    if (!shortcutName.trim()) return;
-    const newList = [...customShortcuts, { label: shortcutName.trim(), view: shortcutTarget }];
-    setCustomShortcuts(newList);
-    localStorage.setItem('erpnext_custom_shortcuts', JSON.stringify(newList));
-    setShortcutName('');
-    setIsCustomizeModalOpen(false);
+  const colorMap: Record<string, string> = {
+    emerald: 'from-emerald-500/10 to-emerald-500/5 border-emerald-500/20 text-emerald-600 dark:text-emerald-400',
+    blue: 'from-blue-500/10 to-blue-500/5 border-blue-500/20 text-blue-600 dark:text-blue-400',
+    violet: 'from-violet-500/10 to-violet-500/5 border-violet-500/20 text-violet-600 dark:text-violet-400',
+    amber: 'from-amber-500/10 to-amber-500/5 border-amber-500/20 text-amber-600 dark:text-amber-400',
+    rose: 'from-rose-500/10 to-rose-500/5 border-rose-500/20 text-rose-600 dark:text-rose-400',
+    indigo: 'from-indigo-500/10 to-indigo-500/5 border-indigo-500/20 text-indigo-600 dark:text-indigo-400',
   };
+  const cls = colorMap[color] || colorMap.blue;
+  return (
+    <motion.div
+      whileHover={{ y: -2, scale: 1.01 }}
+      onClick={onClick}
+      className={`rounded-2xl border bg-gradient-to-br p-4 cursor-pointer transition-shadow hover:shadow-md ${cls}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wider opacity-70 mb-1">{label}</p>
+          <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 leading-none">{value}</p>
+          {subValue && <p className="text-[11px] opacity-60 mt-1 truncate">{subValue}</p>}
+        </div>
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-white/60 dark:bg-white/10`}>
+          <Icon className="w-4.5 h-4.5" />
+        </div>
+      </div>
+      {trend && (
+        <div className={`mt-2 flex items-center gap-1 text-[11px] font-medium ${trend === 'up' ? 'text-emerald-600' : trend === 'down' ? 'text-rose-500' : 'text-slate-400'}`}>
+          {trend === 'up' ? <ArrowUpRight className="w-3 h-3" /> : trend === 'down' ? <ArrowDownRight className="w-3 h-3" /> : null}
+          <span>{trend === 'up' ? '+12% this month' : trend === 'down' ? '-3% this week' : 'Stable'}</span>
+        </div>
+      )}
+    </motion.div>
+  );
+});
 
-  const handleResetShortcuts = () => {
-    setCustomShortcuts([]);
-    localStorage.removeItem('erpnext_custom_shortcuts');
-  };
+// Shortcut grid item
+const ShortcutBtn = React.memo(({ item, onClick }: { item: ShortcutItem; onClick: () => void }) => (
+  <motion.button
+    whileHover={{ scale: 1.03 }}
+    whileTap={{ scale: 0.97 }}
+    onClick={onClick}
+    className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-slate-200/70 dark:border-white/[0.07] bg-white dark:bg-white/[0.03] hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/5 transition-all group text-center"
+  >
+    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+      <item.icon className="w-4 h-4 text-slate-500 dark:text-slate-400 group-hover:text-white" />
+    </div>
+    <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 leading-tight group-hover:text-slate-800 dark:group-hover:text-slate-200">{item.label}</p>
+    {item.desc && <p className="text-[10px] text-slate-400 leading-tight hidden sm:block">{item.desc}</p>}
+  </motion.button>
+));
 
-  // --- Dynamic KPI Calculations ---
-  const totalRevenue = useMemo(() => orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0), [orders]);
-  const activeJobsCount = useMemo(() => production.filter(j => j.status !== 'READY').length, [production]);
-  const lowStockItemsCount = useMemo(() => inventory.filter(i => i.quantity <= i.minStockLevel).length, [inventory]);
-  const totalKarigarsCount = useMemo(() => karigars.length, [karigars]);
+const Dashboard: React.FC<DashboardProps> = ({
+  inventory, production, orders, currency = '₹',
+  features, machines = [], karigars = [], setView,
+}) => {
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('HOME');
 
-  // Pricing calculations
-  const orderCount = orders.length;
-  const pendingDeliveries = orders.filter(o => o.status === 'PENDING').length;
-  const completedJobs = production.filter(j => j.status === 'READY').length;
+  const navigateTo = (view: ViewState) => setView?.(view);
 
-  // --- Dynamic Revenue Trend Data (Last 7 Days) ---
-  const revenueTrendData = useMemo(() => {
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      return d.toISOString().split('T')[0];
-    }).reverse();
+  // Stats
+  const totalOrders = orders.length;
+  const pendingOrders = orders.filter(o => o.status === 'PENDING').length;
+  const completedOrders = orders.filter(o => o.status === 'FULFILLED' || o.status === 'COMPLETED').length;
+  const totalRevenue = orders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+  const lowStock = inventory.filter(i => i.quantity <= (i.minStockLevel || 10)).length;
+  const inProduction = production.filter(p => p.status === 'IN_PROGRESS').length;
+  const activeKarigars = karigars.filter(k => k.isActive !== false).length;
 
-    return last7Days.map(date => {
-      const dayTotal = orders
-        .filter(o => o.orderDate === date)
-        .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-      
-      const label = new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      return { date: label, amount: dayTotal };
+  // Chart data
+  const monthlyData = useMemo(() => {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      const monthOrders = orders.filter(o => {
+        const od = new Date(o.orderDate || o.createdAt || Date.now());
+        return od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
+      });
+      return {
+        month: months[d.getMonth()],
+        sales: monthOrders.reduce((s, o) => s + (o.totalAmount || 0), 0),
+        orders: monthOrders.length,
+      };
     });
   }, [orders]);
 
-  // --- Dynamic Recent Activity Feed ---
-  const recentActivity = useMemo(() => {
-    const activities: { label: string; time: string; icon: any; color: string; timestamp: number }[] = [];
-
-    orders.slice(0, 5).forEach(o => {
-      activities.push({
-        label: `Order #${o.id} for ${o.customerName}`,
-        time: o.orderDate,
-        icon: ShoppingCart,
-        color: 'text-blue-500',
-        timestamp: new Date(o.updatedAt || o.orderDate).getTime()
-      });
-    });
-
-    production.slice(0, 5).forEach(j => {
-      activities.push({
-        label: `Job ${j.id}: ${j.status.toLowerCase()}`,
-        time: j.startDate,
-        icon: j.status === 'READY' ? CheckCircle2 : Factory,
-        color: j.status === 'READY' ? 'text-emerald-500' : 'text-indigo-500',
-        timestamp: new Date(j.updatedAt || j.startDate).getTime()
-      });
-    });
-
-    inventory.filter(i => i.quantity <= i.minStockLevel).slice(0, 3).forEach(i => {
-      activities.push({
-        label: `Low Stock Request: ${i.name}`,
-        time: 'Action Required',
-        icon: AlertTriangle,
-        color: 'text-amber-500',
-        timestamp: Date.now()
-      });
-    });
-
-    return activities.sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
-  }, [orders, production, inventory]);
-
-  const itemVariants = {
-    hidden: { y: 15, opacity: 0 },
-    visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 120 } }
-  };
-
-  const handleNav = (v: ViewState) => {
-    if (setView) setView(v);
-  };
+  const shortcuts = WORKSPACE_SHORTCUTS[activeTab];
+  const doctypes = MODULE_DOCTYPES[activeTab];
+  const activeTabInfo = WORKSPACE_TABS.find(t => t.id === activeTab)!;
 
   return (
-    <div className="space-y-6 pb-12 text-left">
-      
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">ERPNext Workspace v15</span>
-            <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1">
-               <Sparkles className="w-3 h-3 text-amber-500"/> Frappe Framework Engine Enabled
-            </span>
-          </div>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2 tracking-tight">
-            {activeWorkspace === 'HOME' ? 'Home Workspace' : `${activeWorkspace} Dashboard`}
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {activeWorkspace === 'HOME' ? 'Real-time overview of your enterprise documents' : `Complete directory schema, stats and rapid launch points for ${activeWorkspace}`}
-          </p>
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Workspace Tabs — ERPNext-style */}
+      <div className="shrink-0 border-b border-slate-200/60 dark:border-white/[0.06] bg-white/60 dark:bg-white/[0.02] backdrop-blur-sm">
+        <div className="flex items-center gap-0.5 px-4 overflow-x-auto scrollbar-none">
+          {WORKSPACE_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-3 py-3 text-[12px] font-semibold whitespace-nowrap border-b-2 transition-all relative ${
+                activeTab === tab.id
+                  ? `border-indigo-500 ${tab.color}`
+                  : 'border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
+            >
+              <div className={`w-1.5 h-1.5 rounded-full ${activeTab === tab.id ? tab.dot : 'bg-slate-300 dark:bg-slate-600'}`} />
+              {tab.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <button 
-             onClick={() => setIsCustomizeModalOpen(true)}
-             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 border border-slate-200 dark:border-slate-700 transition-all shadow-sm"
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15 }}
+            className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto"
           >
-             <Settings className="w-4 h-4 text-slate-500 animate-spin-slow"/> Customize Workspace
-          </button>
-          
-          <div className="text-right hidden xl:block border-l border-slate-200 dark:border-slate-800 pl-4">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Frappe Clock</p>
-            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 tabular-nums">
-              {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </p>
-          </div>
-        </div>
-      </div>
+            {/* Home Tab — Stats + Charts */}
+            {activeTab === 'HOME' && (
+              <>
+                {/* KPI Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <StatCard label="Total Revenue" value={`${currency}${(totalRevenue/1000).toFixed(0)}K`} subValue={`${totalOrders} orders total`} icon={IndianRupee} color="emerald" trend="up" onClick={() => navigateTo('ORDERS')} />
+                  <StatCard label="In Production" value={inProduction} subValue={`${production.length} work orders`} icon={Factory} color="indigo" trend="neutral" onClick={() => navigateTo('PRODUCTION')} />
+                  <StatCard label="Pending Orders" value={pendingOrders} subValue={`${completedOrders} fulfilled`} icon={ShoppingCart} color="amber" trend={pendingOrders > 5 ? 'up' : 'neutral'} onClick={() => navigateTo('ORDERS')} />
+                  <StatCard label="Low Stock Items" value={lowStock} subValue={`${inventory.length} total items`} icon={AlertTriangle} color={lowStock > 0 ? 'rose' : 'emerald'} trend={lowStock > 0 ? 'down' : 'neutral'} onClick={() => navigateTo('INVENTORY')} />
+                </div>
 
-      {/* Workspace Tabs Navigation (ERPNext Sidebar Style converted to top-tabs) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-2 shrink-0 shadow-sm overflow-x-auto no-scrollbar">
-         <div className="flex gap-1 min-w-max">
-            {[
-               { id: 'HOME', label: 'Home Workspace', emoji: '🏠' },
-               { id: 'SELLING', label: 'Selling', emoji: '🛒' },
-               { id: 'BUYING', label: 'Buying', emoji: '📦' },
-               { id: 'MANUFACTURING', label: 'Manufacturing', emoji: '🏭' },
-               { id: 'STOCK', label: 'Stock & Materials', emoji: '💠' },
-               { id: 'ACCOUNTS', label: 'Accounting', emoji: '💳' },
-               { id: 'HR', label: 'HR & Staffing', emoji: '👥' },
-            ].map(ws => (
-               <button 
-                  key={ws.id} 
-                  onClick={() => setActiveWorkspace(ws.id as ERPWorkspaceType)} 
-                  className={`py-2 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                     activeWorkspace === ws.id 
-                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25' 
-                       : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5'
-                  }`}
-               >
-                 <span>{ws.emoji}</span> {ws.label}
-               </button>
-            ))}
-         </div>
-      </div>
-
-      {/* Workspace Area render */}
-      <AnimatePresence mode="wait">
-        <motion.div 
-           key={activeWorkspace}
-           initial={{ opacity: 0, y: 5 }}
-           animate={{ opacity: 1, y: 0 }}
-           exit={{ opacity: 0, y: -5 }}
-           transition={{ duration: 0.2 }}
-           className="space-y-6"
-        >
-          {/* USER CUSTOMIZATIONS BAR */}
-          {customShortcuts.length > 0 && (
-             <div className="bg-gradient-to-r from-amber-500/5 to-yellow-500/5 border border-amber-500/20 rounded-2xl p-4">
-                <p className="text-[10px] font-black uppercase text-amber-600 tracking-wider mb-2 flex items-center gap-1"><Sparkles className="w-3.5 h-3.5"/> User Custom Workspace Row</p>
-                <div className="flex flex-wrap gap-2">
-                   {customShortcuts.map((cs, idx) => (
-                      <button 
-                         key={idx} 
-                         onClick={() => handleNav(cs.view)}
-                         className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-amber-500/30 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-amber-500/10 transition-all flex items-center gap-1.5"
-                      >
-                         <Plus className="w-3 h-3 text-amber-500 rotate-45"/> {cs.label}
+                {/* Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="lg:col-span-2 rounded-2xl border border-slate-200/70 dark:border-white/[0.07] bg-white dark:bg-white/[0.02] p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Sales Trend</h3>
+                        <p className="text-[11px] text-slate-400">Last 6 months revenue</p>
+                      </div>
+                      <button onClick={() => navigateTo('REPORTS')} className="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1">
+                        View Report <ChevronRight className="w-3 h-3" />
                       </button>
-                   ))}
-                </div>
-             </div>
-          )}
-
-          {/* HOME WORKSPACE VIEW */}
-          {activeWorkspace === 'HOME' && (
-             <>
-               {/* Stat cards (Frappe Number Cards) */}
-               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {[
-                    { label: 'Annual Revenue (FY26)', val: `${currency}${totalRevenue.toLocaleString()}`, icon: IndianRupee, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20', trend: 'Active Ledger' },
-                    { label: 'Active Job Orders', val: activeJobsCount, icon: Factory, color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-900/20', trend: 'In Manufacturing' },
-                    { label: 'Total Registered Staff', val: totalKarigarsCount, icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/40', trend: 'Staff Module' },
-                    { label: 'Low Stock Warnings', val: lowStockItemsCount, icon: AlertTriangle, color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/40', trend: 'Stock Module' }
-                  ].map((card, i) => (
-                    <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-sm">
-                       <div className="flex justify-between items-start">
-                         <div className={`p-2.5 rounded-xl ${card.bg} ${card.color} shrink-0`}>
-                           <card.icon className="w-5 h-5" />
-                         </div>
-                         <span className="text-[9px] font-black uppercase text-slate-400 bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 px-2 py-0.5 rounded-md">{card.trend}</span>
-                       </div>
-                       <div>
-                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{card.label}</p>
-                         <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1 tabular-nums tracking-tight">{card.val}</h3>
-                       </div>
                     </div>
-                  ))}
-               </div>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <AreaChart data={monthlyData}>
+                        <defs>
+                          <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15}/>
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+                        <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                        <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid rgba(148,163,184,0.2)', background: 'rgba(255,255,255,0.95)' }} />
+                        <Area type="monotone" dataKey="sales" stroke="#6366f1" strokeWidth={2} fill="url(#salesGrad)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
 
-               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                 {/* Revenue Chart */}
-                 <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-                   <div className="flex justify-between items-center mb-8">
-                     <div>
-                       <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 uppercase tracking-wide">
-                         <TrendingUp className="w-4 h-4 text-indigo-600" />
-                         Revenue Performance Overview
-                       </h3>
-                       <p className="text-xs text-slate-500 mt-1">Frappe analytic tracker over current sales transactions</p>
-                     </div>
-                     <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-widest border border-slate-150 dark:border-slate-750">
-                       7 Day Trend
-                     </div>
-                   </div>
-                   <div className="h-[300px] w-full">
-                     <ResponsiveContainer width="100%" height="100%">
-                       <AreaChart data={revenueTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                         <defs>
-                           <linearGradient id="dashGradient" x1="0" y1="0" x2="0" y2="1">
-                             <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15}/>
-                             <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                           </linearGradient>
-                         </defs>
-                         <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.05} />
-                         <XAxis 
-                           dataKey="date" 
-                           axisLine={false} 
-                           tickLine={false} 
-                           tick={{fontSize: 10, fill: '#94a3b8', fontWeight: 500}} 
-                           dy={10}
-                         />
-                         <YAxis 
-                           axisLine={false} 
-                           tickLine={false} 
-                           tick={{fontSize: 10, fill: '#94a3b8', fontWeight: 500}} 
-                           tickFormatter={(v) => `${v/1000}k`} 
-                         />
-                         <Tooltip 
-                           formatter={(val: any) => [`${currency}${Number(val).toLocaleString()}`, 'Revenue']}
-                           cursor={{stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '4 4'}} 
-                           contentStyle={{
-                             backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                             backdropFilter: 'blur(10px)',
-                             borderRadius: '12px', 
-                             border: '1px solid rgba(0, 0, 0, 0.1)', 
-                             boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                             fontSize: '12px',
-                             fontWeight: 'bold'
-                           }}
-                         />
-                         <Area 
-                           type="monotone" 
-                           dataKey="amount" 
-                           stroke="#6366f1" 
-                           strokeWidth={3} 
-                           fill="url(#dashGradient)" 
-                           animationDuration={1000}
-                         />
-                       </AreaChart>
-                     </ResponsiveContainer>
-                   </div>
-                 </div>
-
-                 {/* Status Lists */}
-                 <div className="space-y-6">
-                    {/* Recent Activity */}
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 flex flex-col min-h-[380px] shadow-sm">
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-5 flex items-center gap-2 uppercase tracking-wide">
-                        <History className="w-4 h-4 text-indigo-500" />
-                        Live Feed Log
-                      </h3>
-                      <div className="space-y-1 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                        <AnimatePresence mode="popLayout">
-                          {recentActivity.map((act, i) => (
-                            <div 
-                              key={act.timestamp + i}
-                              className="flex items-start gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group cursor-default"
-                            >
-                              <div className={`p-2 rounded-lg bg-slate-100 dark:bg-slate-800 ${act.color} shrink-0`}>
-                                <act.icon className="w-4 h-4" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-snug truncate">{act.label}</p>
-                                <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider font-medium">{act.time}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </AnimatePresence>
-                        {recentActivity.length === 0 && (
-                          <div className="h-full flex flex-col items-center justify-center opacity-20 py-10">
-                            <Package className="w-10 h-10 mb-2"/>
-                            <p className="text-[9px] font-bold uppercase tracking-widest">No Recent Activity</p>
+                  <div className="rounded-2xl border border-slate-200/70 dark:border-white/[0.07] bg-white dark:bg-white/[0.02] p-4">
+                    <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 mb-1">Activity</h3>
+                    <p className="text-[11px] text-slate-400 mb-4">Quick metrics</p>
+                    <div className="space-y-3">
+                      {[
+                        { label: 'Active Karigars', value: activeKarigars, icon: Scissors, color: 'text-indigo-500' },
+                        { label: 'Active Machines', value: machines.length, icon: Settings, color: 'text-cyan-500' },
+                        { label: 'Completed Orders', value: completedOrders, icon: CheckCircle2, color: 'text-emerald-500' },
+                        { label: 'Stock Items', value: inventory.length, icon: Package2, color: 'text-amber-500' },
+                      ].map((row) => (
+                        <div key={row.label} className="flex items-center gap-2.5">
+                          <div className={`w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center shrink-0 ${row.color}`}>
+                            <row.icon className="w-3.5 h-3.5" />
                           </div>
-                        )}
-                      </div>
+                          <span className="flex-1 text-[12px] text-slate-600 dark:text-slate-400">{row.label}</span>
+                          <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200">{row.value}</span>
+                        </div>
+                      ))}
                     </div>
-                 </div>
-               </div>
-             </>
-          )}
-
-          {/* DYNAMIC MODULES WORKSPACES (SELLING, BUYING, ETC.) */}
-          {activeWorkspace !== 'HOME' && (
-             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                
-                {/* Left columns - Stats & Shortcuts */}
-                <div className="lg:col-span-3 space-y-6">
-                   
-                   {/* Module Performance Number Cards */}
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {activeWorkspace === 'SELLING' && (
-                         <>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Sales Invoiced</p>
-                               <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">{currency}{totalRevenue.toLocaleString()}</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Order Documents</p>
-                               <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">{orderCount} Invoices</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Pending Orders</p>
-                               <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">{pendingDeliveries} Deliveries</p>
-                            </div>
-                         </>
-                      )}
-                      {activeWorkspace === 'BUYING' && (
-                         <>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Active Raw Materials Items</p>
-                               <p className="text-2xl font-black text-indigo-600 dark:text-white mt-1">{inventory.length} SKUs</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Supplier Contacts</p>
-                               <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">Linked Records</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider font-mono">GRN Status</p>
-                               <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">Auto tracked</p>
-                            </div>
-                         </>
-                      )}
-                      {activeWorkspace === 'MANUFACTURING' && (
-                         <>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Factory Machine Shards</p>
-                               <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">{machines.length} Mounted</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Active Lots Cutting</p>
-                               <p className="text-2xl font-black text-indigo-600 mt-1">{production.filter(p => p.status === 'CUTTING').length} Lots</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Quality Passes</p>
-                               <p className="text-2xl font-black text-emerald-600 mt-1">{completedJobs} Finished</p>
-                            </div>
-                         </>
-                      )}
-                      {activeWorkspace === 'STOCK' && (
-                         <>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Global Inventory Balance</p>
-                               <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">{inventory.reduce((sum, item) => sum + (item.quantity || 0), 0).toLocaleString()} Units</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Critical Inventory Alerts</p>
-                               <p className="text-2xl font-black text-rose-500 mt-1">{lowStockItemsCount} SKUs</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Custom Combo Packs</p>
-                               <p className="text-2xl font-black text-indigo-600 mt-1">Multi pack active</p>
-                            </div>
-                         </>
-                      )}
-                      {activeWorkspace === 'ACCOUNTS' && (
-                         <>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">General Ledger Entries</p>
-                               <p className="text-2xl font-black text-indigo-600 dark:text-white mt-1">Indexed</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Gross Billings (Total)</p>
-                               <p className="text-2xl font-black text-emerald-600 mt-1">{currency}{totalRevenue.toLocaleString()}</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Cash Register Ledger</p>
-                               <p className="text-2xl font-black text-slate-800 mt-1">Daily Logged</p>
-                            </div>
-                         </>
-                      )}
-                      {activeWorkspace === 'HR' && (
-                         <>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Employee Roster Size</p>
-                               <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">Active Staff</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Karigars Master count</p>
-                               <p className="text-2xl font-black text-indigo-600 mt-1">{karigars.length} Contacts</p>
-                            </div>
-                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Timesheet Compliance</p>
-                               <p className="text-2xl font-black text-emerald-600 mt-1">98% Logged</p>
-                            </div>
-                         </>
-                      )}
-                   </div>
-
-                   {/* ERPNext Action Cards Shortcuts Hub */}
-                   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-                      <div className="flex justify-between items-center border-b pb-3 mb-4">
-                         <h3 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
-                            <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse"/> Standard Frappe Shortcuts
-                         </h3>
-                         <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold tracking-tight">Rapid form launch</span>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                         {activeWorkspace === 'SELLING' && (
-                            <>
-                               {[
-                                  { label: '+ Add Sales Order', view: 'ORDERS' as ViewState },
-                                  { label: '+ Add Customer', view: 'CUSTOMERS' as ViewState },
-                                  { label: '+ Dispatch Delivery', view: 'DELIVERY_CHALLAN' as ViewState },
-                                  { label: 'View Invoices', view: 'TAX_INVOICE' as ViewState },
-                                  { label: 'Sales Returns', view: 'SALES_RETURN' as ViewState },
-                                  { label: 'Credit Note Grid', view: 'CREDIT_NOTE' as ViewState },
-                                  { label: 'Lead CRM Portal', view: 'CRM' as ViewState }
-                               ].map((sc, i) => (
-                                  <button key={i} onClick={() => handleNav(sc.view)} className="p-4 bg-slate-50 dark:bg-slate-950 hover:bg-indigo-50 dark:hover:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-xl text-left text-xs font-black text-slate-700 dark:text-slate-300 transition-all uppercase tracking-tight">
-                                     {sc.label}
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                         {activeWorkspace === 'BUYING' && (
-                            <>
-                               {[
-                                  { label: '+ New Purchase Order', view: 'PURCHASE_ORDER' as ViewState },
-                                  { label: '+ New Inward Receipt', view: 'PURCHASE_INWARD' as ViewState },
-                                  { label: '+ New Supplier profile', view: 'SUPPLIERS' as ViewState },
-                                  { label: 'Debit Notes Console', view: 'DEBIT_NOTE' as ViewState },
-                                  { label: 'Vendor Returns List', view: 'PURCHASE_RETURN' as ViewState }
-                               ].map((sc, i) => (
-                                  <button key={i} onClick={() => handleNav(sc.view)} className="p-4 bg-slate-50 dark:bg-slate-950 hover:bg-indigo-50 dark:hover:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-xl text-left text-xs font-black text-slate-700 dark:text-slate-300 transition-all uppercase tracking-tight">
-                                     {sc.label}
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                         {activeWorkspace === 'MANUFACTURING' && (
-                            <>
-                               {[
-                                  { label: '+ New Production Job', view: 'PRODUCTION' as ViewState },
-                                  { label: '+ New Formula BOM', view: 'DESIGN_RECIPE' as ViewState },
-                                  { label: '+ Launch Sample order', view: 'SAMPLING' as ViewState },
-                                  { label: 'Fabric Quality Check', view: 'QUALITY' as ViewState },
-                                  { label: 'Godown Jobwork logs', view: 'JOB_WORK' as ViewState },
-                                  { label: 'Active Lot Map', view: 'TRACK_LOTS' as ViewState }
-                               ].map((sc, i) => (
-                                  <button key={i} onClick={() => handleNav(sc.view)} className="p-4 bg-slate-50 dark:bg-slate-950 hover:bg-indigo-50 dark:hover:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-xl text-left text-xs font-black text-slate-700 dark:text-slate-300 transition-all uppercase tracking-tight">
-                                     {sc.label}
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                         {activeWorkspace === 'STOCK' && (
-                            <>
-                               {[
-                                  { label: '+ Record Stock Audit', view: 'STOCK_AUDIT' as ViewState },
-                                  { label: '+ Move Stock (Transit)', view: 'STOCK_TRANSFER' as ViewState },
-                                  { label: '+ Record Opening Stock', view: 'OPENING_STOCK' as ViewState },
-                                  { label: 'Combo Creator', view: 'PACK_DESIGN' as ViewState },
-                                  { label: 'Stock Levels Matrix', view: 'INVENTORY' as ViewState },
-                                  { label: 'Catalog Lookup', view: 'CATALOG' as ViewState }
-                               ].map((sc, i) => (
-                                  <button key={i} onClick={() => handleNav(sc.view)} className="p-4 bg-slate-50 dark:bg-slate-950 hover:bg-indigo-50 dark:hover:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-xl text-left text-xs font-black text-slate-700 dark:text-slate-300 transition-all uppercase tracking-tight">
-                                     {sc.label}
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                         {activeWorkspace === 'ACCOUNTS' && (
-                            <>
-                               {[
-                                  { label: 'Ledger Audit List', view: 'ACCOUNTING' as ViewState },
-                                  { label: 'Cash Book Journal', view: 'CASH_BOOK' as ViewState },
-                                  { label: 'Karigars Ledger', view: 'KARIGAR_KHATA' as ViewState },
-                                  { label: 'Agents ledger log', view: 'AGENT_KHATA' as ViewState },
-                                  { label: 'Invoices grid view', view: 'TAX_INVOICE' as ViewState }
-                               ].map((sc, i) => (
-                                  <button key={i} onClick={() => handleNav(sc.view)} className="p-4 bg-slate-50 dark:bg-slate-950 hover:bg-indigo-50 dark:hover:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-xl text-left text-xs font-black text-slate-700 dark:text-slate-300 transition-all uppercase tracking-tight">
-                                     {sc.label}
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                         {activeWorkspace === 'HR' && (
-                            <>
-                               {[
-                                  { label: 'Staff Roster console', view: 'TEAM' as ViewState },
-                                  { label: 'Check in / Shift grid', view: 'ATTENDANCE' as ViewState },
-                                  { label: 'Karigars piece registers', view: 'KARIGARS' as ViewState },
-                                  { label: 'Payroll adjustments', view: 'PAYROLL' as ViewState }
-                               ].map((sc, i) => (
-                                  <button key={i} onClick={() => handleNav(sc.view)} className="p-4 bg-slate-50 dark:bg-slate-950 hover:bg-indigo-50 dark:hover:bg-white/5 border border-slate-200 dark:border-slate-800 rounded-xl text-left text-xs font-black text-slate-700 dark:text-slate-300 transition-all uppercase tracking-tight">
-                                     {sc.label}
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                      </div>
-                   </div>
-                </div>
-
-                {/* Right Column - Unified Document & Report Directories */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-6">
-                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b pb-2 mb-2">DocType Directories</h4>
-                   
-                   {/* Documents Group */}
-                   <div>
-                      <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest pl-1">Documents / Lists</p>
-                      <div className="mt-2 space-y-1">
-                         {activeWorkspace === 'SELLING' && (
-                            <>
-                               {[
-                                  { label: 'Customer Master', view: 'CUSTOMERS' as ViewState },
-                                  { label: 'Sales Orders', view: 'ORDERS' as ViewState },
-                                  { label: 'Delivery Challan', view: 'DELIVERY_CHALLAN' as ViewState },
-                                  { label: 'Credit Note Ledger', view: 'CREDIT_NOTE' as ViewState },
-                                  { label: 'Sales Returns', view: 'SALES_RETURN' as ViewState },
-                               ].map((doc, idx) => (
-                                  <button key={idx} onClick={() => handleNav(doc.view)} className="w-full text-left py-1.5 px-2 bg-slate-50 dark:bg-slate-950/20 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tighter flex justify-between items-center">
-                                     <span>📄 {doc.label}</span>
-                                     <span className="text-[8px] bg-slate-200 dark:bg-slate-800 px-1 rounded text-slate-500">DocType</span>
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                         {activeWorkspace === 'BUYING' && (
-                            <>
-                               {[
-                                  { label: 'Supplier List', view: 'SUPPLIERS' as ViewState },
-                                  { label: 'Purchase Orders', view: 'PURCHASE_ORDER' as ViewState },
-                                  { label: 'Goods Inward Receipt', view: 'PURCHASE_INWARD' as ViewState },
-                                  { label: 'Debit Notes Logs', view: 'DEBIT_NOTE' as ViewState },
-                               ].map((doc, idx) => (
-                                  <button key={idx} onClick={() => handleNav(doc.view)} className="w-full text-left py-1.5 px-2 bg-slate-50 dark:bg-slate-950/20 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tighter flex justify-between items-center">
-                                     <span>📄 {doc.label}</span>
-                                     <span className="text-[8px] bg-slate-200 dark:bg-slate-800 px-1 rounded text-slate-500">DocType</span>
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                         {activeWorkspace === 'MANUFACTURING' && (
-                            <>
-                               {[
-                                  { label: 'Bill of Materials (BOM)', view: 'DESIGN_RECIPE' as ViewState },
-                                  { label: 'Yarn Dyeing Process', view: 'DYEING_PROCESSING' as ViewState },
-                                  { label: 'Manufacturing Job Card', view: 'PRODUCTION' as ViewState },
-                                  { label: 'QC Audit Reports', view: 'QUALITY' as ViewState },
-                               ].map((doc, idx) => (
-                                  <button key={idx} onClick={() => handleNav(doc.view)} className="w-full text-left py-1.5 px-2 bg-slate-50 dark:bg-slate-950/20 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tighter flex justify-between items-center">
-                                     <span>📄 {doc.label}</span>
-                                     <span className="text-[8px] bg-slate-200 dark:bg-slate-800 px-1 rounded text-slate-500">DocType</span>
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                         {activeWorkspace === 'STOCK' && (
-                            <>
-                               {[
-                                  { label: 'Stock Ledger List', view: 'INVENTORY' as ViewState },
-                                  { label: 'Stock Reconciliation', view: 'STOCK_AUDIT' as ViewState },
-                                  { label: 'Stock Transfers Log', view: 'STOCK_TRANSFER' as ViewState },
-                                  { label: 'Combo Design Packs', view: 'PACK_DESIGN' as ViewState },
-                               ].map((doc, idx) => (
-                                  <button key={idx} onClick={() => handleNav(doc.view)} className="w-full text-left py-1.5 px-2 bg-slate-50 dark:bg-slate-950/20 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tighter flex justify-between items-center">
-                                     <span>📄 {doc.label}</span>
-                                     <span className="text-[8px] bg-slate-200 dark:bg-slate-800 px-1 rounded text-slate-500">DocType</span>
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                         {activeWorkspace === 'ACCOUNTS' && (
-                            <>
-                               {[
-                                  { label: 'Acc Ledger Statement', view: 'ACCOUNTING' as ViewState },
-                                  { label: 'Cash Register Ledger', view: 'CASH_BOOK' as ViewState },
-                                  { label: 'Customer Invoices', view: 'TAX_INVOICE' as ViewState },
-                                  { label: 'Supplier Ledger Accounts', view: 'SUPPLIERS' as ViewState },
-                               ].map((doc, idx) => (
-                                  <button key={idx} onClick={() => handleNav(doc.view)} className="w-full text-left py-1.5 px-2 bg-slate-50 dark:bg-slate-950/20 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tighter flex justify-between items-center">
-                                     <span>📄 {doc.label}</span>
-                                     <span className="text-[8px] bg-slate-200 dark:bg-slate-800 px-1 rounded text-slate-500">DocType</span>
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                         {activeWorkspace === 'HR' && (
-                            <>
-                               {[
-                                  { label: 'Employee Registry', view: 'TEAM' as ViewState },
-                                  { label: 'Timesheet Attendance', view: 'ATTENDANCE' as ViewState },
-                                  { label: 'Karigar Piece Registry', view: 'KARIGARS' as ViewState },
-                                  { label: 'Salary Ledger Slip', view: 'PAYROLL' as ViewState },
-                               ].map((doc, idx) => (
-                                  <button key={idx} onClick={() => handleNav(doc.view)} className="w-full text-left py-1.5 px-2 bg-slate-50 dark:bg-slate-950/20 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tighter flex justify-between items-center">
-                                     <span>📄 {doc.label}</span>
-                                     <span className="text-[8px] bg-slate-200 dark:bg-slate-800 px-1 rounded text-slate-500">DocType</span>
-                                  </button>
-                               ))}
-                            </>
-                         )}
-                      </div>
-                   </div>
-
-                   {/* Configuration Setup Links */}
-                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Configuration & Setup</p>
-                      <div className="mt-2 space-y-1">
-                         <button onClick={() => handleNav('SETTINGS')} className="w-full text-left py-1 p-2 bg-slate-50/50 dark:bg-slate-950/10 hover:bg-indigo-50 rounded text-[11px] font-bold text-slate-500 flex items-center justify-between">
-                            <span>⚙️ System Preferences</span>
-                            <span className="text-[8px] opacity-60">Frappe</span>
-                         </button>
-                         <button onClick={() => handleNav('SETTINGS')} className="w-full text-left py-1 p-2 bg-slate-50/50 dark:bg-slate-950/10 hover:bg-indigo-50 rounded text-[11px] font-bold text-slate-500 flex items-center justify-between">
-                            <span>🛠️ DocType Field Designer</span>
-                            <span className="text-[8px] text-indigo-500 font-extrabold">NEW</span>
-                         </button>
-                      </div>
-                   </div>
-
-                </div>
-             </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
-
-      {/* FRA-CUSTOMIZE MODAL DESIGN */}
-      {isCustomizeModalOpen && (
-         <div className="fixed inset-0 z-[250] flex items-center justify-center p-4">
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsCustomizeModalOpen(false)} />
-            <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col gap-5 text-slate-800 dark:text-slate-200">
-               <div>
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                     <Settings className="w-4 h-4 text-indigo-500 animate-spin-slow" /> Customize Workspace Dashboard
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1">Configure custom quick-action shortcut tiles for your unique operator desk.</p>
-               </div>
-
-               <div className="space-y-4">
-                  <div className="space-y-1">
-                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Button Label</label>
-                     <input 
-                        type="text"
-                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none"
-                        placeholder="e.g. Add Cotton Dyeing Job"
-                        value={shortcutName}
-                        onChange={e => setShortcutName(e.target.value)}
-                     />
                   </div>
-                  
-                  <div className="space-y-1">
-                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">ERP Target View</label>
-                     <select 
-                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-xs font-bold"
-                        value={shortcutTarget}
-                        onChange={e => setShortcutTarget(e.target.value as ViewState)}
-                     >
-                        <option value="ORDERS">Sales Orders Master</option>
-                        <option value="PRODUCTION">Manufacturing Unit</option>
-                        <option value="YARN_MANAGEMENT">Yarn Stock Console</option>
-                        <option value="DYEING_PROCESSING">Dyeing Processing</option>
-                        <option value="INVENTORY">Inventory Master Ledger</option>
-                        <option value="SAMPLING">Samples Register</option>
-                        <option value="TEAM">Employee Desk</option>
-                     </select>
-                  </div>
-               </div>
+                </div>
+              </>
+            )}
 
-               <div className="flex gap-3 pt-2">
-                  <button 
-                     type="button" 
-                     onClick={handleResetShortcuts}
-                     className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold uppercase hover:bg-red-500/10 hover:text-red-600 transition-all flex items-center gap-1"
-                  >
-                     Reset Saved
-                  </button>
-                  <button 
-                     type="button" 
-                     onClick={() => setIsCustomizeModalOpen(false)}
-                     className="ml-auto px-4 py-2 text-xs font-bold uppercase text-slate-400 hover:text-slate-600"
-                  >
-                     Cancel
-                  </button>
-                  <button 
-                     type="button" 
-                     onClick={handleAddShortcut}
-                     className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold uppercase"
-                  >
-                     Save Tile
-                  </button>
-               </div>
+            {/* Shortcuts Grid — All Tabs */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h2 className="text-[13px] font-bold text-slate-800 dark:text-slate-100">
+                    {activeTab === 'HOME' ? 'Quick Actions' : `${activeTabInfo.label} Shortcuts`}
+                  </h2>
+                  <p className="text-[11px] text-slate-400">Common tasks and documents</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2">
+                {shortcuts.map((item) => (
+                  <ShortcutBtn key={item.view + item.label} item={item} onClick={() => navigateTo(item.view)} />
+                ))}
+              </div>
             </div>
-         </div>
-      )}
 
+            {/* DocType List */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Documents</h2>
+                {activeTab !== 'HOME' && (
+                  <button onClick={() => navigateTo('DOCUMENT_DESK')} className="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1">
+                    Open Desk <ChevronRight className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {doctypes.map((dt) => (
+                  <motion.button
+                    key={dt.view}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={() => navigateTo(dt.view)}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-slate-200/70 dark:border-white/[0.07] bg-white dark:bg-white/[0.02] hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:bg-indigo-50/30 dark:hover:bg-indigo-500/5 transition-all group text-left"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-indigo-500 transition-colors">
+                      <dt.icon className="w-4 h-4 text-slate-500 dark:text-slate-400 group-hover:text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-slate-900 dark:group-hover:text-white">{dt.label}</p>
+                      <p className="text-[10px] text-slate-400 truncate">→ Open list</p>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+
+            {/* Module Overview Cards (Home only) */}
+            {activeTab === 'HOME' && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Modules</h2>
+                  <button onClick={() => navigateTo('ERP_DESK')} className="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1">
+                    ERPNext Desk <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {ERP_MODULE_GROUPS.filter(g => features[g.id] !== false).map((group) => {
+                    const colors = MODULE_COLOR_MAP[group.id as ERPModuleGroupId] || MODULE_COLOR_MAP['masters'];
+                    const enabledCount = group.items.filter(i => features[i.id] !== false).length;
+                    return (
+                      <motion.div
+                        key={group.id}
+                        whileHover={{ y: -2, scale: 1.01 }}
+                        onClick={() => setActiveTab((['workspace','selling','buying','manufacturing','stock','accounts_hr','masters'].indexOf(group.id) >= 0
+                          ? ['HOME','SELLING','BUYING','MANUFACTURING','STOCK','ACCOUNTS','HR'][['workspace','selling','buying','manufacturing','stock','accounts_hr','masters'].indexOf(group.id)]
+                          : 'HOME') as WorkspaceTab)}
+                        className="rounded-2xl border border-slate-200/70 dark:border-white/[0.07] bg-white dark:bg-white/[0.02] p-3.5 cursor-pointer hover:shadow-md transition-all"
+                      >
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2.5 ${colors.bg}`}>
+                          <group.icon className={`w-4.5 h-4.5 ${colors.text}`} />
+                        </div>
+                        <p className="text-[12px] font-bold text-slate-700 dark:text-slate-200">{group.title}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 truncate">{group.description}</p>
+                        <div className={`mt-2 text-[10px] font-semibold ${colors.text}`}>{enabledCount} doctypes →</div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

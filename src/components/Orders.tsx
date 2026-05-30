@@ -2,9 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { Order, Customer, InventoryItem, OrderItem, Design, Agent } from '../types';
 import { 
   Search, Plus, Filter, ChevronLeft, ChevronRight,
-  MoreHorizontal, ArrowLeft, Save, Trash2, List, Settings, Layers, X
+  MoreHorizontal, ArrowLeft, Save, Trash2, List, Settings, Layers, X, ShoppingCart
 } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
+import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './shared/ListPage';
 
 interface OrdersProps {
   orders: Order[];
@@ -83,121 +84,44 @@ const Orders: React.FC<OrdersProps> = ({
     return <span className="bg-[#fffbeb] text-[#f59e0b] border border-[#fde68a] px-2 py-[2px] rounded-md text-[11px] font-semibold tracking-wide">Pending</span>
   };
 
-  return (
-    <div className="flex flex-col h-full bg-[#f4f5f6] font-sans antialiased text-[#1c2126] absolute inset-0 rounded-tl-xl overflow-hidden">
-       {viewMode === 'LIST' ? (
-          <div className="flex flex-col h-full animate-fade-in">
-            {/* ─── LIST HEADER ─── */}
-            <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 py-4 sticky top-0 z-20">
-               <div className="flex justify-between items-center h-8">
-                  <div className="flex items-center gap-3">
-                     <span className="text-xl text-[#1c2126] font-bold font-sans tracking-tight">Sales Order</span>
-                     <span className="text-xs text-[#525c66] bg-[#f4f5f6] px-2 py-0.5 rounded-full font-medium">{filteredOrders.length}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                     <button onClick={() => openForm()} className="h-7 px-3 flex items-center gap-1.5 bg-[#2490ef] hover:bg-[#2081d6] border border-transparent text-white rounded text-[13px] font-medium shadow-sm transition-all focus:ring-2 focus:ring-offset-1 focus:ring-[#2490ef]/50">
-                        <Plus className="w-4 h-4" />
-                        Add Sales Order
-                     </button>
-                  </div>
-               </div>
-               
-               {/* ─── FILTER BAR ─── */}
-               <div className="flex justify-between items-center mt-3 h-8">
-                  <div className="flex items-center gap-2">
-                      <button className="h-7 px-2.5 flex items-center gap-1.5 bg-white border border-[#d1d8dd] hover:bg-[#f4f5f6] rounded text-[13px] font-medium text-[#1c2126] transition-colors shadow-sm">
-                        <MoreHorizontal className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="h-7 px-2.5 flex items-center gap-1.5 bg-white border border-[#d1d8dd] hover:bg-[#f4f5f6] rounded text-[13px] font-medium text-[#1c2126] transition-colors shadow-sm">
-                        <Filter className="w-3.5 h-3.5" /> Filter
-                      </button>
-                      <div className="relative">
-                         <input
-                            type="text"
-                            placeholder="ID or Customer Name"
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
-                            className="h-7 w-[280px] pl-8 pr-3 text-[13px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-1 focus:ring-[#2490ef] transition-all placeholder-[#8d99a6]"
-                         />
-                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8d99a6]" />
-                      </div>
-                      <select 
-                        className="h-7 px-2 text-[13px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] transition-all"
-                        value={statusFilter}
-                        onChange={e => setStatusFilter(e.target.value as any)}
-                      >
-                         <option value="ALL">All Status</option>
-                         <option value="PENDING">Pending</option>
-                         <option value="SHIPPED">Shipped</option>
-                         <option value="DELIVERED">Delivered</option>
-                      </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                     <span className="text-[13px] text-[#525c66]">{filteredOrders.length > 0 ? `1 of ${filteredOrders.length}` : '0 of 0'}</span>
-                     <div className="flex border border-[#d1d8dd] rounded overflow-hidden">
-                        <button className="h-7 px-2 bg-white hover:bg-[#f4f5f6] text-[#1c2126] border-r border-[#d1d8dd]"><ChevronLeft className="w-4 h-4"/></button>
-                        <button className="h-7 px-2 bg-white hover:bg-[#f4f5f6] text-[#1c2126]"><ChevronRight className="w-4 h-4"/></button>
-                     </div>
-                  </div>
-               </div>
-            </div>
+  const orderColumns: ColumnDef<Order>[] = [
+    { key: 'id',           label: 'Order ID',    width: 160, render: r => r.id,           sortValue: r => r.id },
+    { key: 'customerName', label: 'Customer',    width: 220, render: r => r.customerName, sortValue: r => r.customerName },
+    { key: 'orderDate',    label: 'Date',        width: 110, render: r => r.orderDate,     sortValue: r => r.orderDate },
+    { key: 'status',       label: 'Status',      width: 120, render: r => <StatusBadge status={r.status} /> },
+    { key: 'paymentStatus',label: 'Payment',     width: 110, render: r => <StatusBadge status={r.paymentStatus} />, defaultHidden: true },
+    { key: 'agentName',    label: 'Agent',       width: 140, render: r => r.agentName ?? '—', defaultHidden: true },
+    { key: 'totalAmount',  label: 'Grand Total',             render: (r, cur) => `${cur}${(r.totalAmount || 0).toLocaleString()}`, sortValue: r => r.totalAmount || 0, align: 'right' },
+  ];
 
-            {/* ─── LIST BODY ─── */}
-            <div className="flex-1 overflow-auto p-5 pb-10">
-               <div className="bg-white border border-[#d1d8dd] rounded shadow-sm flex flex-col min-w-[900px]">
-                  {/* Table Header */}
-                  <div className="flex items-center border-b border-[#d1d8dd] bg-[#f4f5f6] px-4 py-2.5 text-xs text-[#525c66] select-none rounded-t">
-                     <div className="w-10 flex">
-                        <input type="checkbox" className="rounded-sm border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef] bg-white w-3.5 h-3.5 cursor-pointer"/>
-                     </div>
-                     <div className="w-48"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Order ID</span></div>
-                     <div className="w-64"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Customer</span></div>
-                     <div className="w-32"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Date</span></div>
-                     <div className="w-32"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Status</span></div>
-                     <div className="flex-1 min-w-0 pl-10"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Grand Total</span></div>
-                  </div>
-                  
-                  {/* Table Body */}
-                  <div className="divide-y divide-[#d1d8dd]/60">
-                     {filteredOrders.length === 0 && (
-                        <div className="px-4 py-12 flex flex-col items-center justify-center text-[#525c66]">
-                           <List className="w-8 h-8 text-[#d1d8dd] mb-3" />
-                           <p className="text-[13px]">No orders found.</p>
-                        </div>
-                     )}
-                     {filteredOrders.map((order) => (
-                        <div key={order.id} className="group flex items-center px-4 py-[9px] hover:bg-[#f4f5f6] transition-colors cursor-pointer text-[13px]" onClick={() => setSelectedOrder(order)}>
-                           <div className="w-10" onClick={(e) => e.stopPropagation()}>
-                              <input 
-                                type="checkbox" 
-                                checked={checkedIds.has(order.id)}
-                                onChange={(e) => {
-                                   const newSet = new Set(checkedIds);
-                                   if(e.target.checked) newSet.add(order.id);
-                                   else newSet.delete(order.id);
-                                   setCheckedIds(newSet);
-                                }}
-                                className="rounded-sm border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef] bg-white w-3.5 h-3.5 cursor-pointer"
-                              />
-                           </div>
-                           <div className="w-48 pr-2 font-medium">
-                               <a className="font-semibold text-[#1c2126] group-hover:underline cursor-pointer select-none">
-                                 {order.id}
-                              </a>
-                           </div>
-                           <div className="w-64 pr-4 truncate text-[#1c2126]">{order.customerName}</div>
-                           <div className="w-32 truncate text-[#525c66]">{order.orderDate}</div>
-                           <div className="w-32 truncate">{getStatusBadge(order.status)}</div>
-                           <div className="flex-1 pl-10 text-[#525c66] truncate tabular-nums">{currency}{(order.totalAmount || 0).toLocaleString()}</div>
-                           <div className="w-16 flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={(e) => { e.stopPropagation(); openForm(order); }} className="text-[#525c66] hover:text-[#1c2126]"><Settings className="w-4 h-4"/></button>
-                           </div>
-                        </div>
-                     ))}
-                  </div>
-               </div>
-            </div>
-          </div>
+  const orderTagFilters: TagFilter[] = [
+    { key: 'pending',   label: 'Pending',   match: r => r.status === 'PENDING' },
+    { key: 'shipped',   label: 'Shipped',   match: r => r.status === 'SHIPPED' },
+    { key: 'delivered', label: 'Delivered', match: r => r.status === 'DELIVERED' },
+    { key: 'unpaid',    label: 'Unpaid',    match: r => r.paymentStatus === 'UNPAID' },
+  ];
+
+  const orderBulkActions: BulkAction[] = [
+    { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onClick: ids => ids.forEach(id => onDeleteOrder(id)) },
+  ];
+
+  return (
+    <div className="flex flex-col h-full font-sans antialiased absolute inset-0 overflow-hidden">
+       {viewMode === 'LIST' ? (
+          <ListPage<Order>
+            doctype="Sales Order"
+            rows={orders}
+            columns={orderColumns}
+            onRowClick={order => setSelectedOrder(order)}
+            onNew={() => openForm()}
+            newLabel="New Order"
+            searchFields={['id', 'customerName', 'agentName']}
+            tagFilters={orderTagFilters}
+            bulkActions={orderBulkActions}
+            currency={currency}
+            emptyIcon={ShoppingCart}
+            emptyMessage="No sales orders yet"
+          />
        ) : (
           <div className="flex flex-col h-full animate-fade-in">
              {/* ─── FORM HEADER ─── */}

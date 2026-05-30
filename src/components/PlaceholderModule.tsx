@@ -1,29 +1,45 @@
 import React from 'react';
-import { Construction } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Construction, ChevronRight, Sparkles } from 'lucide-react';
 
-interface PlaceholderProps {
-  title: string;
+interface PlaceholderModuleProps {
+  title?: string;
+  description?: string;
+  module?: string;
+  icon?: React.ComponentType<{ className?: string }>;
 }
 
-const PlaceholderModule: React.FC<PlaceholderProps> = ({ title }) => {
-  return (
-    <div className="flex flex-col h-full bg-[#f4f5f6] font-sans antialiased text-[#1c2126] absolute inset-0 rounded-tl-xl overflow-hidden">
-      <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 py-4 sticky top-0 z-20">
-         <div className="flex justify-between items-center h-8">
-            <div className="flex items-center gap-3">
-               <span className="text-xl text-[#1c2126] font-bold font-sans tracking-tight">{title}</span>
-            </div>
-         </div>
+const PlaceholderModule: React.FC<PlaceholderModuleProps> = ({
+  title = 'Coming Soon',
+  description = 'This module is under development.',
+  module,
+  icon: Icon = Construction,
+}) => (
+  <div className="flex flex-col items-center justify-center h-full min-h-[320px] py-16 px-8 text-center">
+    <motion.div
+      initial={{ scale: 0.9, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.3, type: 'spring' }}
+      className="flex flex-col items-center"
+    >
+      <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-center mb-5">
+        <Icon className="w-8 h-8 text-indigo-500 dark:text-indigo-400" />
       </div>
-      <div className="flex-1 overflow-auto p-5 flex items-center justify-center">
-         <div className="text-center">
-            <Construction className="w-12 h-12 text-[#8d99a6] mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-[#1c2126] mb-1">Under Construction</h3>
-            <p className="text-[13px] text-[#525c66]">The {title} module is currently being built.</p>
-         </div>
+      {module && (
+        <div className="flex items-center gap-1.5 mb-3">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">{module}</span>
+          <ChevronRight className="w-3 h-3 text-slate-300" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-500">{title}</span>
+        </div>
+      )}
+      <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">{title}</h2>
+      <p className="text-[13px] text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed">{description}</p>
+      <div className="mt-6 flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20">
+        <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+        <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">Module in development — check back soon</span>
       </div>
-    </div>
-  );
-};
+    </motion.div>
+  </div>
+);
 
 export default PlaceholderModule;

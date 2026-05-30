@@ -63,6 +63,7 @@ import DocumentDesk, { DocumentDeskCollection } from '../components/DocumentDesk
 import ERPNextWorkbench from '../components/ERPNextWorkbench';
 import WorkflowInbox, { WorkflowInboxCollection } from '../components/WorkflowInbox';
 import ReportBuilder, { ReportCollection } from '../components/ReportBuilder';
+import UpgradeModule from '../components/UpgradeModule';
 import { 
   InventoryItem, Order, Customer, TeamMember, Supplier, Design, JobWork, 
   Machine, Project, Transaction, Agent, JobSlip, Karigar, AttendanceRecord, 
@@ -75,7 +76,7 @@ import {
   Vehicle, POSInvoice, AuditLog
 } from '../types';
 import { getItem, setItem, hydrateFromNative } from '../utils/indexedDB';
-import { Loader2, Command, Menu, Search } from 'lucide-react';
+import { Loader2, Command, Menu, Search, Bell } from 'lucide-react';
 import { getViewTitle } from '../modules/registry';
 import { getDocTypeSchema } from '../modules/doctypes';
 import { createERPDocument } from '../modules/documentEngine';
@@ -779,6 +780,8 @@ const App: React.FC = () => {
           features={features}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
+          onCommandPalette={() => setIsCommandPaletteOpen(true)}
+          notificationCount={notifications.filter(n => !n.read).length}
         />
         
         {isSidebarOpen && (
@@ -789,49 +792,64 @@ const App: React.FC = () => {
         )}
         
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-            <header className="h-16 flex items-center justify-between px-4 lg:px-8 glass border-b border-macos-border dark:border-macos-darkBorder shrink-0 z-40">
-                <div className="flex items-center gap-4">
+            <header className="h-12 flex items-center justify-between px-4 lg:px-5 bg-white/90 dark:bg-[#0d0d10]/95 backdrop-blur-xl border-b border-slate-200/60 dark:border-white/[0.06] shrink-0 z-40">
+                <div className="flex items-center gap-2 min-w-0">
                     <button 
                       onClick={() => setIsSidebarOpen(true)}
-                      className="lg:hidden p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-slate-500"
+                      className="lg:hidden p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500 shrink-0"
                     >
-                      <Menu className="w-5 h-5" />
+                      <Menu className="w-4 h-4" />
                     </button>
-                    <div>
-                      <h2 className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-200">
+                    {/* ERPNext-style breadcrumb */}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {currentDocType && (
+                        <span className="hidden sm:inline-flex items-center text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                          {currentDocType.module}
+                        </span>
+                      )}
+                      {currentDocType && (
+                        <span className="hidden sm:inline text-slate-300 dark:text-slate-600 text-[10px]">›</span>
+                      )}
+                      <h2 className="text-[14px] font-bold text-slate-800 dark:text-slate-100 truncate">
                           {getViewTitle(currentView)}
                       </h2>
                       {currentDocType && (
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                          {currentDocType.module} / {currentDocType.name}
-                        </p>
+                        <span className="hidden md:inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.06] text-[9px] font-mono text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-white/[0.06]">
+                          {currentDocType.namingSeries?.split('-')[0]}
+                        </span>
                       )}
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="relative w-60 sm:w-80 group">
-                       <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">
-                          <Search className="w-4 h-4"/>
-                       </div>
-                       <input 
-                          type="button"
-                          onClick={() => setIsCommandPaletteOpen(true)}
-                          className="w-full text-left pl-10 pr-12 py-2 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 dark:text-slate-500 font-bold text-[10px] uppercase tracking-wider focus:outline-none hover:bg-slate-200 dark:hover:bg-slate-950 transition-all shadow-inner cursor-pointer text-ellipsis overflow-hidden"
-                          value="Search or type > command..." 
-                       />
-                       <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                          <kbd className="h-5 px-1.5 flex items-center justify-center text-[9px] font-black tracking-widest text-slate-400 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-md shadow-sm">⌘K</kbd>
-                       </div>
-                    </div>
-                    <div className="h-4 w-px bg-macos-border dark:bg-macos-darkBorder" />
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        Sync: {lastSync}
+                <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsCommandPaletteOpen(true)}
+                      className="flex items-center gap-2 pl-2.5 pr-2 py-1.5 bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] rounded-lg text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-600 dark:hover:text-slate-300 transition-all cursor-pointer group"
+                    >
+                      <Search className="w-3.5 h-3.5 group-hover:text-indigo-500 transition-colors" />
+                      <span className="hidden sm:inline text-[11px] font-medium">Search</span>
+                      <kbd className="hidden sm:flex h-4 px-1 items-center justify-center text-[9px] font-bold text-slate-400 bg-white dark:bg-white/10 border border-slate-200 dark:border-white/10 rounded ml-1">⌘K</kbd>
+                    </button>
+                    <button
+                      onClick={() => setCurrentView('NOTIFICATIONS')}
+                      className="relative p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+                    >
+                      <Loader2 className="w-4 h-4" style={{display:'none'}} />
+                      <Bell className="w-4 h-4" />
+                      {notifications.filter(n => !n.read).length > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center">
+                          {notifications.filter(n => !n.read).length > 9 ? '9+' : notifications.filter(n => !n.read).length}
+                        </span>
+                      )}
+                    </button>
+                    <div className="hidden lg:flex items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-white/[0.06]">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">Synced {lastSync}</span>
                     </div>
                 </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto overflow-x-hidden p-8 custom-scrollbar relative" id="main-content">
-                <div className="max-w-[1400px] mx-auto">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar relative" id="main-content">
+                <div className={currentView === "DASHBOARD" ? "" : "max-w-[1500px] mx-auto px-4 py-5 lg:px-6 lg:py-6"}>
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={currentView}
@@ -880,6 +898,7 @@ const App: React.FC = () => {
                               />
                             )}
                             {currentView === 'VEHICLES' && <Vehicles vehicles={active(vehicles)} onAdd={vehicleMgr.add} onUpdate={vehicleMgr.update} onDelete={vehicleMgr.remove} currency={currencySymbol} />}
+                            {currentView === 'UPGRADE' && <UpgradeModule />}
 
                             {/* Utilities & Settings */}
                             {currentView === 'QUOTATION' && <Quotation quotations={active(quotations)} customers={active(customers)} inventory={active(inventory)} designs={active(designs)} agents={active(agents)} onAddQuotation={quotationMgr.add} onUpdateQuotation={quotationMgr.update} onDeleteQuotation={quotationMgr.remove} onAction={handleAction} currency={currencySymbol} />}

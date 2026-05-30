@@ -1,8 +1,8 @@
 {
   "name": "texflow-erp",
   "private": true,
-  "version": "4.3.0",
-  "description": "Ravi-Textile ERP - Physical Core Edition",
+  "version": "6.0.0",
+  "description": "TexFlow ERP v6 \u2014 ERPNext-Style Platform Edition",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -19,7 +19,7 @@
   "build": {
     "appId": "com.ravitextile.erp",
     "productName": "Ravi-Textile ERP",
-    "copyright": "Copyright © 2024 Ravi Textile",
+    "copyright": "Copyright \u00a9 2024 Ravi Textile",
     "directories": {
       "output": "release"
     },

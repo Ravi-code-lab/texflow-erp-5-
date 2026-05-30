@@ -62,7 +62,8 @@ export type ViewState =
   | 'LEAVE_APP'
   | 'TIMESHEET'
   | 'POS'
-  | 'VEHICLES';
+  | 'VEHICLES'
+  | 'UPGRADE';
 
 export enum Unit { KG = 'KG', METER = 'METER', PIECE = 'PIECE', LITER = 'LITER', BOX = 'BOX', YARD = 'YARD' }
 export enum MaterialType { YARN = 'YARN', FABRIC = 'FABRIC', ACCESSORY = 'ACCESSORY', DYE = 'DYE', PACKAGING = 'PACKAGING' }

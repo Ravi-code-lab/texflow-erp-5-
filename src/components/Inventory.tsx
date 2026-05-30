@@ -2,9 +2,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { InventoryItem, MaterialType, InventoryRoll, Order, ProductionJob, Design } from '../types';
 import { 
   Search, Plus, Filter, ChevronLeft, ChevronRight,
-  MoreHorizontal, ArrowLeft, Save, Trash2, List, Sparkles, Scroll
+  MoreHorizontal, ArrowLeft, Save, Trash2, List, Sparkles, Scroll, Package
 } from 'lucide-react';
 import SmartPurchase from './SmartPurchase';
+import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './shared/ListPage';
 
 interface InventoryProps {
   items: InventoryItem[];
@@ -83,113 +84,55 @@ const Inventory: React.FC<InventoryProps> = ({
   // ERPNEXT (FRAPPE) FULL UI RECREATION
   // ───────────────────────────────────────────────────────────────────────────
 
-  return (
-    <div className="flex flex-col h-full bg-[#f4f5f6] font-sans antialiased text-[#1c2126] absolute inset-0 rounded-tl-xl overflow-hidden">
-       {viewMode === 'LIST' ? (
-          <div className="flex flex-col h-full animate-fade-in">
-            {/* ─── LIST HEADER ─── */}
-            <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 py-4 sticky top-0 z-20">
-               <div className="flex justify-between items-center h-8">
-                  <div className="flex items-center gap-3">
-                     <span className="text-xl text-[#1c2126] font-bold font-sans tracking-tight">Raw Material Item</span>
-                     <span className="text-xs text-[#525c66] bg-[#f4f5f6] px-2 py-0.5 rounded-full font-medium">{filteredItems.length}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                     <button onClick={() => setViewMode('SMART')} className="h-7 px-3 flex items-center gap-1.5 bg-white hover:bg-[#f4f5f6] border border-[#d1d8dd] rounded text-[13px] font-medium text-[#1c2126] transition-colors shadow-sm">
-                        Smart Purchase
-                     </button>
-                     <button onClick={() => openForm()} className="h-7 px-3 flex items-center gap-1.5 bg-[#2490ef] hover:bg-[#2081d6] border border-transparent text-white rounded text-[13px] font-medium shadow-sm transition-all focus:ring-2 focus:ring-offset-1 focus:ring-[#2490ef]/50">
-                        <Plus className="w-4 h-4" />
-                        Add Item
-                     </button>
-                  </div>
-               </div>
-               
-               {/* ─── FILTER BAR ─── */}
-               <div className="flex justify-between items-center mt-3 h-8">
-                  <div className="flex items-center gap-2">
-                      <button className="h-7 px-2.5 flex items-center gap-1.5 bg-white border border-[#d1d8dd] hover:bg-[#f4f5f6] rounded text-[13px] font-medium text-[#1c2126] transition-colors shadow-sm">
-                        <MoreHorizontal className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="h-7 px-2.5 flex items-center gap-1.5 bg-white border border-[#d1d8dd] hover:bg-[#f4f5f6] rounded text-[13px] font-medium text-[#1c2126] transition-colors shadow-sm">
-                        <Filter className="w-3.5 h-3.5" /> Filter
-                      </button>
-                      <div className="relative">
-                         <input
-                            type="text"
-                            placeholder="ID, Name, or Location"
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
-                            className="h-7 w-[280px] pl-8 pr-3 text-[13px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-1 focus:ring-[#2490ef] transition-all placeholder-[#8d99a6]"
-                         />
-                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8d99a6]" />
-                      </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                     <span className="text-[13px] text-[#525c66]">{filteredItems.length > 0 ? `1 of ${filteredItems.length}` : '0 of 0'}</span>
-                     <div className="flex border border-[#d1d8dd] rounded overflow-hidden">
-                        <button className="h-7 px-2 bg-white hover:bg-[#f4f5f6] text-[#1c2126] border-r border-[#d1d8dd]"><ChevronLeft className="w-4 h-4"/></button>
-                        <button className="h-7 px-2 bg-white hover:bg-[#f4f5f6] text-[#1c2126]"><ChevronRight className="w-4 h-4"/></button>
-                     </div>
-                  </div>
-               </div>
-            </div>
+  const invColumns: ColumnDef<InventoryItem>[] = [
+    { key: 'id',           label: 'Item Code',  width: 130, render: r => r.id,            sortValue: r => r.id },
+    { key: 'name',         label: 'Item Name',  width: 240, render: r => r.name,          sortValue: r => r.name },
+    { key: 'type',         label: 'Item Group', width: 130, render: r => r.type,          sortValue: r => r.type },
+    { key: 'location',     label: 'Location',   width: 120, render: r => r.location ?? '—', defaultHidden: true },
+    { key: 'quantity',     label: 'Actual Qty', width: 100, render: r => r.quantity,      sortValue: r => r.quantity, align: 'right' },
+    { key: 'unit',         label: 'UOM',        width: 70,  render: r => r.unit,          align: 'center' },
+    { key: 'valuation',    label: 'Valuation',              render: (r, cur) => `${cur}${(r.quantity * r.pricePerUnit).toLocaleString()}`, sortValue: r => r.quantity * r.pricePerUnit, align: 'right' },
+  ];
 
-            {/* ─── LIST BODY ─── */}
-            <div className="flex-1 overflow-auto p-5 pb-10">
-               <div className="bg-white border border-[#d1d8dd] rounded shadow-sm flex flex-col min-w-[900px]">
-                  {/* Table Header */}
-                  <div className="flex items-center border-b border-[#d1d8dd] bg-[#f4f5f6] px-4 py-2.5 text-xs text-[#525c66] select-none rounded-t">
-                     <div className="w-10 flex">
-                        <input type="checkbox" className="rounded-sm border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef] bg-white w-3.5 h-3.5 cursor-pointer"/>
-                     </div>
-                     <div className="w-32"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Item Code</span></div>
-                     <div className="w-72"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Item Name</span></div>
-                     <div className="w-32"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Item Group</span></div>
-                     <div className="w-24 text-right"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Actual Qty</span></div>
-                     <div className="w-16 text-center"><span className="text-transparent">UOM</span></div>
-                     <div className="flex-1 min-w-0 pl-10"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Valuation</span></div>
-                  </div>
-                  
-                  {/* Table Body */}
-                  <div className="divide-y divide-[#d1d8dd]/60">
-                     {filteredItems.length === 0 && (
-                        <div className="px-4 py-12 flex flex-col items-center justify-center text-[#525c66]">
-                           <List className="w-8 h-8 text-[#d1d8dd] mb-3" />
-                           <p className="text-[13px]">No items found.</p>
-                        </div>
-                     )}
-                     {filteredItems.map((item) => (
-                        <div key={item.id} className="group flex items-center px-4 py-[9px] hover:bg-[#f4f5f6] transition-colors cursor-pointer text-[13px]" onClick={() => openForm(item)}>
-                           <div className="w-10" onClick={(e) => e.stopPropagation()}>
-                              <input 
-                                type="checkbox" 
-                                checked={checkedIds.has(item.id)}
-                                onChange={(e) => {
-                                   const newSet = new Set(checkedIds);
-                                   if(e.target.checked) newSet.add(item.id);
-                                   else newSet.delete(item.id);
-                                   setCheckedIds(newSet);
-                                }}
-                                className="rounded-sm border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef] bg-white w-3.5 h-3.5 cursor-pointer"
-                              />
-                           </div>
-                           <div className="w-32 pr-2 text-[#525c66] truncate font-medium">{item.id}</div>
-                           <div className="w-72 pr-4 truncate">
-                              <a className="font-semibold text-[#1c2126] group-hover:underline cursor-pointer select-none">
-                                 {item.name}
-                              </a>
-                           </div>
-                           <div className="w-32 truncate text-[#525c66]">{item.type}</div>
-                           <div className="w-24 text-right tabular-nums text-[#1c2126]">{item.quantity}</div>
-                           <div className="w-16 text-center text-[#525c66] uppercase text-xs">{item.unit}</div>
-                           <div className="flex-1 pl-10 text-[#525c66] truncate tabular-nums">{currency}{(item.quantity * item.pricePerUnit).toLocaleString()}</div>
-                        </div>
-                     ))}
-                  </div>
-               </div>
-            </div>
-          </div>
+  const invTagFilters: TagFilter[] = [
+    { key: 'low_stock',  label: 'Low stock',  match: r => r.quantity <= r.minStockLevel },
+    { key: 'fabric',     label: 'Fabric',     match: r => r.type === MaterialType.FABRIC },
+    { key: 'yarn',       label: 'Yarn',       match: r => r.type === MaterialType.YARN },
+    { key: 'accessory',  label: 'Accessory',  match: r => r.type === MaterialType.ACCESSORY },
+  ];
+
+  const invBulkActions: BulkAction[] = [
+    { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onClick: ids => ids.forEach(id => onDelete(id)) },
+  ];
+
+  const smartPurchaseBtn = (
+    <button
+      onClick={() => setViewMode('SMART')}
+      className="h-7 px-3 flex items-center gap-1.5 bg-white dark:bg-white/[0.04] hover:bg-[#f4f5f6] dark:hover:bg-white/10 border border-[#d1d8dd] dark:border-white/10 rounded text-[13px] font-medium text-[#1c2126] dark:text-slate-300 transition-colors"
+    >
+      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+      Smart Purchase
+    </button>
+  );
+
+  return (
+    <div className="flex flex-col h-full font-sans antialiased absolute inset-0 overflow-hidden">
+       {viewMode === 'LIST' ? (
+          <ListPage<InventoryItem>
+            doctype="Item"
+            rows={items}
+            columns={invColumns}
+            onRowClick={item => openForm(item)}
+            onNew={() => openForm()}
+            newLabel="New Item"
+            toolbarRight={smartPurchaseBtn}
+            searchFields={['id', 'name', 'location', 'type']}
+            tagFilters={invTagFilters}
+            bulkActions={invBulkActions}
+            currency={currency}
+            emptyIcon={Package}
+            emptyMessage="No inventory items yet"
+          />
        ) : viewMode === 'SMART' ? (
           <div className="flex flex-col h-full animate-fade-in">
              <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 py-4 sticky top-0 z-20">

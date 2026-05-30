@@ -9,6 +9,7 @@ import {
   MoreHorizontal, ArrowLeft, Save, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { commitImage } from '../utils/imageUtils';
+import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './shared/ListPage';
 
 interface EmployeesProps {
   team: TeamMember[];
@@ -99,115 +100,49 @@ const Employees: React.FC<EmployeesProps> = ({ team = [], onAdd, onUpdate, onDel
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#f4f5f6] font-sans antialiased text-[#1c2126] absolute inset-0 rounded-tl-xl overflow-hidden">
-       {viewMode === 'LIST' ? (
-          <div className="flex flex-col h-full animate-fade-in">
-            {/* ─── LIST HEADER ─── */}
-            <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 py-4 sticky top-0 z-20">
-               <div className="flex justify-between items-center h-8">
-                  <div className="flex items-center gap-3">
-                     <span className="text-xl text-[#1c2126] font-bold font-sans tracking-tight">Employee</span>
-                     <span className="text-xs text-[#525c66] bg-[#f4f5f6] px-2 py-0.5 rounded-full font-medium">{filteredTeam.length}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                     <button onClick={() => openForm()} className="h-7 px-3 flex items-center gap-1.5 bg-[#2490ef] hover:bg-[#2081d6] border border-transparent text-white rounded text-[13px] font-medium shadow-sm transition-all focus:ring-2 focus:ring-offset-1 focus:ring-[#2490ef]/50">
-                        <Plus className="w-4 h-4" />
-                        Add Employee
-                     </button>
-                  </div>
-               </div>
-               
-               {/* ─── FILTER BAR ─── */}
-               <div className="flex justify-between items-center mt-3 h-8">
-                  <div className="flex items-center gap-2">
-                      <button className="h-7 px-2.5 flex items-center gap-1.5 bg-white border border-[#d1d8dd] hover:bg-[#f4f5f6] rounded text-[13px] font-medium text-[#1c2126] transition-colors shadow-sm">
-                        <MoreHorizontal className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="h-7 px-2.5 flex items-center gap-1.5 bg-white border border-[#d1d8dd] hover:bg-[#f4f5f6] rounded text-[13px] font-medium text-[#1c2126] transition-colors shadow-sm">
-                        <Filter className="w-3.5 h-3.5" /> Filter
-                      </button>
-                      <div className="relative">
-                         <input
-                            type="text"
-                            placeholder="ID, Name, or Department"
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
-                            className="h-7 w-[280px] pl-8 pr-3 text-[13px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-1 focus:ring-[#2490ef] transition-all placeholder-[#8d99a6]"
-                         />
-                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8d99a6]" />
-                      </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                     <span className="text-[13px] text-[#525c66]">{filteredTeam.length > 0 ? `1 of ${filteredTeam.length}` : '0 of 0'}</span>
-                     <div className="flex border border-[#d1d8dd] rounded overflow-hidden">
-                        <button className="h-7 px-2 bg-white hover:bg-[#f4f5f6] text-[#1c2126] border-r border-[#d1d8dd]"><ChevronLeft className="w-4 h-4"/></button>
-                        <button className="h-7 px-2 bg-white hover:bg-[#f4f5f6] text-[#1c2126]"><ChevronRight className="w-4 h-4"/></button>
-                     </div>
-                  </div>
-               </div>
-            </div>
-
-            {/* ─── LIST BODY ─── */}
-            <div className="flex-1 overflow-auto p-5 pb-10">
-               <div className="bg-white border border-[#d1d8dd] rounded shadow-sm flex flex-col min-w-[900px]">
-                  {/* Table Header */}
-                  <div className="flex items-center border-b border-[#d1d8dd] bg-[#f4f5f6] px-4 py-2.5 text-xs text-[#525c66] select-none rounded-t">
-                     <div className="w-10 flex">
-                        <input type="checkbox" className="rounded-sm border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef] bg-white w-3.5 h-3.5 cursor-pointer"/>
-                     </div>
-                     <div className="w-64"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Employee Name</span></div>
-                     <div className="w-32"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Status</span></div>
-                     <div className="w-48"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Department</span></div>
-                     <div className="w-32"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Role</span></div>
-                     <div className="flex-1 min-w-0 pl-10"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Daily Wage</span></div>
-                  </div>
-                  
-                  {/* Table Body */}
-                  <div className="divide-y divide-[#d1d8dd]/60">
-                     {filteredTeam.length === 0 && (
-                        <div className="px-4 py-12 flex flex-col items-center justify-center text-[#525c66]">
-                           <Users className="w-8 h-8 text-[#d1d8dd] mb-3" />
-                           <p className="text-[13px]">No employees found.</p>
-                        </div>
-                     )}
-                     {filteredTeam.map((member) => (
-                        <div key={member.id} className="group flex items-center px-4 py-[9px] hover:bg-[#f4f5f6] transition-colors cursor-pointer text-[13px]" onClick={() => openForm(member)}>
-                           <div className="w-10" onClick={(e) => e.stopPropagation()}>
-                              <input 
-                                type="checkbox" 
-                                checked={checkedIds.has(member.id)}
-                                onChange={(e) => {
-                                   const newSet = new Set(checkedIds);
-                                   if(e.target.checked) newSet.add(member.id);
-                                   else newSet.delete(member.id);
-                                   setCheckedIds(newSet);
-                                }}
-                                className="rounded-sm border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef] bg-white w-3.5 h-3.5 cursor-pointer"
-                              />
-                           </div>
-                           <div className="w-64 pr-4 truncate flex items-center gap-3">
-                              <div className="w-6 h-6 rounded bg-[#f4f5f6] border border-[#d1d8dd] overflow-hidden flex items-center justify-center shrink-0">
-                                  {member.profileImageUrl ? (
-                                      <img src={member.profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
-                                  ) : (
-                                      <UserCircle className="w-4 h-4 text-[#8d99a6]" />
-                                  )}
-                              </div>
-                              <a className="font-semibold text-[#1c2126] group-hover:underline cursor-pointer select-none">
-                                 {member.name}
-                              </a>
-                           </div>
-                           <div className="w-32 truncate">{getStatusBadge(member.status || 'ACTIVE')}</div>
-                           <div className="w-48 truncate text-[#525c66]">{member.department || 'General'}</div>
-                           <div className="w-32 truncate">{getRoleBadge(member.role)}</div>
-                           <div className="flex-1 pl-10 text-[#525c66] truncate tabular-nums">{currency}{(member.dailyWage || 0).toLocaleString()} / Day</div>
-                        </div>
-                     ))}
-                  </div>
-               </div>
-            </div>
-          </div>
-       ) : (
+    <div className="flex flex-col h-full font-sans antialiased absolute inset-0 overflow-hidden">
+       {viewMode === 'LIST' ? (() => {
+          const empCols: ColumnDef<TeamMember>[] = [
+            { key: 'name',       label: 'Employee Name', width: 220, render: r => (
+                <span className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase shrink-0">
+                    {r.name?.charAt(0)}
+                  </span>
+                  {r.name}
+                </span>
+              ), sortValue: r => r.name },
+            { key: 'status',     label: 'Status',        width: 110, render: r => <StatusBadge status={r.status || 'ACTIVE'} /> },
+            { key: 'department', label: 'Department',    width: 160, render: r => r.department || 'General', sortValue: r => r.department || '' },
+            { key: 'role',       label: 'Role',          width: 120, render: r => <StatusBadge status={r.role} />, sortValue: r => r.role },
+            { key: 'defaultShift', label: 'Shift',       width: 100, render: r => r.defaultShift || '—', defaultHidden: true },
+            { key: 'joiningDate',  label: 'Joined',      width: 110, render: r => r.joiningDate || '—', sortValue: r => r.joiningDate || '', defaultHidden: true },
+            { key: 'dailyWage',  label: 'Daily Wage',               render: (r, cur) => `${cur}${(r.dailyWage || 0).toLocaleString()} / Day`, sortValue: r => r.dailyWage || 0, align: 'right' },
+          ];
+          const empTags: TagFilter[] = [
+            { key: 'active',   label: 'Active',   match: r => r.status === 'ACTIVE' },
+            { key: 'inactive', label: 'Inactive', match: r => r.status === 'INACTIVE' },
+            { key: 'on_leave', label: 'On leave', match: r => r.status === 'ON_LEAVE' },
+          ];
+          const empBulk: BulkAction[] = [
+            { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onClick: ids => ids.forEach(id => onDelete(id)) },
+          ];
+          return (
+            <ListPage<TeamMember>
+              doctype="Employee"
+              rows={team}
+              columns={empCols}
+              onRowClick={m => openForm(m)}
+              onNew={() => openForm()}
+              newLabel="New Employee"
+              searchFields={['id', 'name', 'department', 'email', 'phone']}
+              tagFilters={empTags}
+              bulkActions={empBulk}
+              currency={currency}
+              emptyIcon={Users}
+              emptyMessage="No employees found"
+            />
+          );
+        })() : (
           <div className="flex flex-col h-full animate-fade-in">
              {/* ─── FORM HEADER ─── */}
              <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 py-4 sticky top-0 z-20">

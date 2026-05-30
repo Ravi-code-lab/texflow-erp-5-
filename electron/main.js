@@ -1,5 +1,7 @@
 
 const { app, BrowserWindow, ipcMain, dialog, shell, protocol } = require('electron');
+const http = require('http');
+const { WebSocketServer } = require('ws');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -139,9 +141,13 @@ ipcMain.handle('db:save-shard', async (event, { key, data }) => {
             try { manifest = JSON.parse(decompress(decrypt(fs.readFileSync(paths.manifest))).toString()); } catch (e) {}
         }
         
-        manifest.shards[key] = { hash: writtenHash, timestamp: new Date().toISOString(), size: encrypted.length };
+        updateManifestEntry(manifest, key, writtenHash, encrypted.length);
         fs.writeFileSync(paths.manifest, encrypt(compress(Buffer.from(JSON.stringify(manifest)))));
         
+        if (mainWindow && !mainWindow.isDestroyed())
+          mainWindow.webContents.send('lan:shard-push', { key, data });
+        broadcastShard(key, data);
+
         return { success: true };
     } catch (error) { 
         return { success: false, error: error.message }; 
@@ -317,6 +323,244 @@ ipcMain.handle('storage:verify', async () => {
     return { success: true };
 });
 
+
+const LAN_PORT     = 3001;
+const SESSION_TOKEN = crypto.randomBytes(24).toString('base64url');
+// This token is shown in Settings > LAN Server so operators can type it
+// into browser clients.  Log it to console for dev convenience:
+console.log(`[LAN] Session token: ${SESSION_TOKEN}`);
+
+// Expose to renderer so Settings.tsx can display it
+ipcMain.handle('lan:get-token', () => SESSION_TOKEN);
+ipcMain.handle('lan:get-port',  () => LAN_PORT);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. Token middleware helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+function isAuthorized(req) {
+  const auth = req.headers['authorization'] || '';
+  if (auth === `Bearer ${SESSION_TOKEN}`) return true;
+  // Also accept token in query string for WebSocket upgrade
+  const url  = new URL(req.url, `http://localhost`);
+  return url.searchParams.get('token') === SESSION_TOKEN;
+}
+
+function sendJson(res, status, body) {
+  const json = JSON.stringify(body);
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  });
+  res.end(json);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. Shard versioning — upgrade to existing db:save-shard handler
+//    Replace the manifest.shards[key] = { ... } line in main.js with this:
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Call this instead of the inline manifest update inside db:save-shard.
+ * It bumps _v (version counter) on every write.
+ *
+ * REPLACE this section in the existing db:save-shard handler:
+ *   manifest.shards[key] = { hash: writtenHash, timestamp: ..., size: ... };
+ * WITH:
+ *   updateManifestEntry(manifest, key, writtenHash, encrypted.length);
+ */
+function updateManifestEntry(manifest, key, hash, size) {
+  const prev = manifest.shards[key];
+  manifest.shards[key] = {
+    hash,
+    timestamp:  new Date().toISOString(),
+    size,
+    _v: (prev?._v ?? 0) + 1,   // version counter — increments on every write
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. WebSocket clients registry
+// ─────────────────────────────────────────────────────────────────────────────
+
+const wsClients = new Set();
+
+function broadcastShard(key, data) {
+  const msg = JSON.stringify({ type: 'shard', key, data });
+  wsClients.forEach(ws => {
+    if (ws.readyState === 1 /* OPEN */) {
+      try { ws.send(msg); } catch (e) { /* ignore dead socket */ }
+    }
+  });
+}
+
+function broadcastReconnect() {
+  const msg = JSON.stringify({ type: 'reconnect' });
+  wsClients.forEach(ws => {
+    if (ws.readyState === 1) { try { ws.send(msg); } catch (e) {} }
+  });
+}
+
+function broadcastShutdown() {
+  const msg = JSON.stringify({ type: 'server_shutdown' });
+  wsClients.forEach(ws => {
+    if (ws.readyState === 1) { try { ws.send(msg); } catch (e) {} }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. HTTP + WebSocket server
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * loadFullVault() — reads every shard from disk and returns the full state object.
+ * Reused for GET /api/data so LAN clients get a single-request snapshot.
+ */
+async function loadFullVault() {
+  const paths = getVaultPaths();
+  if (!paths || !fs.existsSync(paths.manifest)) return {};
+  try {
+    const rawManifest = fs.readFileSync(paths.manifest);
+    const manifest = JSON.parse(decompress(decrypt(rawManifest)).toString());
+    const state = {};
+    for (const key of Object.keys(manifest.shards)) {
+      const shardPath = path.join(paths.shards, `${key}.bin`);
+      if (!fs.existsSync(shardPath)) continue;
+      try {
+        const raw = fs.readFileSync(shardPath);
+        if (calculateHash(raw) === manifest.shards[key].hash) {
+          state[key] = JSON.parse(decompress(decrypt(raw)).toString());
+        }
+      } catch (e) { /* skip corrupted shard */ }
+    }
+    return state;
+  } catch (e) {
+    console.error('[LAN] loadFullVault error:', e.message);
+    return {};
+  }
+}
+
+function startLanServer() {
+  const server = http.createServer(async (req, res) => {
+
+    // OPTIONS preflight (CORS)
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin':  '*',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      });
+      res.end();
+      return;
+    }
+
+    // Auth check on all routes
+    if (!isAuthorized(req)) {
+      sendJson(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+
+    const url = new URL(req.url, `http://localhost`);
+
+    // ── GET /api/token-check ──
+    if (req.method === 'GET' && url.pathname === '/api/token-check') {
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    // ── GET /api/data — full vault snapshot ──
+    if (req.method === 'GET' && url.pathname === '/api/data') {
+      try {
+        const data = await loadFullVault();
+        sendJson(res, 200, { data });
+      } catch (e) {
+        sendJson(res, 500, { error: e.message });
+      }
+      return;
+    }
+
+    // ── POST /api/shard — write one key from a LAN browser ──
+    if (req.method === 'POST' && url.pathname === '/api/shard') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', async () => {
+        try {
+          const { key, data } = JSON.parse(body);
+          if (!key) { sendJson(res, 400, { error: 'key required' }); return; }
+
+          const paths = getVaultPaths();
+          if (!paths) { sendJson(res, 503, { error: 'Vault not provisioned' }); return; }
+
+          // Write shard to disk (same logic as IPC handler)
+          const shardPath = path.join(paths.shards, `${key}.bin`);
+          const serialized = Buffer.from(JSON.stringify(data));
+          const encrypted = encrypt(compress(serialized));
+          fs.writeFileSync(shardPath, encrypted);
+          const hash = calculateHash(encrypted);
+
+          // Update manifest with version bump
+          let manifest = { shards: {}, version: '8.2.0', lastSync: new Date().toISOString() };
+          if (fs.existsSync(paths.manifest)) {
+            try { manifest = JSON.parse(decompress(decrypt(fs.readFileSync(paths.manifest))).toString()); } catch (e) {}
+          }
+          updateManifestEntry(manifest, key, hash, encrypted.length);
+          fs.writeFileSync(paths.manifest, encrypt(compress(Buffer.from(JSON.stringify(manifest)))));
+
+          logAction(`LAN_SHARD_WRITE: key=[${key}] from LAN client`);
+
+          // Notify the local Electron renderer (so the server-PC UI also updates)
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('lan:shard-push', { key, data });
+          }
+
+          // Broadcast to all other connected LAN clients
+          broadcastShard(key, data);
+
+          sendJson(res, 200, { ok: true, _v: manifest.shards[key]._v });
+        } catch (e) {
+          console.error('[LAN] shard write error:', e.message);
+          sendJson(res, 500, { error: e.message });
+        }
+      });
+      return;
+    }
+
+    sendJson(res, 404, { error: 'Not found' });
+  });
+
+  // ── WebSocket upgrade on the same HTTP server ──
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (req, socket, head) => {
+    if (!isAuthorized(req)) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, ws => {
+      wsClients.add(ws);
+      ws.on('close', () => wsClients.delete(ws));
+      ws.on('error', () => wsClients.delete(ws));
+    });
+  });
+
+  server.listen(LAN_PORT, '0.0.0.0', () => {
+    console.log(`[LAN] Server listening on :${LAN_PORT}`);
+    logAction(`LAN_SERVER_STARTED: port ${LAN_PORT}`);
+  });
+
+  // On Electron quit, notify LAN clients cleanly
+  app.on('before-quit', () => {
+    broadcastShutdown();
+    logAction('LAN_SERVER_STOPPED');
+    server.close();
+  });
+
+  return server;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({ 
     width: 1440, height: 900, 
@@ -349,5 +593,8 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  startLanServer();
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
