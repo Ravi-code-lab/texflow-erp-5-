@@ -33,6 +33,7 @@ interface ProductionProps {
   onAction?: (action: string, data: any) => void;
   currency?: string;
   onUpdateKarigar?: (karigar: Karigar) => void;
+  onDeleteJob?: (id: string) => void;
 }
 
 const PRODUCTION_STAGES = [
@@ -145,7 +146,7 @@ const inventoryLookup = (inventory: InventoryItem[], materialName: string) =>
 const Production: React.FC<ProductionProps> = ({ 
   jobs, karigars, designs = [], inventory = [], machines = [], samples = [], orders = [],
   onAddJob, onUpdateJob, onAddMachine, onUpdateMachine, onDeleteMachine, onAction, currency = '₹',
-  onUpdateKarigar
+  onUpdateKarigar, onDeleteJob
 }) => {
   const [activeTab, setActiveTab] = useState<'KANBAN' | 'LIST' | 'ANALYTICS' | 'SETUP' | 'PROD_PLAN' | 'JOBS' | 'JOBSLIP' | 'WORKSTATIONS' | 'QR' | 'SLIP_ANALYTICS'>('KANBAN');
   const [activeStage, setActiveStage] = useState<string>('CUTTING');
@@ -1147,7 +1148,7 @@ const Production: React.FC<ProductionProps> = ({
         <ProductionPlan orders={orders} designs={designs} jobs={jobs} onAction={onAction} />
       )}
       {activeTab === 'JOBS' && (
-        <ProductionJobs jobs={jobs} designs={designs} machines={machines} karigars={karigars} onUpdateJob={onUpdateJob} onAddJob={onAddJob} onAction={onAction} currency={currency} orders={orders} garmentSetup={garmentSetup} />
+        <ProductionJobs jobs={jobs} designs={designs} machines={machines} karigars={karigars} onUpdateJob={onUpdateJob} onAddJob={onAddJob} onDeleteJob={onDeleteJob} onAction={onAction} currency={currency} orders={orders} garmentSetup={garmentSetup} />
       )}
       {activeTab === 'WORKSTATIONS' && <Workstations workstations={machines} onAdd={onAddMachine!} onUpdate={onUpdateMachine!} onDelete={onDeleteMachine!} />}
       {activeTab === 'JOBSLIP' && <GenerateJobSlip jobs={jobs} workstations={machines} karigars={karigars} onUpdateJob={onUpdateJob} onUpdateKarigar={onUpdateKarigar} currency={currency} />}

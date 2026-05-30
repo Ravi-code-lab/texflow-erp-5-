@@ -195,6 +195,83 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
     return () => clearInterval(interval);
   }, [activeTimerOpIndex]);
 
+  // Auto-sync form updates back to the parent jobs database in real time for dynamic ERP updates!
+  useEffect(() => {
+    if (viewMode === 'FORM' && formData.id) {
+      // Find the existing job to compare and avoid infinite triggers
+      const matchedJob = jobs.find(j => j.id === formData.id);
+      if (matchedJob) {
+        // Compare values to see if there is any real change
+        const hasChanges = 
+          matchedJob.status !== formData.status ||
+          matchedJob.progress !== formData.progress ||
+          matchedJob.deadline !== formData.deadline ||
+          matchedJob.priority !== formData.priority ||
+          matchedJob.quantity !== formData.quantity ||
+          matchedJob.assignedMachine !== formData.assignedMachine ||
+          (matchedJob as any).erpStatus !== formData.erpStatus ||
+          (matchedJob as any).materialsIssued !== formData.materialsIssued ||
+          (matchedJob as any).producedQty !== formData.producedQty ||
+          (matchedJob as any).actualLaborCosts !== formData.actualLaborCosts ||
+          (matchedJob as any).sourceWarehouse !== formData.sourceWarehouse ||
+          (matchedJob as any).wipWarehouse !== formData.wipWarehouse ||
+          (matchedJob as any).targetWarehouse !== formData.targetWarehouse ||
+          (matchedJob as any).fabricLot !== formData.fabricLot ||
+          (matchedJob as any).color !== formData.color ||
+          (matchedJob as any).salesOrderId !== formData.salesOrderId ||
+          JSON.stringify(matchedJob.operations) !== JSON.stringify(formData.operations);
+
+        if (hasChanges) {
+          const defaultSizes: Record<string, number> = {};
+          if (!formData.sizeWise || Object.keys(formData.sizeWise).length === 0) {
+            const q = formData.quantity || 0;
+            defaultSizes['M'] = Math.round(q * 0.4);
+            defaultSizes['L'] = Math.round(q * 0.4);
+            defaultSizes['XL'] = q - (defaultSizes['M'] + defaultSizes['L']);
+          }
+
+          const jobData: ProductionJob = {
+            id: formData.id,
+            productName: formData.productName || matchedJob.productName,
+            quantity: formData.quantity || matchedJob.quantity,
+            status: formData.status || 'CUTTING',
+            startDate: formData.startDate || matchedJob.startDate,
+            deadline: formData.deadline || matchedJob.deadline,
+            priority: (formData.priority as any) || matchedJob.priority || 'NORMAL',
+            progress: formData.progress !== undefined ? formData.progress : matchedJob.progress,
+            assignedMachine: formData.assignedMachine || matchedJob.assignedMachine,
+            sizeWise: formData.sizeWise || matchedJob.sizeWise || defaultSizes,
+            updatedAt: new Date().toISOString()
+          };
+
+          (jobData as any).erpStatus = formData.erpStatus || (matchedJob as any).erpStatus || 'DRAFT';
+          (jobData as any).materialsIssued = formData.materialsIssued !== undefined ? formData.materialsIssued : (matchedJob as any).materialsIssued;
+          (jobData as any).producedQty = formData.producedQty !== undefined ? formData.producedQty : ((matchedJob as any).producedQty || 0);
+          (jobData as any).actualLaborCosts = formData.actualLaborCosts !== undefined ? formData.actualLaborCosts : ((matchedJob as any).actualLaborCosts || 0);
+          
+          (jobData as any).sourceWarehouse = formData.sourceWarehouse || (matchedJob as any).sourceWarehouse || 'Stores - Bhiwandi Godown';
+          (jobData as any).targetWarehouse = formData.targetWarehouse || (matchedJob as any).targetWarehouse || 'Finished Goods Warehouse - TM';
+          (jobData as any).wipWarehouse = formData.wipWarehouse || (matchedJob as any).wipWarehouse || 'WIP Tailoring Shopfloor';
+          (jobData as any).salesOrderId = formData.salesOrderId || (matchedJob as any).salesOrderId || '';
+          (jobData as any).projectRef = formData.projectRef || (matchedJob as any).projectRef || '';
+          (jobData as any).skipMaterialTransfer = !!formData.skipMaterialTransfer;
+          (jobData as any).backflushMaterials = formData.backflushMaterials !== undefined ? formData.backflushMaterials : true;
+          (jobData as any).allowExcessConsumption = !!formData.allowExcessConsumption;
+          (jobData as any).fabricLot = formData.fabricLot || (matchedJob as any).fabricLot || '';
+          (jobData as any).color = formData.color || (matchedJob as any).color || '';
+          (jobData as any).routingTemplateId = formData.routingTemplateId || matchedJob.routingTemplateId || '';
+          if (formData.operations) {
+            jobData.operations = formData.operations;
+          } else if (matchedJob.operations) {
+            jobData.operations = matchedJob.operations;
+          }
+
+          onUpdateJob(jobData);
+        }
+      }
+    }
+  }, [formData, viewMode, jobs, onUpdateJob]);
+
   const filteredJobs = useMemo(() => {
     const searchLower = (filter || '').toLowerCase();
     return (jobs || []).filter(j => {
@@ -908,6 +985,25 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                       {/* TAB 1: DETAILS */}
                       {activeTab === 'DETAILS' && (
                          <div className="space-y-6 animate-fadeIn">
+                             <WorkOrderConnections
+                               salesOrderId={formData.salesOrderId || ''}
+                               hasGeneratedMR={hasGeneratedMR}
+                               stockEntries={stockEntries}
+                               onGenerateMR={() => setHasGeneratedMR(true)}
+                               currency={currency || '₹'}
+                               qty={formData.quantity || 120}
+                               productName={formData.productName || 'PRODUCT BLUEPRINT'}
+                               timelineEvents={timelineEvents}
+                               activePane={activeConnectionPane}
+                               setActivePane={setActiveConnectionPane}
+                               karigars={karigars}
+                               karigarAssignments={karigarAssignments}
+                               operationsCount={activeRoutingTemplate?.operations?.length || 5}
+                             />
+                         </div>
+                      )}
+                      {activeTab === 'DETAILS' && (
+                         <div className="space-y-6 animate-fadeIn">
                              {/* Specifications Card */}
                              <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6">
                                  <h4 className="font-extrabold text-[#1c2126] text-sm mb-5 border-b border-slate-100 pb-2.5 flex items-center justify-between">
@@ -1355,131 +1451,43 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                       {/* TAB 3: OPERATIONS */}
                       {activeTab === 'OPERATIONS' && (
                          <div className="space-y-6 animate-fadeIn">
-                             <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6">
-                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5 border-b border-slate-100 pb-3">
-                                     <div>
-                                        <h4 className="font-extrabold text-sm text-[#1c2126] flex items-center gap-1.5">
-                                           <Hammer className="w-4 h-4 text-indigo-600" /> Advanced Routing Operations & Time Tracking Sheets
-                                        </h4>
-                                        <p className="text-[11px] text-slate-400 mt-0.5 uppercase tracking-widest font-black">Dynamic routing templates and job card sequence execution</p>
-                                     </div>
-                                     <div className="flex items-center gap-2">
-                                        <label className="text-xs text-[#525c66] font-bold">Execution Route Template:</label>
-                                        <div className="relative">
-                                           <select
-                                              value={formData.routingTemplateId || 'RT-001'}
-                                              onChange={e => {
-                                                 const selectedTemplateId = e.target.value;
-                                                 const templates = garmentSetup?.routingTemplates || mockRoutingTemplates;
-                                                 const foundTemplate = templates.find((t: any) => t.id === selectedTemplateId) || mockRoutingTemplates[0];
-                                                 setJobForm(prev => ({
-                                                    ...prev,
-                                                    routingTemplateId: selectedTemplateId,
-                                                    operations: foundTemplate.operations.map((op: any) => ({
-                                                       name: op.name,
-                                                       workstation: op.workstation,
-                                                       time: op.time,
-                                                       rate: op.rate || 140
-                                                    }))
-                                                 }));
-                                              }}
-                                              className="px-2.5 py-1 text-xs border border-[#d1d8dd] bg-[#fafbfc] rounded focus:outline-none focus:border-indigo-500 font-semibold text-[#1c2126] font-sans appearance-none pr-6"
-                                           >
-                                              {(garmentSetup?.routingTemplates || mockRoutingTemplates).map((rt: any) => (
-                                                 <option key={rt.id} value={rt.id}>{rt.name}</option>
-                                              ))}
-                                           </select>
-                                           <ChevronRight className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-[#8d99a6] pointer-events-none rotate-90"/>
-                                        </div>
-                                     </div>
-                                 </div>
-
-                                 {/* Operations Routing Table */}
-                                 <div className="border border-slate-200/80 rounded overflow-hidden">
-                                     <table className="w-full text-left border-collapse">
-                                        <thead>
-                                           <tr className="bg-slate-50 text-[10px] text-slate-500 font-bold uppercase border-b border-slate-200">
-                                              <th className="py-2.5 pl-3">Standard Operation Route</th>
-                                              <th className="py-2.5 px-3">Allocated Workstation Floor</th>
-                                              <th className="py-2.5 px-3 text-center">Standard Cycle Time</th>
-                                              <th className="py-2.5 px-3 text-center">Stopwatch Timer Log</th>
-                                              <th className="py-2.5 pr-3 text-right">Allocated Hourly Rate</th>
-                                              <th className="py-2.5 pr-3 text-right font-bold text-slate-800">Total Operational Cost</th>
-                                              <th className="w-32 text-center">Action Controls</th>
-                                           </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-600">
-                                           {(() => {
-                                              const templates = garmentSetup?.routingTemplates || mockRoutingTemplates;
-                                              const currentOps = formData.operations || 
-                                                (templates.find((rt: any) => rt.id === (formData.routingTemplateId || 'RT-001')) || templates[0]).operations;
-                                                
-                                              return currentOps.map((op: any, i: number) => {
-                                                 const isRunning = activeTimerOpIndex === i;
-                                                 const timeVal = parseInt(op.time) || 12;
-                                                 const hourlyRate = op.rate || 140;
-                                                 const actualOpCost = (formData.quantity || 120) * (hourlyRate / 60) * timeVal;
-                                                 
-                                                 return (
-                                                    <tr key={i} className={`hover:bg-slate-50/50 ${isRunning ? 'bg-indigo-50/30' : ''}`}>
-                                                       <td className="py-3 pl-3 font-bold text-slate-800 flex items-center gap-1.5">
-                                                          <Activity className={`w-3.5 h-3.5 ${isRunning ? 'text-indigo-600 animate-pulse' : 'text-slate-400'}`} /> {op.name}
-                                                       </td>
-                                                       <td className="py-3 px-3 text-slate-600">{op.workstation}</td>
-                                                       <td className="py-3 px-3 text-center font-bold text-slate-700">{op.time}</td>
-                                                       <td className="py-3 px-3 text-center font-mono font-bold text-indigo-600">
-                                                          {isRunning ? (
-                                                             <span className="bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">
-                                                                {Math.floor(timerSeconds/60)}m {timerSeconds%60}s
-                                                             </span>
-                                                          ) : (
-                                                             <span className="text-slate-400 font-medium">00:00:00</span>
-                                                          )}
-                                                       </td>
-                                                       <td className="py-3 pr-3 text-right text-slate-400 font-mono font-medium">
-                                                          {currency}{hourlyRate} / hr
-                                                       </td>
-                                                       <td className="py-3 pr-3 text-right font-extrabold text-slate-800 tabular-nums">
-                                                          {currency}{actualOpCost.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
-                                                       </td>
-                                                       <td className="py-3 text-center">
-                                                          {isRunning ? (
-                                                             <button 
-                                                               type="button"
-                                                               onClick={() => {
-                                                                 setActiveTimerOpIndex(null);
-                                                                 setJobForm(prev => ({
-                                                                   ...prev,
-                                                                   actualLaborCosts: (prev.actualLaborCosts || 0) + (timerSeconds * 0.1)
-                                                                 }));
-                                                               }}
-                                                               className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-[10px] uppercase shadow-sm transition-all animate-pulse"
-                                                             >
-                                                                Stop & Log
-                                                             </button>
-                                                          ) : (
-                                                             <button 
-                                                               type="button"
-                                                               onClick={() => setActiveTimerOpIndex(i)}
-                                                               className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-[10px] uppercase shadow-sm transition-all flex items-center gap-1 mx-auto"
-                                                             >
-                                                                <Play className="w-2.5 h-2.5" /> Start Timer
-                                                             </button>
-                                                          )}
-                                                       </td>
-                                                    </tr>
-                                                 );
-                                              });
-                                           })()}
-                                        </tbody>
-                                     </table>
-                                 </div>
-                             </div>
+                             <WorkOrderJobCards
+                               operations={formData.operations || activeRoutingTemplate?.operations || []}
+                               activeTimerOpIndex={activeTimerOpIndex}
+                               timerSeconds={timerSeconds}
+                               onStartTimer={(idx) => setActiveTimerOpIndex(idx)}
+                               onStopTimer={() => {
+                                 if (activeTimerOpIndex !== null) {
+                                   setJobForm(prev => ({
+                                     ...prev,
+                                     actualLaborCosts: (prev.actualLaborCosts || 0) + (timerSeconds * 0.1)
+                                   }));
+                                   setActiveTimerOpIndex(null);
+                                 }
+                               }}
+                               karigars={karigars}
+                               karigarAssignments={karigarAssignments}
+                               onAssignKarigar={(idx, id) => setKarigarAssignments(prev => ({ ...prev, [idx]: id }))}
+                               currency={currency || '₹'}
+                               qty={formData.quantity || 120}
+                               onSignOffOperation={handleSignOffOperation}
+                               signedOffOps={signedOffOps[formData.id || 'draft-new'] || {}}
+                             />
                          </div>
                       )}
 
                       {/* TAB 4: BUNDLES */}
                       {activeTab === 'BUNDLES' && (
+                         <div className="space-y-6 animate-fadeIn">
+                             <WorkOrderPrintDesk
+                               formData={formData}
+                               qty={formData.quantity || 120}
+                             />
+                         </div>
+                      )}
+
+                      {/* OLD TAB 4: DEEP HIDDENS */}
+                      {activeTab === 'BUNDLES' && false && (
                          <div className="space-y-6">
                             <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6">
                                 <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3">
@@ -1537,6 +1545,18 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
 
                       {/* TAB 5: FINANCIALS */}
                       {activeTab === 'FINANCIALS' && (
+                         <div className="space-y-6 animate-fadeIn">
+                             <WorkOrderFinancials
+                               formData={formData}
+                               currency={currency || '₹'}
+                               selectedDesign={selectedDesign}
+                               operationsCount={activeRoutingTemplate?.operations?.length || 5}
+                             />
+                         </div>
+                      )}
+
+                      {/* OLD TAB 5: DEEP HIDDENS */}
+                      {activeTab === 'FINANCIALS' && false && (
                          <div className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                <div className="bg-white border border-slate-200 rounded p-4 flex justify-between items-center shadow-sm">
@@ -1626,6 +1646,17 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
               </div>
            </div>
         )}
+
+        <WorkOrderStockModals
+          isOpen={stockEntryModalMode !== null}
+          mode={stockEntryModalMode}
+          onClose={() => setStockEntryModalMode(null)}
+          formData={formData}
+          batchRequirements={batchRequirements}
+          currency={currency || '₹'}
+          onTransferSubmit={handleTransferSubmit}
+          onManufactureSubmit={handleManufactureSubmit}
+        />
     </div>
   );
 };

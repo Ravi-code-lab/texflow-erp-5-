@@ -26,7 +26,6 @@ import Reports from '../components/Reports';
 import Suppliers from '../components/Suppliers';
 import QualityControl from '../components/QualityControl';
 import Projects from '../components/Projects';
-import TexBot from '../components/TexBot';
 import UserProfileModal from '../components/UserProfileModal';
 import CommandPalette from '../components/CommandPalette';
 import DataImportTool, { DataImportCollection } from '../components/DataImportTool';
@@ -64,8 +63,6 @@ import ERPNextWorkbench from '../components/ERPNextWorkbench';
 import WorkflowInbox, { WorkflowInboxCollection } from '../components/WorkflowInbox';
 import ReportBuilder, { ReportCollection } from '../components/ReportBuilder';
 import UpgradeModule from '../components/UpgradeModule';
-import { YarnManagement } from '../components/YarnManagement';
-import { DyeingProcessing } from '../components/DyeingProcessing';
 import { FabricCostingWorkspace } from '../components/FabricCosting';
 import { DispatchPlanner } from '../components/DispatchPlanner';
 import { 
@@ -1131,7 +1128,7 @@ const App: React.FC = () => {
                             {currentView === 'DELIVERY_CHALLAN' && <DeliveryChallan orders={active(orders)} customers={active(customers)} designs={active(designs)} inventory={active(inventory)} onAddChallan={ordMgr.add} onUpdateChallan={ordMgr.update} currency={currencySymbol} companyInfo={companyInfo} />}
 
                             {/* Production & Inventory */}
-                            {currentView === 'PRODUCTION' && <Production jobs={active(production)} karigars={active(karigars)} designs={active(designs)} inventory={active(inventory)} machines={active(machines)} samples={active(samples)} orders={active(orders)} onAddJob={prodMgr.add} onUpdateJob={handleJobUpdate} onAddMachine={machineMgr.add} onUpdateMachine={machineMgr.update} onDeleteMachine={(machine) => machineMgr.remove(machine.id)} onAction={handleAction} onUpdateKarigar={karigarMgr.update} currency={currencySymbol} />}
+                            {currentView === 'PRODUCTION' && <Production jobs={active(production)} karigars={active(karigars)} designs={active(designs)} inventory={active(inventory)} machines={active(machines)} samples={active(samples)} orders={active(orders)} onAddJob={prodMgr.add} onUpdateJob={handleJobUpdate} onDeleteJob={(id) => prodMgr.remove(id)} onAddMachine={machineMgr.add} onUpdateMachine={machineMgr.update} onDeleteMachine={(machine) => machineMgr.remove(machine.id)} onAction={handleAction} onUpdateKarigar={karigarMgr.update} currency={currencySymbol} />}
                             {currentView === 'SAMPLING' && <Sampling samples={active(samples)} designs={active(designs)} karigars={active(karigars)} customers={active(customers)} onAdd={sampleMgr.add} onUpdate={sampleMgr.update} onDelete={sampleMgr.remove} currency={currencySymbol} />}
                             {currentView === 'TRACK_LOTS' && <TrackLots jobs={active(production)} onUpdateJob={handleJobUpdate} />}
                             {currentView === 'QUALITY' && <QualityControl reports={active(qualityReports)} inspections={active(inspections)} jobs={active(production)} designs={active(designs)} inventory={active(inventory)} onAddReport={qualityMgr.add} onUpdateReport={qualityMgr.update} onAddInspection={inspectionMgr.add} currency={currencySymbol} />}
@@ -1155,8 +1152,6 @@ const App: React.FC = () => {
                             )}
                             {currentView === 'VEHICLES' && <Vehicles vehicles={active(vehicles)} onAdd={vehicleMgr.add} onUpdate={vehicleMgr.update} onDelete={vehicleMgr.remove} currency={currencySymbol} />}
                             {currentView === 'UPGRADE' && <UpgradeModule />}
-                            {currentView === 'YARN_MANAGEMENT' && <YarnManagement lots={active(yarnLots)} suppliers={active(suppliers)} onAddLot={yarnMgr.add} onUpdateLot={yarnMgr.update} onDeleteLot={yarnMgr.remove} currency={currencySymbol} />}
-                            {currentView === 'DYEING_PROCESSING' && <DyeingProcessing dyeingJobs={active(dyeingJobs)} yarnLots={active(yarnLots)} machines={active(machines)} onAddJob={dyeingMgr.add} onUpdateJob={handleDyeingJobUpdate} onDeleteJob={dyeingMgr.remove} currency={currencySymbol} />}
                             {currentView === 'FABRIC_COSTING' && <FabricCostingWorkspace costings={active(fabricCostings)} designs={active(designs)} inventory={active(inventory)} yarnLots={active(yarnLots)} onAddCosting={costingMgr.add} onUpdateCosting={costingMgr.update} onDeleteCosting={costingMgr.remove} currency={currencySymbol} />}
                             {currentView === 'DISPATCH_PLANNER' && <DispatchPlanner entries={active(dispatchEntries)} orders={active(orders)} onAddEntry={dispatchMgr.add} onUpdateEntry={dispatchMgr.update} onDeleteEntry={dispatchMgr.remove} currency={currencySymbol} />}
 
@@ -1337,7 +1332,6 @@ const App: React.FC = () => {
                 </div>
             </main>
         </div>
-        <TexBot contextData={{ inventory: active(inventory), production: active(production), orders: active(orders) }} />
         {currentUser && <UserProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={currentUser} onUpdate={u => { setCurrentUser(u); teamMgr.update(u); }} onLogout={handleLogout} />}
         <CommandPalette 
           isOpen={isCommandPaletteOpen} 

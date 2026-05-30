@@ -48,8 +48,6 @@ export type ViewState =
   | 'TASKS'
   | 'PROJECTS'
   | 'OPENING_STOCK'
-  | 'YARN_MANAGEMENT'
-  | 'DYEING_PROCESSING'
   | 'FABRIC_COSTING'
   | 'DISPATCH_PLANNER'
   | 'QUOTATION'
