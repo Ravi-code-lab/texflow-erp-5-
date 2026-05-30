@@ -742,7 +742,30 @@ const App: React.FC = () => {
        case 'CONVERT_TO_INVOICE':
          setCurrentView('TAX_INVOICE');
          break;
-       case 'CONVERT_TO_WORK_ORDER':
+       case 'CONVERT_TO_WORK_ORDER_FROM_SAMPLE':
+          const productionFromSample = createERPDocument('PRODUCTION', {
+             productName: data.designName || 'Custom Product',
+             quantity: data.quantity || 1,
+             status: 'PLANNED',
+             startDate: new Date().toISOString().split('T')[0],
+             deadline: data.targetDate || new Date().toISOString().split('T')[0],
+             currentStage: 'PLANNING',
+             qualityStatus: 'PENDING',
+             priority: data.priority || 'NORMAL',
+             progress: 0,
+             styleCode: data.styleCode || `STL-${Math.floor(1000 + Math.random() * 9000).toString()}`,
+             sourceDoc: `Sample Request #${data.id}`,
+             sizeWise: data.sizeWise || { M: data.quantity || 1 }
+          });
+          handleCollection('production', production, setProduction).add(productionFromSample);
+          handleAddNotification({
+             title: "Work Order Triggered",
+             message: `Successfully spawned Work Order from approved Sample Request #${data.id} (${data.designName}).`,
+             type: 'SUCCESS'
+          });
+          setCurrentView('PRODUCTION');
+          break;
+        case 'CONVERT_TO_WORK_ORDER':
          const productionBase = createERPDocument('PRODUCTION', {
             productName: data.items?.[0]?.productName || 'Custom Product',
             quantity: data.items?.[0]?.quantity || 1,
@@ -1149,7 +1172,25 @@ const App: React.FC = () => {
                                 currency={currencySymbol} 
                               />
                             )}
-                            {currentView === 'SALES_RETURN' && <SalesReturn orders={active(orders)} customers={active(customers)} onAddReturn={ordMgr.add} currency={currencySymbol} />}
+                            {currentView === 'SALES_RETURN' && (
+                              <SalesReturn 
+                                orders={active(orders)} 
+                                customers={active(customers)} 
+                                designs={active(designs)}
+                                inventory={active(inventory)}
+                                onAddReturn={(ret) => {
+                                  ordMgr.add(ret);
+                                  handleAddNotification({
+                                    title: "Sales Return Logged",
+                                    message: `Return ${ret.id} logged for ${ret.customerName}.`,
+                                    type: 'SUCCESS'
+                                  });
+                                }} 
+                                onUpdateInventory={(item) => invMgr.update(item)}
+                                onAddNote={(note) => txnMgr.add(note)}
+                                currency={currencySymbol} 
+                              />
+                            )}
                             {currentView === 'MATERIAL_REQUEST' && <MaterialRequestComp requests={active(materialRequests)} inventory={active(inventory)} onAdd={materialReqMgr.add} onUpdate={materialReqMgr.update} onDelete={materialReqMgr.remove} onAction={handleAction} />}
                             {currentView === 'SUPPLIER_QUOTATION' && <SupplierQuotationComp quotations={active(supplierQuotations)} suppliers={active(suppliers)} inventory={active(inventory)} onAdd={supplierQuotationsMgr.add} onUpdate={supplierQuotationsMgr.update} onDelete={supplierQuotationsMgr.remove} onAction={handleAction} currency={currencySymbol} />}
                             {currentView === 'PURCHASE_ORDER' && <PurchaseOrderComp purchaseOrders={active(purchaseOrders)} suppliers={active(suppliers)} inventory={active(inventory)} onAddPO={handleCollection('purchaseOrders', purchaseOrders, setPurchaseOrders).add} onUpdatePO={handleCollection('purchaseOrders', purchaseOrders, setPurchaseOrders).update} onAction={handleAction} currency={currencySymbol} />}

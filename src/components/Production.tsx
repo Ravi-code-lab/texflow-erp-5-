@@ -1147,7 +1147,7 @@ const Production: React.FC<ProductionProps> = ({
         <ProductionPlan orders={orders} designs={designs} jobs={jobs} onAction={onAction} />
       )}
       {activeTab === 'JOBS' && (
-        <ProductionJobs jobs={jobs} designs={designs} machines={machines} karigars={karigars} onUpdateJob={onUpdateJob} onAddJob={onAddJob} onAction={onAction} currency={currency} />
+        <ProductionJobs jobs={jobs} designs={designs} machines={machines} karigars={karigars} onUpdateJob={onUpdateJob} onAddJob={onAddJob} onAction={onAction} currency={currency} orders={orders} garmentSetup={garmentSetup} />
       )}
       {activeTab === 'WORKSTATIONS' && <Workstations workstations={machines} onAdd={onAddMachine!} onUpdate={onUpdateMachine!} onDelete={onDeleteMachine!} />}
       {activeTab === 'JOBSLIP' && <GenerateJobSlip jobs={jobs} workstations={machines} karigars={karigars} onUpdateJob={onUpdateJob} onUpdateKarigar={onUpdateKarigar} currency={currency} />}
