@@ -9,7 +9,7 @@ import {
   MoreHorizontal, ArrowLeft, Save, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { commitImage } from '../utils/imageUtils';
-import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './shared/ListPage';
+import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './ListPage';
 
 interface EmployeesProps {
   team: TeamMember[];

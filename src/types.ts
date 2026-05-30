@@ -332,7 +332,7 @@ export interface ProductionJob extends BaseEntity {
   sizeWise?: Record<string, number>;
 }
 export interface KarigarLedgerEntry extends BaseEntity { date: string; type: 'WORK_RECEIVED' | 'PAYMENT_GIVEN'; description: string; amount: number; quantity?: number; rate?: number; }
-export interface Karigar extends BaseEntity { name: string; skill: string; balance: number; phone?: string; ledger: KarigarLedgerEntry[]; profileImageUrl?: string; }
+export interface Karigar extends BaseEntity { name: string; skill: string; balance: number; phone?: string; ledger: KarigarLedgerEntry[]; profileImageUrl?: string; isActive?: boolean; }
 export interface Supplier extends BaseEntity { name: string; contactPerson: string; email: string; phone?: string; location: string; reliabilityScore: number; materialsProvided: string[]; }
 export interface PurchaseOrderItem { productName: string; quantity: number; unit: Unit | string; unitPrice: number; }
 export interface PurchaseOrder extends BaseEntity { supplierId: string; supplierName: string; date: string; status: 'DRAFT' | 'SENT' | 'RECEIVED' | 'CANCELLED'; items: PurchaseOrderItem[]; totalAmount: number; taxRate?: number; expectedDate?: string; }

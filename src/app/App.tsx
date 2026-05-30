@@ -64,6 +64,10 @@ import ERPNextWorkbench from '../components/ERPNextWorkbench';
 import WorkflowInbox, { WorkflowInboxCollection } from '../components/WorkflowInbox';
 import ReportBuilder, { ReportCollection } from '../components/ReportBuilder';
 import UpgradeModule from '../components/UpgradeModule';
+import { YarnManagement } from '../components/YarnManagement';
+import { DyeingProcessing } from '../components/DyeingProcessing';
+import { FabricCostingWorkspace } from '../components/FabricCosting';
+import { DispatchPlanner } from '../components/DispatchPlanner';
 import { 
   InventoryItem, Order, Customer, TeamMember, Supplier, Design, JobWork, 
   Machine, Project, Transaction, Agent, JobSlip, Karigar, AttendanceRecord, 
@@ -73,7 +77,7 @@ import {
   StockAudit, PayrollAdjustment, SampleRequest, Pack, StockTransfer,
   ShopifyConfig, InvoiceConfig, SecurityConfig, CommunicationConfig, AdvancedConfig,
   Notification, Task, Timesheet, SupplierQuotation, MaterialRequest, SupportTicket, ExpenseClaim,
-  Vehicle, POSInvoice, AuditLog
+  Vehicle, POSInvoice, AuditLog, YarnLot, DyeingJob, FabricCosting, DispatchEntry
 } from '../types';
 import { getItem, setItem, hydrateFromNative } from '../utils/indexedDB';
 import { Loader2, Command, Menu, Search, Bell } from 'lucide-react';
@@ -160,6 +164,10 @@ const App: React.FC = () => {
   const [stockAudits, setStockAudits] = useState<StockAudit[]>([]);
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
   const [packs, setPacks] = useState<Pack[]>([]);
+  const [yarnLots, setYarnLots] = useState<YarnLot[]>([]);
+  const [dyeingJobs, setDyeingJobs] = useState<DyeingJob[]>([]);
+  const [fabricCostings, setFabricCostings] = useState<FabricCosting[]>([]);
+  const [dispatchEntries, setDispatchEntries] = useState<DispatchEntry[]>([]);
   const [payrollAdjustments, setPayrollAdjustments] = useState<Record<string, PayrollAdjustment>>({});
 
   const refreshData = useCallback(async () => {
@@ -187,7 +195,41 @@ const App: React.FC = () => {
         setTeam(await getItem<TeamMember[]>('team') || []);
         setDesigns(await getItem<Design[]>('designs') || []);
         setJobWorks(await getItem<JobWork[]>('jobWorks') || []);
-        setMachines(await getItem<Machine[]>('machines') || []);
+        setMachines(await getItem<Machine[]>('machines') || [
+          {
+            id: 'MAC-JET-A',
+            name: 'Jet Dyehouse Chamber A',
+            model: 'Fong ECO-8 Jet',
+            type: 'DYEING_WET_PROCESSING',
+            status: 'ACTIVE',
+            purchaseDate: '2025-01-10',
+            nextServiceDate: '2026-12-10',
+            capacity: '500 KG',
+            hourlyCost: 450
+          },
+          {
+            id: 'MAC-JET-B',
+            name: 'Jet Dyehouse Chamber B',
+            model: 'Thies Lufter-T',
+            type: 'DYEING_WET_PROCESSING',
+            status: 'ACTIVE',
+            purchaseDate: '2025-03-15',
+            nextServiceDate: '2026-09-15',
+            capacity: '300 KG',
+            hourlyCost: 350
+          },
+          {
+            id: 'MAC-CAL-01',
+            name: 'Santex Calendering Finishing Machine',
+            model: 'Santashrink-Standard',
+            type: 'FINISHING_DRYING',
+            status: 'ACTIVE',
+            purchaseDate: '2024-06-20',
+            nextServiceDate: '2026-06-20',
+            capacity: '1000 MTR/H',
+            hourlyCost: 200
+          }
+        ]);
         setProjects(await getItem<Project[]>('projects') || []);
         setTransactions(await getItem<Transaction[]>('transactions') || []);
         setAgents(await getItem<Agent[]>('agents') || []);
@@ -217,6 +259,149 @@ const App: React.FC = () => {
         setStockAudits(await getItem<StockAudit[]>('stockAudits') || []);
         setTransfers(await getItem<StockTransfer[]>('transfers') || []);
         setPacks(await getItem<Pack[]>('packs') || []);
+        setYarnLots(await getItem<YarnLot[]>('yarnLots') || [
+          {
+            id: 'ROLL-RAYON-140-101',
+            lotNumber: 'BATCH-RAYON-LIVA-140',
+            type: 'VISCOSE',
+            count: '140 GSM',
+            twist: 'Width 44"',
+            shade: 'Teal Floral Print Base',
+            receivedQty: 1500,
+            currentQty: 1150,
+            pricePerKg: 85,
+            receivedDate: '2026-05-15',
+            location: 'Main Fabric Roll Storage',
+            supplierName: 'Liva Rayon Fabrics Corp',
+            status: 'AVAILABLE',
+            tenacity: 22.1,
+            elongation: 15.2,
+            moisture: 11.5,
+            evenness: 1.2
+          },
+          {
+            id: 'ROLL-COT-60S-205',
+            lotNumber: 'BATCH-COTTON-CAMBRIC-60S',
+            type: 'COTTON',
+            count: '80 GSM',
+            twist: 'Width 44"',
+            shade: 'Off-White Ivory Basis',
+            receivedQty: 2500,
+            currentQty: 2500,
+            pricePerKg: 65,
+            receivedDate: '2026-05-18',
+            location: 'Basement Roll Godown 2',
+            supplierName: 'Vardhman Cottons Ltd',
+            status: 'AVAILABLE',
+            tenacity: 28.4,
+            elongation: 6.5,
+            moisture: 7.8,
+            evenness: 1.4
+          }
+        ]);
+        setDyeingJobs(await getItem<DyeingJob[]>('dyeingJobs') || [
+          {
+            id: 'DYE-101',
+            jobNumber: 'EMB-KRT-CHIKAN-101',
+            process: 'FABRIC_DYEING',
+            dyeClass: 'REACTIVE',
+            shade: 'Teal Neck Chikankari Embroidery',
+            pantoneRef: 'EMB-CHIK-V3',
+            yarnLotId: 'ROLL-RAYON-140-101',
+            inputQty: 450,
+            inputUnit: 'KG',
+            outputQty: 450,
+            shrinkagePercent: 0,
+            temperature: 0,
+            ph: 7.0,
+            duration: 240,
+            isJobWork: false,
+            issueDate: '2026-05-20',
+            expectedDate: '2026-05-22',
+            completedDate: '2026-05-22',
+            status: 'COMPLETED',
+            colorMatchStatus: 'PASS',
+            fastness: { washing: 5, rubbing: 4, light: 5 },
+            laborCost: 12000,
+            chemicalCost: 800,
+            machineCost: 2500,
+            totalCost: 15300
+          },
+          {
+            id: 'DYE-102',
+            jobNumber: 'PRINT-KRT-JAIPURI-102',
+            process: 'PRINTING',
+            dyeClass: 'VATS',
+            shade: 'Jaipuri Indigo block stamps',
+            pantoneRef: 'PRNT-DABU-02',
+            yarnLotId: 'ROLL-COT-60S-205',
+            inputQty: 300,
+            inputUnit: 'METER',
+            isJobWork: true,
+            vendorName: 'Classic Handprint Karigars',
+            issueDate: '2026-05-29',
+            expectedDate: '2026-05-31',
+            status: 'IN_PROCESS',
+            laborCost: 7500,
+            chemicalCost: 1200,
+            machineCost: 0,
+            totalCost: 8700
+          }
+        ]);
+        setFabricCostings(await getItem<FabricCosting[]>('fabricCostings') || [
+          {
+            id: 'FC-101',
+            name: 'Summer Print Rayon Kurti (A-Line)',
+            fabricType: 'Rayon Liva (140 GSM)',
+            width: 44,
+            gsm: 140,
+            construction: '60-s Cambric weave',
+            items: [
+              { id: 'item-1', name: 'Rayon Liva Base Fabric (140 GSM)', category: 'YARN', qty: 2.25, unit: 'METER', ratePerUnit: 85, wastagePercent: 4, amount: 198.90 },
+              { id: 'item-2', name: 'Gota/Lace Trim & Branded Labels', category: 'OTHER', qty: 1, unit: 'SET', ratePerUnit: 24, wastagePercent: 0, amount: 24.00 },
+              { id: 'item-3', name: 'Master Tailor Stitching Charge', category: 'WEAVING', qty: 1, unit: 'PIECE', ratePerUnit: 75, wastagePercent: 0, amount: 75.00 },
+              { id: 'item-4', name: 'Front Neck Chikan Embroidery', category: 'DYEING', qty: 1, unit: 'PIECE', ratePerUnit: 55, wastagePercent: 0, amount: 55.00 },
+              { id: 'item-5', name: 'Post-stitch Softener Wash & Iron', category: 'FINISHING', qty: 1, unit: 'PIECE', ratePerUnit: 15, wastagePercent: 0, amount: 15.00 },
+              { id: 'item-6', name: 'Hanger, Polybag + Printed Barcode Box', category: 'PACKING', qty: 1, unit: 'PIECE', ratePerUnit: 20, wastagePercent: 0, amount: 20.00 }
+            ],
+            overheadPercent: 8,
+            profitPercent: 20,
+            taxPercent: 5,
+            rawMaterialCost: 222.90,
+            processingCost: 165.00,
+            totalCost: 387.90,
+            sellingPrice: 502.72,
+            marginPercent: 20,
+            status: 'APPROVED'
+          }
+        ]);
+        setDispatchEntries(await getItem<DispatchEntry[]>('dispatchEntries') || [
+          {
+            id: 'DISP-101',
+            dispatchNumber: 'DISP-MAY-041',
+            date: '2026-05-28',
+            mode: 'ROAD',
+            status: 'DISPATCHED',
+            items: [
+              { orderId: 'SO-1001', orderNumber: 'SO-1001', customerName: 'Raimond Garments Retail', productName: 'Designer Saree Banarasi Silk', qty: 250, unit: 'PIECE', packed: true }
+            ],
+            totalQty: 250,
+            totalWeight: 140,
+            totalValue: 125000,
+            carrierName: 'Gati Freight',
+            vehicleNumber: 'MH-12-PQ-8842',
+            driverName: 'Sanjay Dutt',
+            driverPhone: '+91 91122 33445',
+            lrNumber: 'LR-882193',
+            ewayBillNumber: 'EWAY-9921004821',
+            freightCost: 2800,
+            remarks: 'Loaded meticulously in dry truck bed.',
+            trackingEvents: [
+              { timestamp: '2026-05-28 10:00', location: 'Factory Loading Chute', status: 'Waybill Generated & Packed' },
+              { timestamp: '2026-05-28 16:30', location: 'State Border Toll Plaza', status: 'Parcel advanced to: DISPATCHED' }
+            ]
+          }
+        ]);
         setPayrollAdjustments(await getItem<Record<string, PayrollAdjustment>>('payrollAdjustments') || {});
         setNotifications(await getItem<Notification[]>('notifications') || []);
         setTasks(await getItem<Task[]>('tasks') || []);
@@ -350,6 +535,54 @@ const App: React.FC = () => {
   const auditMgr = handleCollection('stockAudits', stockAudits, setStockAudits);
   const projectMgr = handleCollection('projects', projects, setProjects);
   const machineMgr = handleCollection('machines', machines, setMachines);
+  const yarnMgr = handleCollection('yarnLots', yarnLots, setYarnLots);
+  const dyeingMgr = handleCollection('dyeingJobs', dyeingJobs, setDyeingJobs);
+  const costingMgr = handleCollection('fabricCostings', fabricCostings, setFabricCostings);
+  const dispatchMgr = handleCollection('dispatchEntries', dispatchEntries, setDispatchEntries);
+
+  const handleDyeingJobUpdate = (job: DyeingJob) => {
+    dyeingMgr.update(job);
+
+    if (job.status === 'COMPLETED') {
+      const rawLot = yarnLots.find(l => l.id === job.yarnLotId);
+      if (rawLot) {
+        const updatedRawQty = Math.max(0, Number((rawLot.currentQty - job.inputQty).toFixed(2)));
+        const rawLotStatus = updatedRawQty <= 1 ? 'CONSUMED' : rawLot.status;
+        
+        const updatedRawLot: YarnLot = {
+          ...rawLot,
+          currentQty: updatedRawQty,
+          status: rawLotStatus as any
+        };
+        yarnMgr.update(updatedRawLot);
+
+        const dyedLotId = `LOT-DYED-${Date.now().toString().slice(-4)}`;
+        const dyedLotNum = `${rawLot.lotNumber}-${job.shade || 'DYED'}-LOT`;
+        
+        const newDyedLot: YarnLot = {
+          id: dyedLotId,
+          lotNumber: dyedLotNum,
+          type: rawLot.type,
+          count: rawLot.count,
+          twist: rawLot.twist,
+          shade: job.shade || 'Dyed Shade',
+          currentQty: job.outputQty || job.inputQty,
+          receivedQty: job.outputQty || job.inputQty,
+          receivedDate: new Date().toISOString().split('T')[0],
+          pricePerKg: rawLot.pricePerKg + Number(((job.totalCost || 0) / (job.outputQty || job.inputQty)).toFixed(2)),
+          location: 'Dye-House Buffer',
+          supplierName: 'Internal Dyeing & Wet Processing',
+          status: 'AVAILABLE',
+          notes: `Dyed from source lot ${rawLot.lotNumber} via Job card ${job.jobNumber}. Sourced price ${currencySymbol}${rawLot.pricePerKg} + chemical/machine overhead.`,
+          tenacity: job.fastness ? (rawLot.tenacity || 20) * 0.95 : rawLot.tenacity,
+          elongation: rawLot.elongation,
+          moisture: 7.5,
+          evenness: rawLot.evenness
+        };
+        yarnMgr.add(newDyedLot);
+      }
+    }
+  };
 
   const handleUpdatePayrollAdjustment = (key: string, adjustment: PayrollAdjustment) => {
     const newAdjustments = { ...payrollAdjustments, [key]: adjustment };
@@ -875,7 +1108,7 @@ const App: React.FC = () => {
                             {currentView === 'DELIVERY_CHALLAN' && <DeliveryChallan orders={active(orders)} customers={active(customers)} designs={active(designs)} inventory={active(inventory)} onAddChallan={ordMgr.add} onUpdateChallan={ordMgr.update} currency={currencySymbol} companyInfo={companyInfo} />}
 
                             {/* Production & Inventory */}
-                            {currentView === 'PRODUCTION' && <Production jobs={active(production)} karigars={active(karigars)} designs={active(designs)} inventory={active(inventory)} machines={active(machines)} samples={active(samples)} orders={active(orders)} onAddJob={prodMgr.add} onUpdateJob={handleJobUpdate} onAddMachine={machineMgr.add} onUpdateMachine={machineMgr.update} onDeleteMachine={(machine) => machineMgr.remove(machine.id)} onAction={handleAction} currency={currencySymbol} />}
+                            {currentView === 'PRODUCTION' && <Production jobs={active(production)} karigars={active(karigars)} designs={active(designs)} inventory={active(inventory)} machines={active(machines)} samples={active(samples)} orders={active(orders)} onAddJob={prodMgr.add} onUpdateJob={handleJobUpdate} onAddMachine={machineMgr.add} onUpdateMachine={machineMgr.update} onDeleteMachine={(machine) => machineMgr.remove(machine.id)} onAction={handleAction} onUpdateKarigar={karigarMgr.update} currency={currencySymbol} />}
                             {currentView === 'SAMPLING' && <Sampling samples={active(samples)} designs={active(designs)} karigars={active(karigars)} customers={active(customers)} onAdd={sampleMgr.add} onUpdate={sampleMgr.update} onDelete={sampleMgr.remove} currency={currencySymbol} />}
                             {currentView === 'TRACK_LOTS' && <TrackLots jobs={active(production)} onUpdateJob={handleJobUpdate} />}
                             {currentView === 'QUALITY' && <QualityControl reports={active(qualityReports)} inspections={active(inspections)} jobs={active(production)} designs={active(designs)} inventory={active(inventory)} onAddReport={qualityMgr.add} onUpdateReport={qualityMgr.update} onAddInspection={inspectionMgr.add} currency={currencySymbol} />}
@@ -899,6 +1132,10 @@ const App: React.FC = () => {
                             )}
                             {currentView === 'VEHICLES' && <Vehicles vehicles={active(vehicles)} onAdd={vehicleMgr.add} onUpdate={vehicleMgr.update} onDelete={vehicleMgr.remove} currency={currencySymbol} />}
                             {currentView === 'UPGRADE' && <UpgradeModule />}
+                            {currentView === 'YARN_MANAGEMENT' && <YarnManagement lots={active(yarnLots)} suppliers={active(suppliers)} onAddLot={yarnMgr.add} onUpdateLot={yarnMgr.update} onDeleteLot={yarnMgr.remove} currency={currencySymbol} />}
+                            {currentView === 'DYEING_PROCESSING' && <DyeingProcessing dyeingJobs={active(dyeingJobs)} yarnLots={active(yarnLots)} machines={active(machines)} onAddJob={dyeingMgr.add} onUpdateJob={handleDyeingJobUpdate} onDeleteJob={dyeingMgr.remove} currency={currencySymbol} />}
+                            {currentView === 'FABRIC_COSTING' && <FabricCostingWorkspace costings={active(fabricCostings)} designs={active(designs)} inventory={active(inventory)} yarnLots={active(yarnLots)} onAddCosting={costingMgr.add} onUpdateCosting={costingMgr.update} onDeleteCosting={costingMgr.remove} currency={currencySymbol} />}
+                            {currentView === 'DISPATCH_PLANNER' && <DispatchPlanner entries={active(dispatchEntries)} orders={active(orders)} onAddEntry={dispatchMgr.add} onUpdateEntry={dispatchMgr.update} onDeleteEntry={dispatchMgr.remove} currency={currencySymbol} />}
 
                             {/* Utilities & Settings */}
                             {currentView === 'QUOTATION' && <Quotation quotations={active(quotations)} customers={active(customers)} inventory={active(inventory)} designs={active(designs)} agents={active(agents)} onAddQuotation={quotationMgr.add} onUpdateQuotation={quotationMgr.update} onDeleteQuotation={quotationMgr.remove} onAction={handleAction} currency={currencySymbol} />}

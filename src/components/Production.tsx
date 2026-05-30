@@ -13,6 +13,7 @@ import ProductionJobs from './ProductionJobs';
 import ProductionPlan from './ProductionPlan';
 import GenerateJobSlip from './GenerateJobSlip';
 import GenerateQR from './GenerateQR';
+import { ManufacturingPipeline } from './ManufacturingPipeline';
 import JobslipAnalytics from './JobslipAnalytics';
 import Workstations from './Workstations';
 
@@ -31,6 +32,7 @@ interface ProductionProps {
   onDeleteMachine?: (machine: Machine) => void;
   onAction?: (action: string, data: any) => void;
   currency?: string;
+  onUpdateKarigar?: (karigar: Karigar) => void;
 }
 
 const PRODUCTION_STAGES = [
@@ -142,7 +144,8 @@ const inventoryLookup = (inventory: InventoryItem[], materialName: string) =>
 
 const Production: React.FC<ProductionProps> = ({ 
   jobs, karigars, designs = [], inventory = [], machines = [], samples = [], orders = [],
-  onAddJob, onUpdateJob, onAddMachine, onUpdateMachine, onDeleteMachine, onAction, currency = '₹'
+  onAddJob, onUpdateJob, onAddMachine, onUpdateMachine, onDeleteMachine, onAction, currency = '₹',
+  onUpdateKarigar
 }) => {
   const [activeTab, setActiveTab] = useState<'KANBAN' | 'LIST' | 'ANALYTICS' | 'SETUP' | 'PROD_PLAN' | 'JOBS' | 'JOBSLIP' | 'WORKSTATIONS' | 'QR' | 'SLIP_ANALYTICS'>('KANBAN');
   const [activeStage, setActiveStage] = useState<string>('CUTTING');
@@ -511,7 +514,7 @@ const Production: React.FC<ProductionProps> = ({
             <button onClick={() => setActiveTab('JOBS')} className={`px-3 py-2 transition-all ${activeTab === 'JOBS' ? 'bg-macos-accent text-white' : 'bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-800'}`}>Work Orders</button>
             <button onClick={() => setActiveTab('JOBSLIP')} className={`px-3 py-2 transition-all ${activeTab === 'JOBSLIP' ? 'bg-macos-accent text-white' : 'bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-800'}`}>Job Card</button>
             <button onClick={() => setActiveTab('WORKSTATIONS')} className={`px-3 py-2 transition-all ${activeTab === 'WORKSTATIONS' ? 'bg-macos-accent text-white' : 'bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-800'}`}>Workstations</button>
-            <button onClick={() => setActiveTab('QR')} className={`px-3 py-2 transition-all ${activeTab === 'QR' ? 'bg-macos-accent text-white' : 'bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-800'}`}>Tracking Board</button>
+            <button onClick={() => setActiveTab('QR')} className={`px-3 py-2 transition-all ${activeTab === 'QR' ? 'bg-macos-accent text-white' : 'bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-800'}`}>Lifecycle Pipeline</button>
           </div>
           <button 
             onClick={() => {
@@ -1147,8 +1150,10 @@ const Production: React.FC<ProductionProps> = ({
         <ProductionJobs jobs={jobs} designs={designs} machines={machines} karigars={karigars} onUpdateJob={onUpdateJob} onAddJob={onAddJob} onAction={onAction} currency={currency} />
       )}
       {activeTab === 'WORKSTATIONS' && <Workstations workstations={machines} onAdd={onAddMachine!} onUpdate={onUpdateMachine!} onDelete={onDeleteMachine!} />}
-      {activeTab === 'JOBSLIP' && <GenerateJobSlip jobs={jobs} workstations={machines} karigars={karigars} onUpdateJob={onUpdateJob} />}
-      {activeTab === 'QR' && <GenerateQR />}
+      {activeTab === 'JOBSLIP' && <GenerateJobSlip jobs={jobs} workstations={machines} karigars={karigars} onUpdateJob={onUpdateJob} onUpdateKarigar={onUpdateKarigar} currency={currency} />}
+      {activeTab === 'QR' && (
+        <ManufacturingPipeline designs={designs} karigars={karigars} machines={machines} />
+      )}
       {activeTab === 'SLIP_ANALYTICS' && <JobslipAnalytics />}
 
       {/* New Job Modal */}

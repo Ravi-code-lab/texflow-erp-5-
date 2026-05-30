@@ -5,7 +5,7 @@ import {
   MoreHorizontal, ArrowLeft, Save, Trash2, List, Sparkles, Scroll, Package
 } from 'lucide-react';
 import SmartPurchase from './SmartPurchase';
-import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './shared/ListPage';
+import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './ListPage';
 
 interface InventoryProps {
   items: InventoryItem[];

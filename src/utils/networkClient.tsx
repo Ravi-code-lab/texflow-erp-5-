@@ -71,7 +71,7 @@ export function onDataPush(cb: (key: string, data: any) => void) {
 }
 
 
-function connectWebSocketPatched() {
+function connectWebSocket() {
   disconnectWebSocket();
   const url = getServerUrl();
   if (!url || isElectron) return;
@@ -111,7 +111,7 @@ function connectWebSocketPatched() {
     ws.onclose = () => {
       ws = null;
       wsCallbacks.forEach(cb => cb('__disconnected__', null));
-      wsReconnectTimer = setTimeout(connectWebSocketPatched, 5000);
+      wsReconnectTimer = setTimeout(connectWebSocket, 5000);
     };
     ws.onerror = () => { ws?.close(); };
   } catch (e) { console.warn('[LAN] WebSocket error:', e); }

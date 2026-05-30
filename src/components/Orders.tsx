@@ -5,7 +5,7 @@ import {
   MoreHorizontal, ArrowLeft, Save, Trash2, List, Settings, Layers, X, ShoppingCart
 } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
-import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './shared/ListPage';
+import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './ListPage';
 
 interface OrdersProps {
   orders: Order[];

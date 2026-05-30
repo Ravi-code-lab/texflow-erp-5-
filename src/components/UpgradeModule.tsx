@@ -436,7 +436,7 @@ const AppsTab: React.FC = () => {
             <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20">
               <GitBranch className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
               <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                <span className="font-bold">{selected.behind} commit{selected.behind > 1 ? 's' : ''}</span> behind origin/{selected.branch}
+                <span className="font-bold">{selected.behind || 0} commit{(selected.behind || 0) > 1 ? 's' : ''}</span> behind origin/{selected.branch}
               </p>
             </div>
           )}
@@ -444,7 +444,7 @@ const AppsTab: React.FC = () => {
             <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20">
               <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
               <p className="text-[11px] text-blue-700 dark:text-blue-300">
-                <span className="font-bold">{selected.changedFiles} uncommitted file{selected.changedFiles > 1 ? 's' : ''}</span> in working tree
+                <span className="font-bold">{selected.changedFiles || 0} uncommitted file{(selected.changedFiles || 0) > 1 ? 's' : ''}</span> in working tree
               </p>
             </div>
           )}

@@ -388,15 +388,15 @@ export function DynamicForm<T extends Record<string, any>>({
       let doc: T;
       if (isEditMode) {
         doc = prepareDocumentUpdate(
-          values as T,
-          initialValues as T,
+          values as any,
+          initialValues as any,
           currentUser
-        );
+        ) as any;
       } else {
         const created = createERPDocument(schema!.view, values as T, {
           status: values.status,
         });
-        doc = prepareDocumentCreate(created as T, currentUser);
+        doc = prepareDocumentCreate(created as any, currentUser) as any;
       }
       await onSave(doc);
     } catch (e: any) {
