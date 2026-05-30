@@ -673,19 +673,19 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#f4f5f6] font-sans antialiased text-[#1c2126] absolute inset-0 rounded-tl-xl overflow-hidden shadow-inner">
+    <div className="flex flex-col h-[calc(100vh-200px)] min-h-[600px] bg-[#f4f5f6] font-sans antialiased text-[#1c2126] rounded-xl overflow-hidden shadow-inner border border-slate-200 dark:border-slate-800">
         {viewMode === 'LIST' ? (
            <div className="flex flex-col h-full">
             {/* ─── ERPNEXT-STYLE WORK ORDER DIRECTORY COMMAND CENTER ─── */}
-            <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 py-4 sticky top-0 z-20">
-               <div className="flex justify-between items-center h-8">
-                  <div className="flex items-center gap-3">
-                     <span className="text-xl text-[#1c2126] font-bold tracking-tight">Work Orders (Production Jobs)</span>
-                     <span className="text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded font-bold uppercase tracking-wider">Manufacturing Engine</span>
+            <div className="flex-none bg-white border-b border-[#d1d8dd] px-4 sm:px-6 py-4 sticky top-0 z-20">
+               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                     <span className="text-lg sm:text-xl text-[#1c2126] font-bold tracking-tight">Work Orders (Production Jobs)</span>
+                     <span className="text-[10px] sm:text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded font-bold uppercase tracking-wider">Manufacturing Engine</span>
                      <span className="text-xs text-[#525c66] bg-[#f4f5f6] px-2 py-0.5 rounded-full font-medium">{filteredJobs.length} live units</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                     <button onClick={() => openForm()} className="h-7 px-3 flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 border border-transparent text-white rounded text-[13px] font-medium shadow-sm transition-all focus:ring-1 focus:ring-indigo-500">
+                  <div className="flex items-center gap-2 shrink-0">
+                     <button onClick={() => openForm()} className="h-8 px-3 flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 border border-transparent text-white rounded text-[13px] font-medium shadow-sm transition-all focus:ring-1 focus:ring-indigo-500">
                         <Plus className="w-4 h-4" />
                         Create Work Order
                      </button>
@@ -693,10 +693,10 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                </div>
                
                {/* ─── FILTERS COMMAND STATION ─── */}
-               <div className="flex justify-between items-center mt-3 h-8">
-                  <div className="flex items-center gap-2">
+               <div className="flex flex-col lg:flex-row lg:items-center justify-between mt-4 gap-3">
+                  <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
                       <select 
-                        className="h-7 px-2 text-[13px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-indigo-500"
+                        className="h-8 px-2 text-[13px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-indigo-500 w-full sm:w-auto"
                         value={statusFilter}
                         onChange={e => setStatusFilter(e.target.value)}
                       >
@@ -708,7 +708,7 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                       </select>
 
                       <select 
-                        className="h-7 px-2 text-[13px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-indigo-500"
+                        className="h-8 px-2 text-[13px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-indigo-500 w-full sm:w-auto"
                         value={priorityFilter}
                         onChange={e => setPriorityFilter(e.target.value)}
                       >
@@ -718,29 +718,29 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                          <option value="HIGH">High</option>
                       </select>
 
-                      <div className="relative">
+                      <div className="relative w-full sm:w-auto">
                          <input
                             type="text"
                             placeholder="Find Work Order or Product..."
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
-                            className="h-7 w-[280px] pl-8 pr-3 text-[13px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-indigo-500 transition-all placeholder-[#8d99a6]"
+                            className="h-8 w-full sm:w-[280px] pl-8 pr-3 text-[13px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-indigo-500 transition-all placeholder-[#8d99a6]"
                          />
-                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8d99a6]" />
+                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8d99a6]" />
                       </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full lg:w-auto">
                      <span className="text-[13px] font-mono text-[#525c66]">{filteredJobs.length > 0 ? `Showing 1 - ${filteredJobs.length}` : '0 results'}</span>
                      <div className="flex border border-[#d1d8dd] rounded overflow-hidden">
-                        <button className="h-7 px-2 bg-white hover:bg-[#f4f5f6] text-[#1c2126] border-r border-[#d1d8dd]"><ChevronLeft className="w-4 h-4"/></button>
-                        <button className="h-7 px-2 bg-white hover:bg-[#f4f5f6] text-[#1c2126]"><ChevronRight className="w-4 h-4"/></button>
+                        <button className="h-8 px-2.5 bg-white hover:bg-[#f4f5f6] text-[#1c2126] border-r border-[#d1d8dd]"><ChevronLeft className="w-4 h-4"/></button>
+                        <button className="h-8 px-2.5 bg-white hover:bg-[#f4f5f6] text-[#1c2126]"><ChevronRight className="w-4 h-4"/></button>
                      </div>
                   </div>
                </div>
             </div>
 
             {/* LIVE KPI MATRICES */}
-            <div className="px-6 pt-5 grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
+            <div className="px-4 sm:px-6 pt-4 sm:pt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 shrink-0">
                 <div className="bg-white p-4 border border-[#d1d8dd] rounded shadow-sm flex items-center justify-between">
                    <div>
                       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Total Work Orders</p>
@@ -778,8 +778,8 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
             </div>
 
             {/* ─── DETAILED LIST ─── */}
-            <div className="flex-1 overflow-auto p-6">
-               <div className="bg-white border border-[#d1d8dd] rounded shadow-md flex flex-col min-w-[950px] overflow-hidden">
+            <div className="flex-1 overflow-auto p-4 sm:p-6 pb-24 border-t border-transparent">
+               <div className="bg-white border border-[#d1d8dd] rounded shadow-sm flex flex-col min-w-[950px] overflow-hidden">
                   {/* Table Header */}
                   <div className="flex items-center border-b border-[#d1d8dd] bg-[#fafbfc] px-5 py-3 text-xs text-[#525c66] select-none uppercase tracking-wider font-bold">
                      <div className="w-10">
@@ -863,10 +863,10 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
         ) : (
            <div className="flex flex-col h-full bg-[#f4f5f6]">
               {/* ─── FORM HEADER WITH ERPNEXT PROGRESS STEPPER ─── */}
-              <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 py-4 sticky top-0 z-20 shadow-sm">
-                <div className="flex justify-between items-center h-8">
-                   <div className="flex items-center gap-3">
-                      <button onClick={() => setViewMode('LIST')} className="h-7 w-7 flex items-center justify-center rounded hover:bg-[#f4f5f6] text-[#525c66] transition-colors">
+              <div className="flex-none bg-white border-b border-[#d1d8dd] px-4 sm:px-6 py-4 sticky top-0 z-20 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                   <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <button onClick={() => setViewMode('LIST')} className="h-8 w-8 flex items-center justify-center rounded hover:bg-[#f4f5f6] text-[#525c66] transition-colors shrink-0">
                          <ArrowLeft className="w-4 h-4" />
                       </button>
                       <span className="text-lg text-[#1c2126] font-extrabold tracking-tight">
@@ -876,7 +876,7 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                    </div>
 
                    {/* CORE STATE CONTROLS */}
-                   <div className="flex items-center gap-2">
+                   <div className="flex flex-wrap items-center gap-2 shrink-0">
                       {formData.id && (formData.erpStatus === 'DRAFT' || !formData.erpStatus) && (
                          <button 
                             type="button" 
@@ -929,8 +929,8 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
 
                 {/* ERPNext Multi-Level Action Steps Stepper */}
                 {formData.id && (
-                   <div className="flex items-center gap-1.5 mt-4 pt-4 border-t border-slate-100 text-xs">
-                       <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider mr-2">Lifecycle Stage:</span>
+                   <div className="flex items-center gap-1.5 mt-4 pt-4 border-t border-slate-100 text-xs overflow-x-auto no-scrollbar pb-2">
+                       <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider mr-2 shrink-0">Lifecycle Stage:</span>
                        {[
                          { step: 'DRAFT', label: '1. Draft Blueprint' },
                          { step: 'SUBMITTED', label: '2. Ledger Approved' },
@@ -941,8 +941,8 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                           const isDone = i < ['DRAFT', 'SUBMITTED', 'IN_PROGRESS', 'COMPLETED'].indexOf(formData.erpStatus || 'DRAFT');
                           return (
                              <React.Fragment key={st.step}>
-                                {i > 0 && <span className="text-slate-300">➔</span>}
-                                <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10.5px] transition-all border ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : isDone ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-400 border-slate-200/80'}`}>
+                                {i > 0 && <span className="text-slate-300 shrink-0">➔</span>}
+                                <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10.5px] transition-all border shrink-0 ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : isDone ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-400 border-slate-200/80'}`}>
                                    {st.label}
                                 </span>
                              </React.Fragment>
@@ -953,8 +953,8 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
               </div>
 
               {/* TABS NAVIGATION BAR FOR WORK ORDER BLUEPRINT */}
-              <div className="flex-none bg-white border-b border-[#d1d8dd] px-6">
-                 <div className="flex gap-1.5">
+              <div className="flex-none bg-white border-b border-[#d1d8dd] px-4 sm:px-6">
+                 <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
                     {[
                       { id: 'DETAILS', label: 'Core Specs', icon: Settings },
                       { id: 'MATERIALS', label: 'Required Inputs (BOM)', icon: Layers, badge: batchRequirements.length },
@@ -966,7 +966,7 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                          key={tab.id}
                          type="button"
                          onClick={() => setActiveTab(tab.id as any)}
-                         className={`px-4 py-3 text-[12px] font-bold uppercase tracking-wider border-b-2 transition-all flex items-center gap-1.5 ${activeTab === tab.id ? 'border-indigo-600 text-indigo-700 bg-indigo-50/10' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                         className={`px-4 py-3 text-[12px] font-bold uppercase tracking-wider border-b-2 transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap ${activeTab === tab.id ? 'border-indigo-600 text-indigo-700 bg-indigo-50/10' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                        >
                           <tab.icon className="w-3.5 h-3.5" />
                           {tab.label}
@@ -1272,9 +1272,9 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                                            <RefreshCw className="w-3 h-3" /> Auto-Distribute (Standard 15:35:35:10 Curve)
                                         </button>
                                      </div>
-                                     <div className="flex gap-4">
+                                     <div className="flex flex-wrap gap-4">
                                         {['S', 'M', 'L', 'XL', 'XXL', 'XXXL'].map(size => (
-                                           <div key={size} className="flex-1 flex flex-col space-y-1.5">
+                                           <div key={size} className="flex-1 min-w-[60px] flex flex-col space-y-1.5">
                                               <label className="text-xs text-slate-500 text-center font-bold">{size}</label>
                                               <input 
                                                  type="number" 

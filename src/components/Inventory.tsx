@@ -116,7 +116,7 @@ const Inventory: React.FC<InventoryProps> = ({
   );
 
   return (
-    <div className="flex flex-col h-full font-sans antialiased absolute inset-0 overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-200px)] min-h-[600px] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-sans antialiased rounded-xl overflow-hidden">
        {viewMode === 'LIST' ? (
           <ListPage<InventoryItem>
             doctype="Item"

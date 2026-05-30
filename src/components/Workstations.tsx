@@ -38,7 +38,7 @@ const Workstations: React.FC<WorkstationsProps> = ({ workstations, onAdd, onUpda
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#f4f5f6] font-sans antialiased text-[#1c2126] absolute inset-0 rounded-tl-xl overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-200px)] min-h-[600px] bg-[#f4f5f6] font-sans antialiased text-[#1c2126] rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
       <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 py-4 sticky top-0 z-20">
          <div className="flex justify-between items-center h-8">
             <div className="flex items-center gap-3">

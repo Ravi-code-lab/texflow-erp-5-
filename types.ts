@@ -1,11 +1,7 @@
 
 export type ViewState = 
   | 'DASHBOARD' 
-  | 'ERP_DESK'
-  | 'DOCUMENT_DESK'
-  | 'DATA_IMPORT'
-  | 'CATALOG'
-  | 'PACKING_SLIPS'
+  | 'CATALOG' 
   | 'SAMPLING'
   | 'DESIGN_RECIPE'
   | 'INVENTORY' 
@@ -41,14 +37,12 @@ export type ViewState =
   | 'REPORTS' 
   | 'TEAM'
   | 'SETTINGS'
-  | 'DOCTYPE_CENTER'
-  | 'WORKFLOW_INBOX'
-  | 'REPORT_BUILDER'
   | 'NOTIFICATIONS'
-  | 'AUDIT_TRAIL'
   | 'TASKS'
   | 'PROJECTS'
   | 'OPENING_STOCK'
+  | 'YARN_MANAGEMENT'
+  | 'DYEING_PROCESSING'
   | 'FABRIC_COSTING'
   | 'DISPATCH_PLANNER'
   | 'QUOTATION'
@@ -61,19 +55,13 @@ export type ViewState =
   | 'LEAVE_APP'
   | 'TIMESHEET'
   | 'POS'
-  | 'VEHICLES'
-  | 'UPGRADE'
-  | 'PRINT_FORMATS'
-  | string;
+  | 'VEHICLES';
 
 export enum Unit { KG = 'KG', METER = 'METER', PIECE = 'PIECE', LITER = 'LITER', BOX = 'BOX', YARD = 'YARD' }
 export enum MaterialType { YARN = 'YARN', FABRIC = 'FABRIC', ACCESSORY = 'ACCESSORY', DYE = 'DYE', PACKAGING = 'PACKAGING' }
 
 export interface BaseEntity {
   id: string;
-  doctype?: string;
-  namingSeries?: string;
-  docstatus?: 0 | 1 | 2;
   updatedAt?: string; 
   createdAt?: string;
   updatedBy?: string;
@@ -145,10 +133,6 @@ export interface DesignVariant {
 export interface RecipeItem { materialId?: string; materialName: string; quantity: number; unit: Unit | string; estimatedCost?: number; wastagePercent?: number; }
 export type WorkType = 'DIGITAL_PRINT' | 'EMBROIDERY' | 'HANDWORK' | 'ROTARY' | 'PLAIN' | 'DYED';
 export interface DesignLaborCost { cutting?: number; stitching?: number; embroidery?: number; washing?: number; finishing?: number; folding?: number; packing?: number; other?: number; }
-export interface GarmentOperationTemplate { id: string; name: string; stage: string; processType: 'IN_HOUSE' | 'JOB_WORK'; workstationType?: string; defaultRate?: number; plannedHours?: number; qualityCheckpoint?: boolean; }
-export interface GarmentRoutingTemplate { id: string; name: string; category: string; operations: GarmentOperationTemplate[]; }
-export interface GarmentWorkOrderOperation extends GarmentOperationTemplate { status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED'; completedQuantity?: number; rejectedQuantity?: number; assignedTo?: string; completedAt?: string; }
-export interface GarmentBundleTicket { id: string; bundleNo: string; size: string; quantity: number; status: 'CUTTING' | 'ISSUED' | 'STITCHING' | 'FINISHING' | 'COMPLETED'; operationId?: string; karigarId?: string; createdAt: string; }
 
 export interface Design extends BaseEntity { 
     name: string; 
@@ -174,23 +158,10 @@ export interface Design extends BaseEntity {
     tags?: string[];
     brandId?: string;
     brandName?: string;
-    routingTemplateId?: string;
-    uom?: string;
-    brand?: string;
-    maintainStock?: boolean;
-    allowPurchase?: boolean;
-    allowSales?: boolean;
-    weight?: string;
-    dimensions?: string;
-    reorderLevel?: number;
-    reorderQty?: number;
-    taxCategory?: string;
-    barcode?: string;
 }
 
 export interface JobWorkItem { description: string; issuedQuantity: number; receivedQuantity: number; rate: number; unit: Unit | string; quantity: number; wastagePercent: number; rejectedQuantity: number; receiptHistory: any[]; }
-export interface JobWorkSuppliedItem { productName: string; quantity: number; unit: string; consumedQuantity?: number; }
-export interface JobWork extends BaseEntity { challanNumber: string; vendorName: string; process: string; issueDate: string; expectedDate: string; status: string; items: JobWorkItem[]; suppliedItems?: JobWorkSuppliedItem[]; totalCost: number; paymentStatus: string; sourceWorkOrderId?: string; sourceOperationId?: string; styleCode?: string; color?: string; fabricLot?: string; }
+export interface JobWork extends BaseEntity { challanNumber: string; vendorName: string; process: string; issueDate: string; expectedDate: string; status: string; items: JobWorkItem[]; totalCost: number; paymentStatus: string; }
 export interface Transaction extends BaseEntity { date: string; description: string; amount: number; type: 'INCOME' | 'EXPENSE'; category: string; paymentMethod: string; referenceId?: string; subType?: string; }
 
 export interface MaterialRequestItem {
@@ -311,7 +282,7 @@ export interface Vehicle extends BaseEntity {
 }
 
 export interface OrderItem { productName: string; quantity: number; unitPrice: number; unit: Unit | string; sizeWise?: Record<string, number>; }
-export interface Order extends BaseEntity { customerName: string; status: string; paymentStatus: string; items: OrderItem[]; orderDate: string; totalAmount: number; agentName?: string; agentId?: string; agentCommissionRate?: number; agentCommissionAmount?: number; taxRate?: number; shippingAddress?: string; dueDate?: string; vehicleNo?: string; transportName?: string; isShopify?: boolean; shopifyOrderId?: string; brandId?: string; brandName?: string; termsAndConditions?: string; notes?: string; poNo?: string; poDate?: string; project?: string; }
+export interface Order extends BaseEntity { customerName: string; status: string; paymentStatus: string; items: OrderItem[]; orderDate: string; totalAmount: number; agentName?: string; agentId?: string; agentCommissionRate?: number; agentCommissionAmount?: number; taxRate?: number; shippingAddress?: string; dueDate?: string; vehicleNo?: string; transportName?: string; isShopify?: boolean; shopifyOrderId?: string; brandId?: string; brandName?: string; }
 export interface CuttingLog extends BaseEntity {
   date: string;
   quantity: number;
@@ -333,19 +304,12 @@ export interface ProductionJob extends BaseEntity {
   sampleId?: string;
   orderId?: string;
   batchNo?: string;
-  styleCode?: string;
-  fabricLot?: string;
-  color?: string;
-  season?: string;
-  routingTemplateId?: string;
-  operations?: GarmentWorkOrderOperation[];
-  bundles?: GarmentBundleTicket[];
   cuttingLogs?: CuttingLog[];
   productionLogs?: ProductionLog[];
   sizeWise?: Record<string, number>;
 }
 export interface KarigarLedgerEntry extends BaseEntity { date: string; type: 'WORK_RECEIVED' | 'PAYMENT_GIVEN'; description: string; amount: number; quantity?: number; rate?: number; }
-export interface Karigar extends BaseEntity { name: string; skill: string; balance: number; phone?: string; ledger: KarigarLedgerEntry[]; profileImageUrl?: string; isActive?: boolean; }
+export interface Karigar extends BaseEntity { name: string; skill: string; balance: number; phone?: string; ledger: KarigarLedgerEntry[]; profileImageUrl?: string; }
 export interface Supplier extends BaseEntity { name: string; contactPerson: string; email: string; phone?: string; location: string; reliabilityScore: number; materialsProvided: string[]; }
 export interface PurchaseOrderItem { productName: string; quantity: number; unit: Unit | string; unitPrice: number; }
 export interface PurchaseOrder extends BaseEntity { supplierId: string; supplierName: string; date: string; status: 'DRAFT' | 'SENT' | 'RECEIVED' | 'CANCELLED'; items: PurchaseOrderItem[]; totalAmount: number; taxRate?: number; expectedDate?: string; }
@@ -382,9 +346,7 @@ export interface CompanyInfo {
   accountNumber?: string;
   ifscCode?: string;
 }
-export interface QualityReportDefect { type: string; severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'; description?: string; }
-export interface GarmentMeasurementCheck { point: string; target: number; tolerance: number; actual: number; unit: string; passed: boolean; }
-export interface QualityReport extends BaseEntity { jobId: string; inspectorName: string; defectType: 'SHADE_VARIATION' | 'WEAVING_ERROR' | 'STAIN' | 'MEASUREMENT' | 'STITCHING' | 'PACKING' | 'OTHER'; defectsFound: number; checkedQuantity: number; status: 'PASSED' | 'FAILED' | 'RE-WORK'; date: string; operationId?: string; productName?: string; styleCode?: string; color?: string; size?: string; imageUrl?: string; measurements?: GarmentMeasurementCheck[]; defects?: QualityReportDefect[]; defectTypes?: string[]; issueSeverity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'; }
+export interface QualityReport extends BaseEntity { jobId: string; inspectorName: string; defectType: 'SHADE_VARIATION' | 'WEAVING_ERROR' | 'STAIN' | 'OTHER'; defectsFound: number; checkedQuantity: number; status: 'PASSED' | 'FAILED' | 'RE-WORK'; date: string; }
 export interface ProductionLog extends BaseEntity { jobId: string; machineId: string; operatorId: string; quantityProduced: number; wasteProduced: number; timestamp: string; efficiency?: number; }
 export interface Customer extends BaseEntity { 
   name: string; 
@@ -656,24 +618,6 @@ export interface FabricCosting extends BaseEntity {
 // ─── DISPATCH PLANNER ────────────────────────────────────────────────────────
 export type DispatchMode = 'ROAD' | 'RAIL' | 'AIR' | 'COURIER' | 'HAND_DELIVERY';
 export type DispatchStatus = 'PENDING' | 'PACKED' | 'DISPATCHED' | 'IN_TRANSIT' | 'DELIVERED' | 'RETURNED' | 'CANCELLED';
-
-export interface PackingSlipItem {
-  productName: string;
-  quantity: number;
-  unit: string;
-  netWeight?: number;
-  grossWeight?: number;
-}
-export interface PackingSlip extends BaseEntity {
-  deliveryNoteId: string;
-  customerName: string;
-  date: string;
-  fromPackageNo: number;
-  toPackageNo: number;
-  items: PackingSlipItem[];
-  netWeight?: number;
-  grossWeight?: number;
-}
 
 export interface DispatchItem {
   orderId: string;

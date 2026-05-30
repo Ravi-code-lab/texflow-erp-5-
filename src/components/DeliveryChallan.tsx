@@ -25,6 +25,7 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
   companyInfo = { name: 'RAVI-TEXTILE', address: 'Surat, GJ', gstin: '', email: '', website: '', logoUrl: '' }
 }) => {
   const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>('LIST');
+  const [activeTab, setActiveTab] = useState<'DETAILS' | 'ITEMS' | 'SHIPPING'>('DETAILS');
   const [filter, setFilter] = useState('');
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   
@@ -278,12 +279,25 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
                   </div>
                </div>
 
+               <div className="flex gap-6 border-b border-transparent overflow-x-auto no-scrollbar mt-4">
+                  {[
+                    { id: 'DETAILS', label: 'Details' },
+                    { id: 'ITEMS', label: 'Items' },
+                    { id: 'SHIPPING', label: 'Transportation' }
+                  ].map(tab => (
+                     <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`pb-3 text-[13px] font-medium border-b-2 transition-colors ${activeTab === tab.id ? 'border-[#2490ef] text-[#1c2126]' : 'border-transparent text-[#525c66] hover:text-[#1c2126]'}`}
+                     >
+                        {tab.label}
+                     </button>
+                  ))}
+               </div>
+               
                {formData.id && (
-                  <div className="flex justify-between items-center mt-3 h-8 text-[13px]">
-                     <div className="flex items-center gap-4 text-[#1c2126] font-medium">
-                           <a className="hover:underline cursor-pointer opacity-80 border-b-2 border-transparent hover:border-[#1c2126] pb-1 transition-all">Details</a>
-                           <a className="hover:underline cursor-pointer opacity-80 border-b-2 border-transparent hover:border-[#1c2126] pb-1 transition-all">Connections</a>
-                     </div>
+                  <div className="flex justify-end items-center mt-3 h-8 text-[13px]">
                      <div className="flex items-center gap-1">
                            <button onClick={() => generateDCPDF(formData)} className="text-[#525c66] hover:text-[#1c2126] font-semibold px-2 py-1 rounded hover:bg-[#f4f5f6] transition-colors flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> Print</button>
                            <button className="text-[#525c66] hover:text-[#1c2126] font-semibold px-2 py-1 rounded hover:bg-[#f4f5f6] transition-colors">Menu</button>
@@ -296,6 +310,7 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
              <div className="flex-1 overflow-auto p-5 pb-16 flex justify-center">
                  <form onSubmit={handleCreate} className="w-full max-w-[850px] space-y-4">
                      
+                     {activeTab === 'DETAILS' && (
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
                          <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Customer Details</h4>
                          <div className="grid grid-cols-2 gap-x-16 gap-y-6">
@@ -345,7 +360,9 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
                             </div>
                          </div>
                      </div>
+                     )}
 
+                     {activeTab === 'ITEMS' && (
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
                          <div className="flex justify-between items-center border-b border-[#d1d8dd] pb-2 mb-5">
                              <h4 className="font-semibold text-sm text-[#1c2126]">Items</h4>
@@ -383,7 +400,9 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
                             </tbody>
                          </table>
                      </div>
+                     )}
 
+                     {activeTab === 'SHIPPING' && (
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
                          <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Transportation</h4>
                          <div className="grid grid-cols-2 gap-x-16 gap-y-6">
@@ -418,6 +437,7 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
                             </div>
                          </div>
                      </div>
+                     )}
 
                      <button type="submit" className="hidden">Submit</button>
                  </form>

@@ -1,13 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
 // Removed non-existent JobWorkMaterial from the import list below
-import { JobWork, JobWorkItem, Design, InventoryItem, Unit } from '../types';
+import { JobWork, JobWorkItem, JobWorkSuppliedItem, Design, InventoryItem, Unit } from '../types';
 import { 
   Truck, ArrowRight, Printer, Search, Plus, 
   FlaskConical, PenTool, Sparkles, LayoutGrid, List, 
   Target, Gauge, Clock, Receipt, Check, Trash2, Download,
   Package, Info, Zap, ShieldCheck, BadgeCheck, Box, X,
-  ArrowDownLeft, Scale, FlaskRound, Scissors
+  ArrowDownLeft, Scale, FlaskRound, Scissors, ArrowUpRight
 } from 'lucide-react';
 import BaseModal from './BaseModal';
 import ProductImageThumb, { resolveProductImage } from './ProductImageThumb';
@@ -25,9 +25,14 @@ interface JobWorkProps {
 
 const PROCESS_NODES = [
   { id: 'DYEING', label: 'Dyeing & Bleach', icon: FlaskConical, color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-950/20', border: 'border-indigo-100' },
-  { id: 'PRINTING', label: 'Rotary/Digital', icon: Zap, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/20', border: 'border-amber-100' },
-  { id: 'EMBROIDERY', label: 'Schiffli/Hand', icon: Sparkles, color: 'text-pink-500', bg: 'bg-pink-50 dark:bg-pink-950/20', border: 'border-pink-100' },
-  { id: 'STITCHING', label: 'Stitching Unit', icon: PenTool, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-950/20', border: 'border-blue-100' }
+  { id: 'PRINTING', label: 'Rotary/Digital/Block', icon: Zap, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/20', border: 'border-amber-100' },
+  { id: 'EMBROIDERY', label: 'Schiffli/Machine/Hand', icon: Sparkles, color: 'text-pink-500', bg: 'bg-pink-50 dark:bg-pink-950/20', border: 'border-pink-100' },
+  { id: 'HANDWORK', label: 'Zardosi/Aari/Bead', icon: Target, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-950/20', border: 'border-rose-100' },
+  { id: 'WASHING', label: 'Washing/Dry Clean', icon: FlaskRound, color: 'text-cyan-500', bg: 'bg-cyan-50 dark:bg-cyan-950/20', border: 'border-cyan-100' },
+  { id: 'CUTTING', label: 'Cutting Unit', icon: Scissors, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-950/20', border: 'border-orange-100' },
+  { id: 'STITCHING', label: 'Stitching Unit', icon: PenTool, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-950/20', border: 'border-blue-100' },
+  { id: 'FINISHING', label: 'Finishing & Pressing', icon: BadgeCheck, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/20', border: 'border-emerald-100' },
+  { id: 'PACKING', label: 'Packing & Labeling', icon: Package, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-950/20', border: 'border-purple-100' }
 ];
 
 const JobWorkComp: React.FC<JobWorkProps> = ({ 
@@ -40,12 +45,13 @@ const JobWorkComp: React.FC<JobWorkProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<Partial<JobWork>>({ 
-    process: 'DYEING', status: 'ISSUED', items: [], paymentStatus: 'UNPAID',
+    process: 'DYEING', status: 'ISSUED', items: [], suppliedItems: [], paymentStatus: 'UNPAID',
     issueDate: new Date().toISOString().split('T')[0],
     expectedDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
   });
   
   const [itemInput, setItemInput] = useState<Partial<JobWorkItem>>({ description: '', issuedQuantity: 0, receivedQuantity: 0, rate: 0, unit: Unit.METER });
+  const [suppliedItemInput, setSuppliedItemInput] = useState<Partial<JobWorkSuppliedItem>>({ productName: '', quantity: 0, unit: 'METER' });
 
   // Logic to calculate material consumption shards
   const calculateConsumption = (issued: number, received: number) => {
@@ -91,15 +97,13 @@ const JobWorkComp: React.FC<JobWorkProps> = ({
   };
 
   const addItem = () => {
-    if(itemInput.description && itemInput.issuedQuantity && itemInput.issuedQuantity > 0) {
-        const { wastage, ratio } = calculateConsumption(itemInput.issuedQuantity, itemInput.receivedQuantity || 0);
-            
+    if(itemInput.description) {
         setFormData(prev => ({ 
             ...prev, 
             items: [...(prev.items || []), { 
                 ...itemInput, 
-                quantity: itemInput.issuedQuantity!,
-                wastagePercent: (wastage / itemInput.issuedQuantity!) * 100,
+                quantity: itemInput.issuedQuantity || 0,
+                wastagePercent: 0,
                 rejectedQuantity: 0, 
                 receiptHistory: [] 
             } as JobWorkItem] 
@@ -112,6 +116,22 @@ const JobWorkComp: React.FC<JobWorkProps> = ({
     const updated = [...(formData.items || [])];
     updated.splice(idx, 1);
     setFormData({ ...formData, items: updated });
+  };
+
+  const addSuppliedItem = () => {
+      if(suppliedItemInput.productName && suppliedItemInput.quantity && suppliedItemInput.quantity > 0) {
+          setFormData(prev => ({
+              ...prev,
+              suppliedItems: [...(prev.suppliedItems || []), { ...suppliedItemInput } as JobWorkSuppliedItem]
+          }));
+          setSuppliedItemInput({ productName: '', quantity: 0, unit: 'METER' });
+      }
+  };
+
+  const removeSuppliedItem = (idx: number) => {
+      const updated = [...(formData.suppliedItems || [])];
+      updated.splice(idx, 1);
+      setFormData({ ...formData, suppliedItems: updated });
   };
 
   return (
@@ -198,19 +218,21 @@ const JobWorkComp: React.FC<JobWorkProps> = ({
                              
                              const firstItemDescription = job.items[0]?.description;
                              const imageUrl = resolveProductImage(firstItemDescription, designs, inventory);
+                             const processNode = PROCESS_NODES.find(n => n.id === job.process);
 
                              return (
                                 <tr key={job.id} onClick={() => { setEditingId(job.id); setFormData(job); setIsModalOpen(true); }} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer group transition-all h-16">
                                     <td className="p-3 text-center">
-                                        <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-700">
+                                        <div className={`w-10 h-10 rounded-lg ${processNode?.bg || 'bg-indigo-50 dark:bg-indigo-900/20'} flex items-center justify-center overflow-hidden border ${processNode?.border || 'border-slate-200 dark:border-slate-700'}`}>
                                             {imageUrl ? (
                                               <img src={imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                             ) : (
-                                              <FlaskRound className="w-5 h-5 text-indigo-500" />
+                                              processNode ? <processNode.icon className={`w-5 h-5 ${processNode.color}`} /> : <FlaskRound className="w-5 h-5 text-indigo-500" />
                                             )}
                                         </div>
                                     </td>
                                     <td className="p-4">
+
                                         <p className="font-bold text-slate-700 dark:text-white uppercase text-sm">{job.vendorName}</p>
                                         <span className="text-[10px] font-mono text-slate-400">#{job.challanNumber}</span>
                                     </td>
@@ -261,7 +283,7 @@ const JobWorkComp: React.FC<JobWorkProps> = ({
                             >
                                 <div className="flex justify-between items-start mb-4">
                                    <div>
-                                      <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{job.process}</p>
+                                      <p className={`text-[10px] font-black uppercase tracking-widest ${PROCESS_NODES.find(n => n.id === job.process)?.color || 'text-indigo-500'}`}>{PROCESS_NODES.find(n => n.id === job.process)?.label || job.process}</p>
                                       <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase truncate mt-1">{job.vendorName}</h3>
                                    </div>
                                    <div className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${job.status === 'ISSUED' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>{job.status}</div>
@@ -321,45 +343,57 @@ const JobWorkComp: React.FC<JobWorkProps> = ({
                       </div>
                   </div>
 
-                  <div className="p-6 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-4 shadow-inner">
-                      <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] border-b pb-2 flex justify-between">
-                          <span>Material Reconciliation Matrix</span>
-                          <span className="text-slate-400">Leakage Analytics Enabled</span>
-                      </h4>
-                      <div className="grid grid-cols-12 gap-2">
-                        <input className="col-span-4 border dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold uppercase bg-white dark:bg-slate-900 outline-none" placeholder="Description/SKU..." value={itemInput.description} onChange={e => setItemInput({...itemInput, description: e.target.value})} />
-                        <input type="number" className="col-span-2 border dark:border-slate-700 rounded-xl p-2.5 text-xs font-black text-center bg-white dark:bg-slate-900 outline-none" placeholder="Issued" value={itemInput.issuedQuantity || ''} onChange={e => setItemInput({...itemInput, issuedQuantity: Number(e.target.value)})} />
-                        <input type="number" className="col-span-2 border dark:border-slate-700 rounded-xl p-2.5 text-xs font-black text-center bg-white dark:bg-slate-900 outline-none" placeholder="Recv" value={itemInput.receivedQuantity || ''} onChange={e => setItemInput({...itemInput, receivedQuantity: Number(e.target.value)})} />
-                        <input type="number" className="col-span-3 border dark:border-slate-700 rounded-xl p-2.5 text-xs font-bold bg-white dark:bg-slate-900 outline-none" placeholder="Rate" value={itemInput.rate || ''} onChange={e => setItemInput({...itemInput, rate: Number(e.target.value)})} />
-                        <button type="button" onClick={addItem} className="col-span-1 bg-indigo-600 text-white p-2.5 rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center shadow-lg active:scale-90"><Plus className="w-4 h-4"/></button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Supplied Items */}
+                      <div className="p-5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-inner flex flex-col">
+                          <h4 className="text-[10px] font-black tracking-widest text-slate-500 uppercase border-b pb-2 mb-3 flex items-center gap-1.5"><ArrowUpRight className="w-3.5 h-3.5"/> Supplied Materials (BOM)</h4>
+                          <div className="grid grid-cols-12 gap-1.5 mb-3">
+                              <input className="col-span-6 border border-slate-200 dark:border-slate-800 rounded-lg p-2 text-xs bg-white dark:bg-slate-900 outline-none" placeholder="RM/Fabric SKU..." value={suppliedItemInput.productName} onChange={e => setSuppliedItemInput({...suppliedItemInput, productName: e.target.value})} />
+                              <input type="number" className="col-span-3 border border-slate-200 dark:border-slate-800 rounded-lg p-2 text-xs text-center bg-white dark:bg-slate-900 outline-none" placeholder="Qty" value={suppliedItemInput.quantity || ''} onChange={e => setSuppliedItemInput({...suppliedItemInput, quantity: Number(e.target.value)})} />
+                              <button type="button" onClick={addSuppliedItem} className="col-span-3 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-bold tracking-wider hover:bg-slate-300 transition-colors uppercase">Add</button>
+                          </div>
+                          <div className="space-y-1.5 overflow-y-auto max-h-[200px] flex-1">
+                              {formData.suppliedItems?.map((item, i) => (
+                                  <div key={i} className="flex justify-between items-center text-xs p-2 bg-white dark:bg-slate-900 rounded border border-slate-100 dark:border-slate-800">
+                                      <div className="font-bold text-slate-700 dark:text-slate-300 uppercase">{item.productName}</div>
+                                      <div className="flex items-center gap-3">
+                                          <div className="font-mono text-slate-500">{item.quantity} {item.unit}</div>
+                                          <button type="button" onClick={() => removeSuppliedItem(i)} className="text-red-400 hover:text-red-500"><X className="w-3.5 h-3.5"/></button>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
                       </div>
-                      
-                      <div className="space-y-2 mt-4">
-                        {formData.items?.map((item, i) => {
-                            const ratio = item.issuedQuantity > 0 ? (item.receivedQuantity / item.issuedQuantity) * 100 : 0;
-                            return (
-                                <div key={i} className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border dark:border-slate-800 shadow-sm animate-fade-in group">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-3">
-                                          <ProductImageThumb productName={item.description} designs={designs} inventory={inventory} size="sm" />
-                                          <div>
-                                            <p className="font-black text-[11px] text-slate-800 dark:text-slate-200 uppercase tracking-tighter">{item.description}</p>
-                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{currency}{item.rate} / {item.unit}</p>
+
+                      {/* Received Items */}
+                      <div className="p-5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-inner flex flex-col">
+                          <h4 className="text-[10px] font-black tracking-widest text-indigo-600 uppercase border-b pb-2 mb-3 flex items-center gap-1.5"><ArrowDownLeft className="w-3.5 h-3.5"/> Expected/Received</h4>
+                          <div className="grid grid-cols-12 gap-1.5 mb-3">
+                              <input className="col-span-5 border border-slate-200 dark:border-slate-800 rounded-lg p-2 text-xs bg-white dark:bg-slate-900 outline-none" placeholder="Finished SKU..." value={itemInput.description} onChange={e => setItemInput({...itemInput, description: e.target.value})} />
+                              <input type="number" className="col-span-2 border border-slate-200 dark:border-slate-800 rounded-lg p-2 text-xs text-center bg-white dark:bg-slate-900 outline-none" placeholder="Exp Qty" value={itemInput.issuedQuantity || ''} onChange={e => setItemInput({...itemInput, issuedQuantity: Number(e.target.value)})} />
+                              <input type="number" className="col-span-3 border border-slate-200 dark:border-slate-800 rounded-lg p-2 text-xs text-center bg-white dark:bg-slate-900 outline-none" placeholder="Recv Qty" value={itemInput.receivedQuantity || ''} onChange={e => setItemInput({...itemInput, receivedQuantity: Number(e.target.value)})} />
+                              <input type="number" className="col-span-2 border border-slate-200 dark:border-slate-800 rounded-lg p-2 text-xs text-center bg-white dark:bg-slate-900 outline-none" placeholder="Rate" value={itemInput.rate || ''} onChange={e => setItemInput({...itemInput, rate: Number(e.target.value)})} />
+                              <button type="button" onClick={addItem} className="col-span-12 mt-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-lg p-2 text-[10px] font-bold tracking-wider hover:bg-indigo-200 transition-colors uppercase">Add to matrix</button>
+                          </div>
+                          
+                          <div className="space-y-1.5 overflow-y-auto max-h-[168px] flex-1">
+                              {formData.items?.map((item, i) => (
+                                  <div key={i} className="flex justify-between items-center text-xs p-2 bg-white dark:bg-slate-900 rounded border border-slate-100 dark:border-slate-800 shadow-sm relative group overflow-hidden">
+                                     <div className="absolute top-0 left-0 bottom-0 w-1 bg-indigo-500"></div>
+                                      <div className="ml-2">
+                                          <div className="font-black text-slate-800 dark:text-slate-100 uppercase text-[10px]">{item.description}</div>
+                                          <div className="text-[9px] font-bold text-slate-400 mt-0.5">{currency}{item.rate} / {item.unit}</div>
+                                      </div>
+                                      <div className="flex items-center gap-4">
+                                          <div className="text-right flex flex-col items-end">
+                                             <div className="text-[8px] font-bold text-slate-400 uppercase">Recv/Exp</div>
+                                             <div className="font-mono text-[11px] font-black"><span className={item.receivedQuantity < item.issuedQuantity ? 'text-amber-500' : 'text-emerald-500'}>{item.receivedQuantity}</span><span className="text-slate-300">/</span><span className="text-slate-600">{item.issuedQuantity}</span></div>
                                           </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-6">
-                                        <div className="text-right">
-                                            <p className="text-[8px] font-bold text-slate-400 uppercase">Ratio Yield</p>
-                                            <p className={`text-[11px] font-black tabular-nums ${ratio < 95 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                                {item.receivedQuantity} <span className="opacity-20">/</span> {item.issuedQuantity}
-                                            </p>
-                                        </div>
-                                        <button type="button" onClick={() => removeItem(i)} className="text-slate-300 hover:text-rose-500 transition-all p-1"><X className="w-4 h-4"/></button>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                          <button type="button" onClick={() => removeItem(i)} className="text-red-400 hover:text-red-500 p-1"><X className="w-3.5 h-3.5"/></button>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
                       </div>
                   </div>
               </div>
@@ -389,6 +423,22 @@ const JobWorkComp: React.FC<JobWorkProps> = ({
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 flex items-center gap-2"><Scissors className="w-3.5 h-3.5 text-indigo-500"/> Process Chain</h4>
                       <select className="w-full border rounded-lg p-2 text-[10px] font-black uppercase bg-slate-50 dark:bg-slate-950 outline-none" value={formData.process} onChange={e => setFormData({...formData, process: e.target.value})}>
                           {PROCESS_NODES.map(n => <option key={n.id} value={n.id}>{n.label}</option>)}
+                      </select>
+
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 flex items-center gap-2 mt-4">Job Status</h4>
+                      <select className="w-full border rounded-lg p-2 text-[10px] font-black uppercase bg-slate-50 dark:bg-slate-950 outline-none" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+                          <option value="ISSUED">Issued (In Transit)</option>
+                          <option value="IN_PROGRESS">In Progress (Vendor)</option>
+                          <option value="COMPLETED">Completed/Ready</option>
+                          <option value="BILLED">Billed</option>
+                          <option value="CANCELLED">Cancelled</option>
+                      </select>
+
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 flex items-center gap-2 mt-4">Payment Status</h4>
+                      <select className="w-full border rounded-lg p-2 text-[10px] font-black uppercase bg-slate-50 dark:bg-slate-950 outline-none" value={formData.paymentStatus} onChange={e => setFormData({...formData, paymentStatus: e.target.value})}>
+                          <option value="UNPAID">Unpaid</option>
+                          <option value="PARTIAL">Partially Paid</option>
+                          <option value="PAID">Paid in Full</option>
                       </select>
                   </div>
               </div>

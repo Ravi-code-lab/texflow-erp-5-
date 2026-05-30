@@ -53,6 +53,7 @@ import CreditDebitNotes from '../components/CreditDebitNotes';
 import TrackLots from '../components/TrackLots';
 import SalesOrder from '../components/SalesOrder';
 import DeliveryChallan from '../components/DeliveryChallan';
+import PackingList from '../components/PackingList';
 import Sampling from '../components/Sampling';
 import NotificationCenter from '../components/NotificationCenter';
 import TaskManager from '../components/TaskManager';
@@ -63,6 +64,7 @@ import ERPNextWorkbench from '../components/ERPNextWorkbench';
 import WorkflowInbox, { WorkflowInboxCollection } from '../components/WorkflowInbox';
 import ReportBuilder, { ReportCollection } from '../components/ReportBuilder';
 import UpgradeModule from '../components/UpgradeModule';
+import { PrintFormatBuilder } from '../components/PrintFormatBuilder';
 import { FabricCostingWorkspace } from '../components/FabricCosting';
 import { DispatchPlanner } from '../components/DispatchPlanner';
 import { 
@@ -74,12 +76,12 @@ import {
   StockAudit, PayrollAdjustment, SampleRequest, Pack, StockTransfer,
   ShopifyConfig, InvoiceConfig, SecurityConfig, CommunicationConfig, AdvancedConfig,
   Notification, Task, Timesheet, SupplierQuotation, MaterialRequest, SupportTicket, ExpenseClaim,
-  Vehicle, POSInvoice, AuditLog, YarnLot, DyeingJob, FabricCosting, DispatchEntry
+  Vehicle, POSInvoice, AuditLog, YarnLot, DyeingJob, FabricCosting, DispatchEntry, PackingSlip
 } from '../types';
 import { getItem, setItem, hydrateFromNative } from '../utils/indexedDB';
 import { Loader2, Command, Menu, Search, Bell } from 'lucide-react';
 import { getViewTitle } from '../modules/registry';
-import { getDocTypeSchema } from '../modules/doctypes';
+import { getDocTypeSchema, DOCTYPE_SCHEMAS } from '../modules/doctypes';
 import { createERPDocument } from '../modules/documentEngine';
 import { createAuditLog, prepareDocumentCreate, prepareDocumentDelete, prepareDocumentUpdate } from '../modules/documentLifecycle';
 
@@ -136,6 +138,7 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [slips, setSlips] = useState<JobSlip[]>([]);
+  const [packingSlips, setPackingSlips] = useState<PackingSlip[]>([]);
   const [quotations, setQuotations] = useState<Order[]>([]);
   const [purchaseInvoices, setPurchaseInvoices] = useState<PurchaseOrder[]>([]);
   const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>([]);
@@ -166,6 +169,7 @@ const App: React.FC = () => {
   const [fabricCostings, setFabricCostings] = useState<FabricCosting[]>([]);
   const [dispatchEntries, setDispatchEntries] = useState<DispatchEntry[]>([]);
   const [payrollAdjustments, setPayrollAdjustments] = useState<Record<string, PayrollAdjustment>>({});
+  const [dynamicDocuments, setDynamicDocuments] = useState<Record<string, any[]>>({});
 
   const refreshData = useCallback(async () => {
     setIsLoading(true);
@@ -400,9 +404,11 @@ const App: React.FC = () => {
           }
         ]);
         setPayrollAdjustments(await getItem<Record<string, PayrollAdjustment>>('payrollAdjustments') || {});
+        setDynamicDocuments(await getItem<Record<string, any[]>>('dynamicDocuments') || {});
         setNotifications(await getItem<Notification[]>('notifications') || []);
         setTasks(await getItem<Task[]>('tasks') || []);
         setAuditLogs(await getItem<AuditLog[]>('auditLogs') || []);
+        setPackingSlips(await getItem<PackingSlip[]>('packingSlips') || []);
         
         setLastSync(new Date().toLocaleTimeString());
     } catch (error) {
@@ -536,6 +542,7 @@ const App: React.FC = () => {
   const dyeingMgr = handleCollection('dyeingJobs', dyeingJobs, setDyeingJobs);
   const costingMgr = handleCollection('fabricCostings', fabricCostings, setFabricCostings);
   const dispatchMgr = handleCollection('dispatchEntries', dispatchEntries, setDispatchEntries);
+  const packingSlipMgr = handleCollection('packingSlips', packingSlips, setPackingSlips);
 
   const handleDyeingJobUpdate = (job: DyeingJob) => {
     dyeingMgr.update(job);
@@ -1019,8 +1026,87 @@ const App: React.FC = () => {
     { view: 'PROJECTS', label: 'Project', documents: active(projects), onImport: (documents) => projectMgr.upsertMany(documents as Project[]) },
   ];
 
+  const dynamicDocMgr = {
+    add: (view: string, doc: any) => {
+       setDynamicDocuments(prev => { 
+           const list = prev[view] || []; 
+           const nextItem = prepareDocumentCreate(doc, currentUser?.name || 'User');
+           const newData = {...prev, [view]: [nextItem, ...list]}; 
+           setItem('dynamicDocuments', newData); 
+           setLastSync(new Date().toLocaleTimeString());
+           writeAuditLog(view, nextItem.id, 'CREATE', undefined, nextItem);
+           return newData; 
+       });
+    },
+    update: (view: string, doc: any) => {
+       setDynamicDocuments(prev => { 
+           const list = prev[view] || []; 
+           const previous = list.find((i: any) => i.id === doc.id);
+           const nextItem = prepareDocumentUpdate(doc, previous, currentUser?.name || 'User');
+           const newData = {...prev, [view]: list.map((i: any) => i.id === doc.id ? nextItem : i)};
+           setItem('dynamicDocuments', newData); 
+           setLastSync(new Date().toLocaleTimeString());
+           writeAuditLog(view, nextItem.id, 'UPDATE', previous, nextItem);
+           return newData; 
+       });
+    },
+    remove: (view: string, id: string) => {
+       setDynamicDocuments(prev => { 
+           const list = prev[view] || []; 
+           const previous = list.find((i: any) => i.id === id);
+           const deletedItem = previous ? prepareDocumentDelete(previous, currentUser?.name || 'User') : undefined;
+           const newData = {...prev, [view]: list.map((i: any) => i.id === id && deletedItem ? deletedItem : i)};
+           setItem('dynamicDocuments', newData); 
+           setLastSync(new Date().toLocaleTimeString());
+           if (deletedItem) writeAuditLog(view, id, 'DELETE', previous, deletedItem);
+           return newData; 
+       });
+    },
+  };
+
+  const isHardcodedView = [
+    'DASHBOARD', 'ERP_DESK', 'DOCUMENT_DESK', 'DATA_IMPORT', 'DOCTYPE_CENTER',
+    'WORKFLOW_INBOX', 'REPORT_BUILDER', 'AUDIT_TRAIL', 'TASKS', 'TIMESHEET',
+    'PROJECTS', 'OPENING_STOCK', 'SETTINGS', 'NOTIFICATIONS', 'INVENTORY',
+    'PRODUCTION', 'MASTERS', 'KARIGARS', 'KARIGAR_KHATA', 'AGENTS', 'OFFICES',
+    'TEAM', 'ACCOUNTING', 'ATTENDANCE', 'AGENT_KHATA', 'CASH_BOOK', 'LOGIN',
+    'CATALOG', 'DESIGN_RECIPE', 'JOB_WORK', 'ASSETS', 'CRM', 'REPORTS', 'SUPPLIERS',
+    'QUALITY', 'PACK_DESIGN', 'STOCK_TRANSFER', 'STOCK_AUDIT', 'TAX_INVOICE',
+    'QUOTATION', 'PURCHASE_INVOICE', 'LEAVE_APP', 'CHART_OF_ACCOUNTS', 'MATERIAL_REQUEST',
+    'EXPENSE_CLAIM', 'SUPPORT_TICKET', 'SUPPLIER_QUOTATION', 'POS', 'VEHICLES',
+    'SALES_RETURN', 'PURCHASE_ORDER', 'PURCHASE_INWARD', 'PURCHASE_RETURN', 'CREDIT_NOTE',
+    'DEBIT_NOTE', 'TRACK_LOTS', 'ORDERS', 'DELIVERY_CHALLAN', 'PACKING_SLIPS', 'SAMPLING', 'PAYROLL',
+    'DESIGN_CATALOG', 'FABRIC_COSTING', 'DISPATCH_PLANNER', 'UPGRADE', 'PRINT_FORMATS', 'CUSTOMERS'
+  ].includes(currentView);
+
+  const customSchemas = DOCTYPE_SCHEMAS.filter(schema => ![
+    'DASHBOARD', 'ERP_DESK', 'DOCUMENT_DESK', 'DATA_IMPORT', 'DOCTYPE_CENTER',
+    'WORKFLOW_INBOX', 'REPORT_BUILDER', 'AUDIT_TRAIL', 'TASKS', 'TIMESHEET',
+    'PROJECTS', 'OPENING_STOCK', 'SETTINGS', 'NOTIFICATIONS', 'INVENTORY',
+    'PRODUCTION', 'MASTERS', 'KARIGARS', 'KARIGAR_KHATA', 'AGENTS', 'OFFICES',
+    'TEAM', 'ACCOUNTING', 'ATTENDANCE', 'AGENT_KHATA', 'CASH_BOOK', 'LOGIN',
+    'CATALOG', 'DESIGN_RECIPE', 'JOB_WORK', 'ASSETS', 'CRM', 'REPORTS', 'SUPPLIERS',
+    'QUALITY', 'PACK_DESIGN', 'STOCK_TRANSFER', 'STOCK_AUDIT', 'TAX_INVOICE',
+    'QUOTATION', 'PURCHASE_INVOICE', 'LEAVE_APP', 'CHART_OF_ACCOUNTS', 'MATERIAL_REQUEST',
+    'EXPENSE_CLAIM', 'SUPPORT_TICKET', 'SUPPLIER_QUOTATION', 'POS', 'VEHICLES',
+    'SALES_RETURN', 'PURCHASE_ORDER', 'PURCHASE_INWARD', 'PURCHASE_RETURN', 'CREDIT_NOTE',
+    'DEBIT_NOTE', 'TRACK_LOTS', 'ORDERS', 'DELIVERY_CHALLAN', 'PACKING_SLIPS', 'SAMPLING', 'PAYROLL',
+    'DESIGN_CATALOG', 'FABRIC_COSTING', 'DISPATCH_PLANNER', 'UPGRADE', 'PRINT_FORMATS', 'CUSTOMERS'
+  ].includes(schema.view));
+
+  const dynamicDeskCollections: DocumentDeskCollection[] = customSchemas.map(schema => ({
+    view: schema.view,
+    label: schema.name,
+    documents: active(dynamicDocuments[schema.view] || []),
+    onAdd: (doc: any) => dynamicDocMgr.add(schema.view, doc),
+    onUpdate: (doc: any) => dynamicDocMgr.update(schema.view, doc),
+    onDelete: (id: string) => dynamicDocMgr.remove(schema.view, id),
+  }));
+
+  const allDocumentDeskCollections = [...documentDeskCollections, ...dynamicDeskCollections];
+
   return (
-    <div className="flex h-screen bg-macos-bg dark:bg-black text-slate-900 dark:text-white font-sans overflow-hidden transition-all duration-500">
+    <div className="flex h-screen bg-slate-50 dark:bg-[#0f1115] text-slate-900 dark:text-white font-sans overflow-hidden transition-all duration-500">
         <Sidebar 
           currentView={currentView} 
           setView={(v) => { setCurrentView(v); setIsSidebarOpen(false); }} 
@@ -1126,6 +1212,7 @@ const App: React.FC = () => {
                             {currentView === 'ORDERS' && <SalesOrder orders={active(orders)} customers={active(customers)} inventory={active(inventory)} designs={active(designs)} agents={active(agents)} onAddOrder={ordMgr.add} onUpdateOrder={ordMgr.update} onDeleteOrder={ordMgr.remove} onAction={handleAction} currency={currencySymbol} />}
                             {currentView === 'POS' && <POS posInvoices={active(posInvoices)} inventory={active(inventory)} onAdd={posInvoiceMgr.add} onUpdate={posInvoiceMgr.update} onDelete={posInvoiceMgr.remove} currency={currencySymbol} companyInfo={companyInfo} />}
                             {currentView === 'DELIVERY_CHALLAN' && <DeliveryChallan orders={active(orders)} customers={active(customers)} designs={active(designs)} inventory={active(inventory)} onAddChallan={ordMgr.add} onUpdateChallan={ordMgr.update} currency={currencySymbol} companyInfo={companyInfo} />}
+                            {currentView === 'PACKING_SLIPS' && <PackingList slips={active(packingSlips)} orders={active(orders)} onAddSlip={packingSlipMgr.add} onUpdateSlip={packingSlipMgr.update} />}
 
                             {/* Production & Inventory */}
                             {currentView === 'PRODUCTION' && <Production jobs={active(production)} karigars={active(karigars)} designs={active(designs)} inventory={active(inventory)} machines={active(machines)} samples={active(samples)} orders={active(orders)} onAddJob={prodMgr.add} onUpdateJob={handleJobUpdate} onDeleteJob={(id) => prodMgr.remove(id)} onAddMachine={machineMgr.add} onUpdateMachine={machineMgr.update} onDeleteMachine={(machine) => machineMgr.remove(machine.id)} onAction={handleAction} onUpdateKarigar={karigarMgr.update} currency={currencySymbol} />}
@@ -1152,6 +1239,7 @@ const App: React.FC = () => {
                             )}
                             {currentView === 'VEHICLES' && <Vehicles vehicles={active(vehicles)} onAdd={vehicleMgr.add} onUpdate={vehicleMgr.update} onDelete={vehicleMgr.remove} currency={currencySymbol} />}
                             {currentView === 'UPGRADE' && <UpgradeModule />}
+                            {currentView === 'PRINT_FORMATS' && <PrintFormatBuilder />}
                             {currentView === 'FABRIC_COSTING' && <FabricCostingWorkspace costings={active(fabricCostings)} designs={active(designs)} inventory={active(inventory)} yarnLots={active(yarnLots)} onAddCosting={costingMgr.add} onUpdateCosting={costingMgr.update} onDeleteCosting={costingMgr.remove} currency={currencySymbol} />}
                             {currentView === 'DISPATCH_PLANNER' && <DispatchPlanner entries={active(dispatchEntries)} orders={active(orders)} onAddEntry={dispatchMgr.add} onUpdateEntry={dispatchMgr.update} onDeleteEntry={dispatchMgr.remove} currency={currencySymbol} />}
 
@@ -1317,7 +1405,7 @@ const App: React.FC = () => {
                             )}
                             {currentView === 'NOTIFICATIONS' && <NotificationCenter notifications={notifications} onMarkAsRead={handleMarkAsRead} onMarkAllAsRead={handleMarkAllAsRead} onDelete={handleDeleteNotification} onClearAll={handleClearAllNotifications} />}
                             {currentView === 'ERP_DESK' && <ERPNextWorkbench stats={docTypeStats} features={features} userRole={currentUser?.role} onNavigate={setCurrentView} />}
-                            {currentView === 'DOCUMENT_DESK' && <DocumentDesk collections={documentDeskCollections} />}
+                            {currentView === 'DOCUMENT_DESK' && <DocumentDesk collections={allDocumentDeskCollections} />}
                             {currentView === 'DATA_IMPORT' && <DataImportTool collections={dataImportCollections} />}
                             {currentView === 'DOCTYPE_CENTER' && <DocTypeCenter stats={docTypeStats} userRole={currentUser?.role} onNavigate={setCurrentView} />}
                             {currentView === 'WORKFLOW_INBOX' && <WorkflowInbox collections={workflowCollections} userRole={currentUser?.role} onNavigate={setCurrentView} />}
@@ -1327,6 +1415,8 @@ const App: React.FC = () => {
                             {currentView === 'TIMESHEET' && <TimesheetComp timesheets={active(timesheets)} team={active(team)} projects={active(projects)} tasks={active(tasks)} onAdd={timesheetMgr.add} onUpdate={timesheetMgr.update} onDelete={timesheetMgr.remove} />}
                             {currentView === 'PROJECTS' && <Projects projects={active(projects)} team={active(team)} customers={active(customers)} onAddProject={projectMgr.add} onUpdateProject={projectMgr.update} onDeleteProject={projectMgr.remove} currency={currencySymbol} />}
                             {currentView === 'OPENING_STOCK' && <OpeningStock items={active(inventory)} onAdd={invMgr.add} onUpdate={invMgr.update} onDelete={invMgr.remove} currency={currencySymbol} />}
+                            
+                            {!isHardcodedView && <DocumentDesk collections={allDocumentDeskCollections.filter(c => c.view === currentView).length > 0 ? allDocumentDeskCollections : [{view: currentView, label: currentView, documents: [], onAdd: () => {}, onUpdate: () => {}}]} />}
                         </motion.div>
                     </AnimatePresence>
                 </div>

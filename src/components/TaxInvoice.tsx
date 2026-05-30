@@ -21,6 +21,7 @@ const TaxInvoice: React.FC<TaxInvoiceProps> = ({
   orders, customers, inventory = [], designs = [], onAddInvoice, currency = '₹' 
 }) => {
   const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>('LIST');
+  const [activeTab, setActiveTab] = useState<'DETAILS' | 'ITEMS'>('DETAILS');
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNPAID' | 'PAID'>('ALL');
   const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
@@ -223,6 +224,7 @@ const TaxInvoice: React.FC<TaxInvoiceProps> = ({
                  <form onSubmit={handleCreate} className="w-full max-w-[850px] space-y-4">
                      
                      {/* Primary Details Card */}
+                     {activeTab === 'DETAILS' && (
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
                          <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Customer & Date</h4>
                          <div className="grid grid-cols-2 gap-x-16 gap-y-6">
@@ -253,7 +255,9 @@ const TaxInvoice: React.FC<TaxInvoiceProps> = ({
                             </div>
                          </div>
                      </div>
+                     )}
 
+                     {activeTab === 'ITEMS' && (
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
                          <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Items</h4>
                          <div className="flex gap-2 mb-4">
@@ -323,6 +327,7 @@ const TaxInvoice: React.FC<TaxInvoiceProps> = ({
                              </table>
                          )}
                      </div>
+                     )}
 
                      {/* Shipping Card */}
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">

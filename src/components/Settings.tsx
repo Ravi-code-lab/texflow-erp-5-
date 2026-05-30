@@ -48,7 +48,7 @@ const Settings: React.FC<SettingsProps> = ({
   advancedConfig, onUpdateAdvancedConfig,
   lastSync
 }) => {
-  const [activeTab, setActiveTab] = useState<'COMPANY' | 'BILLING' | 'MODULES' | 'CUSTOMIZER' | 'THEME' | 'STORAGE' | 'INTEGRATIONS' | 'SECURITY' | 'COMMUNICATION' | 'ADVANCED'>('COMPANY');
+  const [activeTab, setActiveTab] = useState<'COMPANY' | 'BILLING' | 'MODULES' | 'CUSTOMIZER' | 'THEME' | 'STORAGE' | 'INTEGRATIONS' | 'SECURITY' | 'SERVER' | 'COMMUNICATION' | 'ADVANCED'>('COMPANY');
   const [isSaving, setIsSaving] = useState(false);
   const [vaultStatus, setVaultStatus] = useState<any>(null);
   
@@ -89,6 +89,20 @@ const Settings: React.FC<SettingsProps> = ({
   const [localSecurity, setLocalSecurity] = useState<SecurityConfig>(securityConfig || { geminiApiKey: '', sessionTimeout: 30, twoFactorEnabled: false });
   const [localCommunication, setLocalCommunication] = useState<CommunicationConfig>(communicationConfig || { smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', whatsappEnabled: false });
   const [localAdvanced, setLocalAdvanced] = useState<AdvancedConfig>(advancedConfig || { enableAuditLogs: true, auditLogRetentionDays: 90, debugMode: false, autoBackupInterval: 24 });
+
+  const [lanIp, setLanIp] = useState('127.0.0.1');
+  const [lanToken, setLanToken] = useState('none');
+  const [lanPort, setLanPort] = useState(3001);
+  const [isLanServerRunning, setIsLanServerRunning] = useState(false);
+
+  useEffect(() => {
+    if (isElectron && ipc) {
+        ipc.invoke('lan:get-ip').then(setLanIp);
+        ipc.invoke('lan:get-token').then(setLanToken);
+        ipc.invoke('lan:get-port').then(setLanPort);
+        ipc.invoke('lan:server-status').then(setIsLanServerRunning);
+    }
+  }, [activeTab]);
 
   // Sync local state when props update
   useEffect(() => {
@@ -230,7 +244,7 @@ const Settings: React.FC<SettingsProps> = ({
       subs: [
         { id: 'DESIGN_RECIPE', label: 'SKU Recipes / BOM' },
         { id: 'SAMPLING', label: 'Sample Tracker' },
-        { id: 'PRODUCTION', label: 'Job Slips / Lots' },
+        { id: 'PRODUCTION', label: 'Work Order / Job Slips' },
         { id: 'TRACK_LOTS', label: 'Lot Convergence' },
         { id: 'JOB_WORK', label: 'External Jobwork' },
         { id: 'QUALITY', label: 'Quality Audit' }
@@ -279,25 +293,25 @@ const Settings: React.FC<SettingsProps> = ({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-4 overflow-x-auto flex-none scroll-smooth">
-          <div className="flex gap-4 sm:gap-8 min-w-max">
+      <div className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 overflow-x-auto flex-none scroll-smooth shadow-sm relative z-10">
+          <div className="flex gap-4 min-w-max">
               {[
                 { id: 'COMPANY', label: 'Company', icon: Building },
                 { id: 'BILLING', label: 'Billing', icon: Coins },
                 { id: 'MODULES', label: 'Modules', icon: LayoutGrid },
-                { id: 'CUSTOMIZER', label: 'DocType Customizer', icon: Settings2 },
+                { id: 'CUSTOMIZER', label: 'DocType', icon: Settings2 },
                 { id: 'INTEGRATIONS', label: 'Integrations', icon: Store },
                 { id: 'SECURITY', label: 'Security', icon: ShieldCheck },
+                { id: 'SERVER', label: 'LAN Server', icon: Server },
                 { id: 'COMMUNICATION', label: 'Network', icon: Globe },
                 { id: 'THEME', label: 'Display', icon: Brush },
-                { id: 'STORAGE', label: 'Backup & Restore', icon: Shield },
+                { id: 'STORAGE', label: 'Backup', icon: Shield },
                 { id: 'ADVANCED', label: 'Advanced', icon: Terminal }
               ].map(t => (
                   <button 
                     key={t.id} 
                     onClick={() => setActiveTab(t.id as any)} 
-                    className={`py-4 px-1 text-xs font-bold border-b-2 transition-all uppercase tracking-normal flex items-center gap-2 whitespace-nowrap ${activeTab === t.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                    className={`py-3 px-1 text-[10px] font-black border-b-2 transition-all uppercase tracking-[0.1em] flex items-center gap-2 whitespace-nowrap ${activeTab === t.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                   >
                      <t.icon className="w-3.5 h-3.5"/> {t.label}
                   </button>
@@ -305,8 +319,40 @@ const Settings: React.FC<SettingsProps> = ({
           </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          <form onSubmit={handleSave} className="flex flex-col lg:flex-row gap-6 pb-20 max-w-6xl mx-auto">
+      <div className="flex-1 overflow-hidden flex relative bg-slate-50 dark:bg-slate-950">
+          <div className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 hidden md:flex flex-col overflow-y-auto shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10">
+             <div className="p-4 py-6 space-y-1">
+                <h4 className="px-3 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Config Modules</h4>
+                 {[
+                    { id: 'COMPANY', label: 'Company Info', icon: Building },
+                    { id: 'BILLING', label: 'Billing Setup', icon: Coins },
+                    { id: 'MODULES', label: 'Module Control', icon: LayoutGrid },
+                    { id: 'CUSTOMIZER', label: 'DocType Customizer', icon: Settings2 },
+                    { id: 'INTEGRATIONS', label: 'Integrations', icon: Store },
+                    { id: 'SECURITY', label: 'Security & Auth', icon: ShieldCheck },
+                    { id: 'SERVER', label: 'LAN Server', icon: Server },
+                    { id: 'COMMUNICATION', label: 'Comm. Network', icon: Globe },
+                    { id: 'THEME', label: 'Theme & Brand', icon: Brush },
+                    { id: 'STORAGE', label: 'Data & Backup', icon: Shield },
+                    { id: 'ADVANCED', label: 'Advanced', icon: Terminal }
+                 ].map(t => (
+                    <button 
+                      key={t.id} 
+                      onClick={() => setActiveTab(t.id as any)} 
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-[11px] font-bold transition-all flex items-center justify-between group ${activeTab === t.id ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                    >
+                       <div className="flex items-center gap-3">
+                          <t.icon className={`w-4 h-4 transition-colors ${activeTab === t.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 group-hover:text-slate-500'}`}/>
+                          <span className="uppercase tracking-widest">{t.label}</span>
+                       </div>
+                       {activeTab === t.id && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>}
+                    </button>
+                 ))}
+             </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
+              <form onSubmit={handleSave} className="flex flex-col lg:flex-row gap-6 pb-20 max-w-6xl mx-auto p-6 md:p-8">
               <div className="flex-1 space-y-6">
                   {activeTab === 'COMPANY' && (
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm space-y-5 animate-fade-in">
@@ -351,6 +397,36 @@ const Settings: React.FC<SettingsProps> = ({
                             <div>
                                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 px-1">IFSC Code</label>
                                 <input className="w-full border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm font-mono bg-white dark:bg-slate-950 uppercase" value={localCompany.ifscCode || ''} onChange={e => setLocalCompany({...localCompany, ifscCode: e.target.value.toUpperCase()})} />
+                            </div>
+                        </div>
+
+                        <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase border-b pb-2 mt-8 mb-4">System Defaults</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 px-1">Default Currency</label>
+                                <select className="w-full border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm font-bold bg-white dark:bg-slate-950 outline-none">
+                                    <option value="INR">INR (₹)</option>
+                                    <option value="USD">USD ($)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                    <option value="GBP">GBP (£)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 px-1">Country</label>
+                                <select className="w-full border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm font-bold bg-white dark:bg-slate-950 outline-none">
+                                    <option value="IN">India</option>
+                                    <option value="US">United States</option>
+                                    <option value="GB">United Kingdom</option>
+                                    <option value="AE">United Arab Emirates</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 px-1">Time Zone</label>
+                                <select className="w-full border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm font-bold bg-white dark:bg-slate-950 outline-none">
+                                    <option value="Asia/Kolkata">Asia/Kolkata</option>
+                                    <option value="America/New_York">America/New_York</option>
+                                    <option value="Europe/London">Europe/London</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -607,6 +683,64 @@ const Settings: React.FC<SettingsProps> = ({
                                         <label htmlFor="2fa-toggle" className="block w-10 h-5 bg-slate-200 dark:bg-slate-700 rounded-full peer-checked:bg-indigo-600 cursor-pointer relative transition-colors">
                                             <div className="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5 shadow-sm"></div>
                                         </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'SERVER' && (
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm space-y-6 animate-fade-in">
+                        <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase border-b pb-2 mb-4 flex items-center gap-2">
+                           <Server className="w-4 h-4" /> Local Network Server
+                        </h3>
+                        <div className="space-y-6">
+                            {/* LAN Server Configuration */}
+                            <div className="space-y-4 pb-2">
+                                <p className="text-sm text-slate-500 mb-6 font-medium">Turn this device into a central local server. Other PCs on your network can connect via Chrome or Edge to use the application and sync data in real-time.</p>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-800/10 p-5 rounded-xl border border-slate-200 dark:border-slate-800 relative">
+                                    {!isElectron && (
+                                        <div className="absolute inset-0 z-10 backdrop-blur-[2px] bg-white/40 dark:bg-slate-900/60 rounded-xl flex flex-col items-center justify-center border border-amber-200 dark:border-amber-800/30">
+                                            <Server className="w-6 h-6 text-amber-500 mb-2" />
+                                            <p className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest text-center px-4">Available in Desktop Server App Only</p>
+                                            <p className="text-[9px] font-bold text-amber-600/70 dark:text-amber-500/70 mt-1 max-w-[250px] text-center">Run the application via Electron to host a LAN server and sync data to local clients.</p>
+                                        </div>
+                                    )}
+                                    <div className={`space-y-4 ${!isElectron ? 'opacity-20 pointer-events-none' : ''}`}>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 px-1">LAN Server Status</label>
+                                            <div className="flex items-center gap-3 mt-1">
+                                                <div className={`w-3 h-3 rounded-full ${isLanServerRunning ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>
+                                                <span className={`text-xs font-black uppercase tracking-wider ${isLanServerRunning ? 'text-emerald-600' : 'text-red-500'}`}>{isLanServerRunning ? 'ONLINE' : 'OFFLINE'}</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex gap-3">
+                                            {!isLanServerRunning ? (
+                                                <button type="button" onClick={() => { if (ipc) ipc.invoke('lan:start-server').then(() => setIsLanServerRunning(true)); }} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest shadow-lg transition-transform active:scale-95 flex items-center gap-2">
+                                                    Start Server
+                                                </button>
+                                            ) : (
+                                                <button type="button" onClick={() => { if (ipc) ipc.invoke('lan:stop-server').then(() => setIsLanServerRunning(false)); }} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest shadow-lg transition-transform active:scale-95 flex items-center gap-2">
+                                                    Stop Server
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className={`space-y-4 ${!isElectron ? 'opacity-20 pointer-events-none' : ''}`}>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 px-1">Network Identity (IP:PORT)</label>
+                                            <input className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-sm font-mono text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 outline-none select-all" readOnly value={`${lanIp}:${lanPort}`} />
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1.5 px-1">Provide this IP address to client PCs.</p>
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 px-1">Session Handshake Token</label>
+                                            <input className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-sm font-mono text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 outline-none select-all" readOnly value={lanToken} />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -915,6 +1049,7 @@ const Settings: React.FC<SettingsProps> = ({
                   </div>
               </div>
           </form>
+      </div>
       </div>
     </div>
   );

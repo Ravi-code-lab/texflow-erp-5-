@@ -3,7 +3,7 @@ import { Design, InventoryItem, RecipeItem, DesignLaborCost } from '../types';
 import { 
   Palette, Search, Plus, Filter, 
   MoreHorizontal, ArrowLeft, Save, ChevronLeft, ChevronRight,
-  List, ShieldCheck, Camera, X, Check, Trash2, Settings, Download
+  List, ShieldCheck, Camera, X, Check, Trash2, Settings, Download, Layers
 } from 'lucide-react';
 import { commitImage } from '../utils/imageUtils';
 import { jsPDF } from 'jspdf';
@@ -22,20 +22,27 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
   designs, inventory, onAdd, onUpdate, onDelete, currency = '₹' 
 }) => {
   const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>('LIST');
+  const [activeTab, setActiveTab] = useState<'DETAILS' | 'INVENTORY' | 'BOM' | 'VARIANTS' | 'SETTINGS' | 'MORE'>('DETAILS');
   const [filter, setFilter] = useState('');
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [isUploading, setIsUploading] = useState(false);
   const [newRecipeItem, setNewRecipeItem] = useState<Partial<RecipeItem>>({ materialName: '', quantity: 0, wastagePercent: 0 });
 
-  const [formData, setFormData] = useState<Partial<Design>>({
+  const defaultFormState: Partial<Design> = {
     status: 'ACTIVE', category: 'KURTI', imageUrl: '', recipe: [],
     processCostPerPiece: 0, targetMargin: 20,
     hasVariants: false, options: [], variants: [],
     description: '', sku: '', finishedGsm: '180', composition: '',
     laborCosts: { cutting: 0, stitching: 0, embroidery: 0, washing: 0, finishing: 0, packing: 0 },
     processLossPercent: 2, hsnCode: '', shrinkage: '2-4%', finishedWidth: '44',
-    tags: []
-  });
+    tags: [],
+    uom: 'Nos', brand: '', maintainStock: true,
+    allowPurchase: false, allowSales: true, 
+    weight: '', dimensions: '', reorderLevel: 0, reorderQty: 0,
+    taxCategory: 'Standard'
+  };
+
+  const [formData, setFormData] = useState<Partial<Design>>(defaultFormState);
 
   const filteredDesigns = useMemo(() => {
     const searchLower = (filter || '').toLowerCase();
@@ -84,15 +91,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
     if (d) {
        setFormData(d);
     } else {
-       setFormData({
-         status: 'ACTIVE', category: 'KURTI', imageUrl: '', recipe: [],
-         processCostPerPiece: 0, targetMargin: 20,
-         hasVariants: false, options: [], variants: [],
-         description: '', sku: '', finishedGsm: '180', composition: '',
-         laborCosts: { cutting: 0, stitching: 0, embroidery: 0, washing: 0, finishing: 0, packing: 0 },
-         processLossPercent: 2, hsnCode: '', shrinkage: '2-4%', finishedWidth: '44',
-         tags: []
-       });
+       setFormData(defaultFormState);
     }
     setViewMode('FORM');
   };
@@ -146,7 +145,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#f4f5f6] font-sans antialiased text-[#1c2126] absolute inset-0 rounded-tl-xl overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-200px)] min-h-[600px] bg-[#f4f5f6] font-sans antialiased text-[#1c2126] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">
        {viewMode === 'LIST' ? (
           <div className="flex flex-col h-full animate-fade-in">
             {/* ─── LIST HEADER ─── */}
@@ -209,6 +208,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
                      <div className="w-64"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Product Name</span></div>
                      <div className="w-32"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Item Code</span></div>
                      <div className="w-32"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Item Group</span></div>
+                     <div className="w-24"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">UOM</span></div>
                      <div className="w-32"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Status</span></div>
                      <div className="flex-1 min-w-0 pl-4 text-right"><span className="cursor-pointer hover:text-[#1c2126] transition-colors">Landed Cost</span></div>
                   </div>
@@ -248,6 +248,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
                            </div>
                            <div className="w-32 pr-4 truncate text-[#525c66]">{d.sku || '-'}</div>
                            <div className="w-32 pr-4 truncate text-[#525c66]">{d.category || '-'}</div>
+                           <div className="w-24 pr-4 truncate text-[#525c66]">{d.uom || 'Nos'}</div>
                            <div className="w-32">{getStatusBadge(d.status || 'ACTIVE')}</div>
                            <div className={"flex-1 pl-4 pr-4 truncate tabular-nums text-right font-medium text-[#1c2126]"}>
                                {currency}{(d.processCostPerPiece || 0).toLocaleString()}
@@ -261,8 +262,8 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
        ) : (
           <div className="flex flex-col h-full animate-fade-in">
              {/* ─── FORM HEADER ─── */}
-             <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 py-4 sticky top-0 z-20">
-               <div className="flex justify-between items-center h-8">
+             <div className="flex-none bg-white border-b border-[#d1d8dd] px-6 pt-4 sticky top-0 z-20">
+               <div className="flex justify-between items-center h-8 mb-4">
                   <div className="flex items-center gap-3">
                      <button onClick={() => setViewMode('LIST')} className="h-7 w-7 flex items-center justify-center rounded hover:bg-[#f4f5f6] text-[#525c66] transition-colors">
                         <ArrowLeft className="w-4 h-4" />
@@ -292,6 +293,27 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
                      </button>
                   </div>
                </div>
+               
+               {/* TABS */}
+               <div className="flex gap-6 border-b border-transparent overflow-x-auto no-scrollbar">
+                  {[
+                    { id: 'DETAILS', label: 'Item Details' },
+                    { id: 'INVENTORY', label: 'Inventory & UOM' },
+                    { id: 'BOM', label: 'BOM & Costing' },
+                    { id: 'VARIANTS', label: 'Variants' },
+                    { id: 'SETTINGS', label: 'Pricing & Settings' },
+                    { id: 'MORE', label: 'More Info' }
+                  ].map(tab => (
+                     <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`pb-3 text-[13px] font-medium border-b-2 transition-colors ${activeTab === tab.id ? 'border-[#2490ef] text-[#1c2126]' : 'border-transparent text-[#525c66] hover:text-[#1c2126]'}`}
+                     >
+                        {tab.label}
+                     </button>
+                  ))}
+               </div>
              </div>
 
              {/* ─── FORM BODY ─── */}
@@ -299,6 +321,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
                  <form onSubmit={handleSave} className="w-full max-w-[850px] space-y-4">
                      
                      {/* Information Card */}
+                     {activeTab === 'DETAILS' && (
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
                          <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Item Information</h4>
                          <div className="flex flex-col md:flex-row gap-8">
@@ -361,6 +384,15 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
                                         />
                                     </div>
                                     <div className="space-y-1.5 flex flex-col">
+                                        <label className="text-xs text-[#525c66]">Composition</label>
+                                        <input 
+                                          value={formData.composition || ''} 
+                                          onChange={e => setFormData({...formData, composition: e.target.value})}
+                                          className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                          placeholder="e.g. 100% Cotton"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5 flex flex-col">
                                         <label className="text-xs text-[#525c66]">Target Margin (%)</label>
                                         <input 
                                           type="number"
@@ -386,8 +418,77 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
                              </div>
                          </div>
                      </div>
+                     )}
+
+                     {/* Inventory & UOM */}
+                     {activeTab === 'INVENTORY' && (
+                     <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
+                         <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Inventory Settings</h4>
+                         
+                         <div className="flex items-center gap-2 mb-6">
+                             <input 
+                                type="checkbox" 
+                                id="maintainStock" 
+                                checked={formData.maintainStock !== false} 
+                                onChange={e => setFormData({...formData, maintainStock: e.target.checked})}
+                                className="rounded-sm border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef] w-4 h-4 cursor-pointer"
+                             />
+                             <label htmlFor="maintainStock" className="text-[#1c2126] font-medium cursor-pointer">Maintain Stock</label>
+                         </div>
+
+                         {formData.maintainStock !== false && (
+                         <div className="flex flex-col md:flex-row gap-8">
+                            <div className="flex-1 space-y-5">
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">Default Unit of Measure (UOM) <span className="text-[#ef4444] ml-0.5">*</span></label>
+                                    <div className="relative">
+                                       <select 
+                                          value={formData.uom || 'Nos'} 
+                                          onChange={e => setFormData({...formData, uom: e.target.value})}
+                                          className="w-full px-2.5 py-[6px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126] appearance-none"
+                                       >
+                                           {['Nos', 'Kg', 'Meters', 'Sets', 'Dozens', 'Pieces', 'Boxes'].map(c => <option key={c} value={c}>{c}</option>)}
+                                       </select>
+                                       <ChevronRight className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8d99a6] pointer-events-none rotate-90"/>
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">Barcode / EAN</label>
+                                    <input 
+                                      value={formData.barcode || ''} 
+                                      onChange={e => setFormData({...formData, barcode: e.target.value})}
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex-1 space-y-5">
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">Reorder Level</label>
+                                    <input 
+                                      type="number"
+                                      value={formData.reorderLevel || 0} 
+                                      onChange={e => setFormData({...formData, reorderLevel: Number(e.target.value)})}
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                    />
+                                </div>
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">Reorder Quantity</label>
+                                    <input 
+                                      type="number"
+                                      value={formData.reorderQty || 0} 
+                                      onChange={e => setFormData({...formData, reorderQty: Number(e.target.value)})}
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                    />
+                                </div>
+                            </div>
+                         </div>
+                         )}
+                     </div>
+                     )}
 
                      {/* Bill of Materials */}
+                     {activeTab === 'BOM' && (
+                     <div className="space-y-4">
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
                          <div className="flex justify-between items-center border-b border-[#d1d8dd] pb-2 mb-5">
                              <h4 className="font-semibold text-sm text-[#1c2126]">Bill of Materials (BOM)</h4>
@@ -473,6 +574,138 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({
                             ))}
                          </div>
                      </div>
+                     </div>
+                     )}
+
+                     {activeTab === 'VARIANTS' && (
+                     <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
+                         <div className="flex justify-between items-center border-b border-[#d1d8dd] pb-2 mb-5">
+                             <h4 className="font-semibold text-sm text-[#1c2126]">Variants & Options</h4>
+                             <label className="flex items-center gap-2 cursor-pointer">
+                                 <input type="checkbox" className="rounded-sm border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef]" checked={formData.hasVariants || false} onChange={e => setFormData({...formData, hasVariants: e.target.checked})} />
+                                 <span className="text-[#525c66] font-medium">Has Variants?</span>
+                             </label>
+                         </div>
+                         {formData.hasVariants ? (
+                             <div className="space-y-6">
+                                 <div>
+                                     <h5 className="font-medium text-[#1c2126] mb-3">Item Attributes</h5>
+                                     {(formData.options || []).map((opt, idx) => (
+                                         <div key={opt.id} className="flex gap-4 items-center mb-3">
+                                            <input className="w-1/3 px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] text-[#1c2126]" value={opt.name} onChange={e => {
+                                                const newOpts = [...(formData.options || [])];
+                                                newOpts[idx].name = e.target.value;
+                                                setFormData({...formData, options: newOpts});
+                                            }} placeholder="e.g. Size" />
+                                            <input className="flex-1 px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] text-[#1c2126]" value={opt.values.join(', ')} onChange={e => {
+                                                const newOpts = [...(formData.options || [])];
+                                                newOpts[idx].values = e.target.value.split(',').map(s=>s.trim()).filter(Boolean);
+                                                setFormData({...formData, options: newOpts});
+                                            }} placeholder="Comma separated values e.g. S, M, L, XL" />
+                                            <button type="button" onClick={() => setFormData({...formData, options: formData.options?.filter((_, i) => i !== idx)})} className="p-1.5 text-[#ef4444] hover:bg-[#fef2f2] rounded">
+                                               <Trash2 className="w-4 h-4" />
+                                            </button>
+                                         </div>
+                                     ))}
+                                     <button type="button" onClick={() => setFormData({...formData, options: [...(formData.options || []), {id: crypto.randomUUID(), name: '', values: []}]})} className="text-[#2490ef] font-medium text-[13px] hover:underline">+ Add Attribute</button>
+                                 </div>
+                             </div>
+                         ) : (
+                             <div className="py-8 text-center text-[#525c66] bg-[#fdfdfd] rounded border border-dashed border-[#d1d8dd]">
+                                 Please enable variants to add Colors, Sizes, etc.
+                             </div>
+                         )}
+                     </div>
+                     )}
+
+                     {activeTab === 'SETTINGS' && (
+                     <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
+                         <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Sales, Purchase & Accounting</h4>
+                         <div className="grid grid-cols-2 gap-8">
+                             <div className="space-y-4">
+                                 <div className="flex items-center gap-2">
+                                     <input 
+                                        type="checkbox" 
+                                        id="allowSales" 
+                                        checked={formData.allowSales !== false} 
+                                        onChange={e => setFormData({...formData, allowSales: e.target.checked})}
+                                        className="rounded-sm border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef] w-4 h-4 cursor-pointer"
+                                     />
+                                     <label htmlFor="allowSales" className="text-[#1c2126] font-medium cursor-pointer">Allow Sales</label>
+                                 </div>
+                                 <div className="flex items-center gap-2 mb-6">
+                                     <input 
+                                        type="checkbox" 
+                                        id="allowPurchase" 
+                                        checked={formData.allowPurchase !== false} 
+                                        onChange={e => setFormData({...formData, allowPurchase: e.target.checked})}
+                                        className="rounded-sm border-[#d1d8dd] text-[#2490ef] focus:ring-[#2490ef] w-4 h-4 cursor-pointer"
+                                     />
+                                     <label htmlFor="allowPurchase" className="text-[#1c2126] font-medium cursor-pointer">Allow Purchase</label>
+                                 </div>
+                                 <div className="space-y-1.5 flex flex-col">
+                                     <label className="text-xs text-[#525c66]">Brand</label>
+                                     <input 
+                                       value={formData.brand || ''} 
+                                       onChange={e => setFormData({...formData, brand: e.target.value})}
+                                       className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                       placeholder="e.g. In-house Brand"
+                                     />
+                                 </div>
+                             </div>
+                             <div className="space-y-4">
+                                 <div className="space-y-1.5 flex flex-col">
+                                     <label className="text-xs text-[#525c66]">Tax Category</label>
+                                     <div className="relative">
+                                         <select 
+                                            value={formData.taxCategory || 'Standard'} 
+                                            onChange={e => setFormData({...formData, taxCategory: e.target.value})}
+                                            className="w-full px-2.5 py-[6px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126] appearance-none"
+                                         >
+                                             {['Standard', 'Exempt', 'Zero Rated', 'Reduced Rate', 'Luxury'].map(c => <option key={c} value={c}>{c}</option>)}
+                                         </select>
+                                         <ChevronRight className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8d99a6] pointer-events-none rotate-90"/>
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
+                     )}
+
+                     {activeTab === 'MORE' && (
+                         <div className="space-y-4">
+                             <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
+                                 <h4 className="font-semibold text-sm text-[#1c2126] border-b border-[#d1d8dd] pb-2 mb-5">Extra Information</h4>
+                                 <div className="space-y-4">
+                                     <div className="grid grid-cols-2 gap-8">
+                                        <div className="space-y-1.5 flex flex-col">
+                                            <label className="text-xs text-[#525c66]">Weight (per unit)</label>
+                                            <input 
+                                              className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] transition-all text-[#1c2126]" 
+                                              placeholder="e.g. 200g"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5 flex flex-col">
+                                            <label className="text-xs text-[#525c66]">Dimensions (L x W x H)</label>
+                                            <input 
+                                              className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] transition-all text-[#1c2126]" 
+                                              placeholder="e.g. 10x10x2 cm"
+                                            />
+                                        </div>
+                                     </div>
+                                     <div className="space-y-1.5 flex flex-col">
+                                         <label className="text-xs text-[#525c66]">Description</label>
+                                         <textarea 
+                                              rows={4}
+                                              className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] transition-all text-[#1c2126]" 
+                                              value={formData.description || ''} 
+                                              onChange={e => setFormData({...formData, description: e.target.value})} 
+                                         />
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
+                     )}
 
                     {/* Summary Footer */}
                     <div className="bg-[#f0f4f8] border border-[#d1d8dd] rounded shadow-sm p-6 flex justify-between items-center text-[15px]">

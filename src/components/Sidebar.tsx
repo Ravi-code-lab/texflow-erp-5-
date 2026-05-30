@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { ViewState, TeamMember, UIPreferences, CompanyInfo } from '../types';
 import {
-  getEnabledERPModuleGroups, HOME_MODULE, SETTINGS_MODULE, UPGRADE_MODULE,
+  getEnabledERPModuleGroups, HOME_MODULE, SETTINGS_MODULE, UPGRADE_MODULE, PRINT_FORMAT_MODULE,
   MODULE_COLOR_MAP, ERPModuleGroupId, ERPModuleItem,
 } from '../modules/registry';
 import { canAccessView, filterViewsByRole } from '../modules/permissions';
@@ -290,7 +290,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             {canAccessView(role, 'SETTINGS') && (
               <NavItem item={{ ...SETTINGS_MODULE }} />
             )}
-            <NavItem item={{ ...UPGRADE_MODULE }} />
+            {role === 'ADMIN' && (
+              <>
+                <NavItem item={{ ...PRINT_FORMAT_MODULE }} />
+                <NavItem item={{ ...UPGRADE_MODULE }} />
+              </>
+            )}
           </div>
         )}
       </nav>

@@ -7,8 +7,10 @@ const fs = require('fs');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const AdmZip = require('adm-zip');
+const os = require('os');
 
 let mainWindow;
+let lanServerInstance = null;
 
 const CONFIG_FILE = 'vault_config.json';
 const VAULT_FOLDER_NAME = 'RaviTextile_Vault';
@@ -334,6 +336,39 @@ console.log(`[LAN] Session token: ${SESSION_TOKEN}`);
 ipcMain.handle('lan:get-token', () => SESSION_TOKEN);
 ipcMain.handle('lan:get-port',  () => LAN_PORT);
 
+ipcMain.handle('lan:get-ip', () => {
+    const interfaces = os.networkInterfaces();
+    let addresses = [];
+    for (const k in interfaces) {
+        for (const k2 in interfaces[k]) {
+            const address = interfaces[k][k2];
+            if (address.family === 'IPv4' && !address.internal) {
+                addresses.push(address.address);
+            }
+        }
+    }
+    return addresses.length > 0 ? addresses[0] : '127.0.0.1';
+});
+
+ipcMain.handle('lan:server-status', () => !!lanServerInstance);
+
+ipcMain.handle('lan:start-server', () => {
+    startLanServer();
+    return true;
+});
+
+ipcMain.handle('lan:stop-server', () => {
+    if (lanServerInstance) {
+        broadcastShutdown();
+        lanServerInstance.close();
+        lanServerInstance = null;
+        wsClients.forEach(ws => ws.close());
+        wsClients.clear();
+        logAction('LAN_SERVER_STOPPED_MANUALLY');
+    }
+    return false;
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. Token middleware helper
 // ─────────────────────────────────────────────────────────────────────────────
@@ -443,6 +478,8 @@ async function loadFullVault() {
 }
 
 function startLanServer() {
+  if (lanServerInstance) return lanServerInstance;
+
   const server = http.createServer(async (req, res) => {
 
     // OPTIONS preflight (CORS)
@@ -552,11 +589,16 @@ function startLanServer() {
   });
 
   // On Electron quit, notify LAN clients cleanly
-  app.on('before-quit', () => {
-    broadcastShutdown();
-    logAction('LAN_SERVER_STOPPED');
-    server.close();
+  app.once('before-quit', () => {
+    if (lanServerInstance) {
+       broadcastShutdown();
+       logAction('LAN_SERVER_STOPPED');
+       lanServerInstance.close();
+       lanServerInstance = null;
+    }
   });
+
+  lanServerInstance = server;
 
   return server;
 }

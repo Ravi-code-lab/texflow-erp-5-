@@ -1,6 +1,6 @@
 import {
   Activity, Archive, ArrowRightLeft, ArrowUpCircle, Banknote, BarChart4, Bell, BookOpen,
-  Boxes, Briefcase, Car, CheckSquare, ClipboardList, Coins, Database, Factory,
+  Boxes, Box, Briefcase, Car, CheckSquare, ClipboardList, Coins, Database, Factory,
   FileCheck, FileSpreadsheet, FileText, Fingerprint, FlaskConical, FlaskRound,
   GitBranch, Home, Landmark, Layers, LayoutDashboard, LucideIcon, MapPin,
   Megaphone, Monitor, Palette, PhoneCall, Receipt, Scissors, SearchCheck,
@@ -64,11 +64,20 @@ export const SETTINGS_MODULE: ERPModuleItem = {
 
 export const UPGRADE_MODULE: ERPModuleItem = {
   id: 'UPGRADE',
-  label: 'Software Upgrade',
+  label: 'System Upgrade',
   doctype: 'Patch Log',
   module: 'core',
   icon: ArrowUpCircle,
   keywords: ['update', 'version', 'changelog', 'migration', 'patch', 'release'],
+};
+
+export const PRINT_FORMAT_MODULE: ERPModuleItem = {
+  id: 'PRINT_FORMATS',
+  label: 'Print Formats',
+  doctype: 'Print Format',
+  module: 'core',
+  icon: FileText,
+  keywords: ['print', 'pdf', 'layout', 'jinja', 'template', 'invoice'],
 };
 
 export const ERP_MODULE_GROUPS: ERPModuleGroup[] = [
@@ -106,6 +115,7 @@ export const ERP_MODULE_GROUPS: ERPModuleGroup[] = [
       { id: 'ORDERS', label: 'Sales Order', doctype: 'Sales Order', module: 'selling', icon: ShoppingCart, description: 'Confirmed customer purchase orders' },
       { id: 'POS', label: 'Point of Sale', doctype: 'POS Invoice', module: 'selling', icon: Monitor, description: 'Walk-in retail billing and invoicing' },
       { id: 'DELIVERY_CHALLAN', label: 'Delivery Note', doctype: 'Delivery Note', module: 'selling', icon: Truck, description: 'Record goods dispatched to customers' },
+      { id: 'PACKING_SLIPS', label: 'Packing Slip', doctype: 'Packing Slip', module: 'selling', icon: Box, description: 'Create package lists for delivery notes' },
       { id: 'TAX_INVOICE', label: 'Sales Invoice', doctype: 'Sales Invoice', module: 'selling', icon: Receipt, description: 'GST tax invoices and billing' },
       { id: 'SALES_RETURN', label: 'Sales Return', doctype: 'Sales Return', module: 'selling', icon: Undo2, description: 'Process customer returns and refunds' },
       { id: 'CREDIT_NOTE', label: 'Credit Note', doctype: 'Credit Note', module: 'selling', icon: Banknote, description: 'Issue credit notes against sales invoices' },
@@ -143,7 +153,7 @@ export const ERP_MODULE_GROUPS: ERPModuleGroup[] = [
       { id: 'PRODUCTION', label: 'Work Order', doctype: 'Work Order', module: 'manufacturing', icon: ClipboardList, description: 'Production job scheduling and tracking' },
       { id: 'TRACK_LOTS', label: 'Lot Tracking', doctype: 'Batch', module: 'manufacturing', icon: MapPin, description: 'Track raw material and production lots/batches' },
       { id: 'FABRIC_COSTING', label: 'Garment Costing Worksheet', doctype: 'Garment Cost Card', module: 'manufacturing', icon: Coins, description: 'Calculate fabric consumption in meters, stitching rates, trims, and box packaging budgets', keywords: ['costing', 'garment', 'stitching', 'kurti', 'meter', 'trim', 'consumption'] },
-      { id: 'JOB_WORK', label: 'Subcontracting', doctype: 'Subcontracting Order', module: 'manufacturing', icon: ArrowRightLeft, description: 'Outsource production processes to job workers' },
+      { id: 'JOB_WORK', label: 'Job Work (Subcontracting)', doctype: 'Job Work Order', module: 'manufacturing', icon: ArrowRightLeft, description: 'Outsource production processes to job workers' },
       { id: 'QUALITY', label: 'Quality Inspection', doctype: 'Quality Inspection', module: 'manufacturing', icon: ShieldCheck, description: 'QC checks for materials and finished goods' },
     ],
   },
@@ -208,6 +218,7 @@ export const ERP_MODULE_ITEMS: ERPModuleItem[] = [
   ...ERP_MODULE_GROUPS.flatMap((group) => group.items),
   SETTINGS_MODULE,
   UPGRADE_MODULE,
+  PRINT_FORMAT_MODULE,
 ];
 
 export const getERPModuleByView = (view: ViewState) =>

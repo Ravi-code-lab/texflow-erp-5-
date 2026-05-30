@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     resolve: {
       alias: {
-        '@': path.resolve((process as any).cwd(), './src'),
+        '@': path.resolve((process as any).cwd(), './'),
       },
     },
     define: {

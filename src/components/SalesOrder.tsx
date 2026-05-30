@@ -28,6 +28,7 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
   onAddOrder, onUpdateOrder, onDeleteOrder, onAction, currency = '₹' 
 }) => {
   const [viewMode, setViewMode] = useState<'LIST' | 'FORM' | 'KANBAN'>('LIST');
+  const [activeTab, setActiveTab] = useState<'DETAILS' | 'ITEMS' | 'SHIPPING' | 'TAXES' | 'MORE'>('DETAILS');
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -417,27 +418,36 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
                      </button>
                   </div>
                </div>
-               
-               {formData.id && (
-                  <div className="flex justify-between items-center mt-3 h-8 text-[13px]">
-                     <div className="flex items-center gap-4 text-[#1c2126] font-medium">
-                           <a className="hover:underline cursor-pointer opacity-80 border-b-2 border-transparent hover:border-[#1c2126] pb-1 transition-all">Details</a>
-                           <a className="hover:underline cursor-pointer opacity-80 border-b-2 border-transparent hover:border-[#1c2126] pb-1 transition-all">Items</a>
-                     </div>
-                     <div className="flex items-center gap-1">
-                           <button className="text-[#525c66] hover:text-[#1c2126] font-semibold px-2 py-1 rounded hover:bg-[#f4f5f6] transition-colors">Print</button>
-                     </div>
-                  </div>
-               )}
+               {/* TABS */}
+               <div className="flex gap-6 border-b border-transparent overflow-x-auto no-scrollbar mt-4">
+                  {[
+                    { id: 'DETAILS', label: 'Order Details' },
+                    { id: 'ITEMS', label: 'Items & Pricing' },
+                    { id: 'SHIPPING', label: 'Shipping & Delivery' },
+                    { id: 'TAXES', label: 'Taxes & Charges' },
+                    { id: 'MORE', label: 'Terms & Conditions' }
+                  ].map(tab => (
+                     <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`pb-3 text-[13px] font-medium border-b-2 transition-colors ${activeTab === tab.id ? 'border-[#2490ef] text-[#1c2126]' : 'border-transparent text-[#525c66] hover:text-[#1c2126]'}`}
+                     >
+                        {tab.label}
+                     </button>
+                  ))}
+               </div>
              </div>
 
              {/* ─── FORM BODY ─── */}
              <div className="flex-1 overflow-auto p-5 pb-16 flex justify-center">
                  <form onSubmit={handleCreate} className="w-full max-w-[850px] space-y-4">
                      
-                     {/* Details Card */}
-                     <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
-                         <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Sales Order Details</h4>
+                     {/* Details and Broker Section */}
+                     {activeTab === 'DETAILS' && (
+                     <div className="space-y-4">
+                       <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
+                           <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Sales Order Details</h4>
                          <div className="grid grid-cols-2 gap-x-16 gap-y-6">
                             <div className="space-y-5">
                                 <div className="space-y-1.5 flex flex-col">
@@ -465,8 +475,37 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
                                       className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
                                     />
                                 </div>
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">Customer PO No.</label>
+                                    <input 
+                                      type="text"
+                                      value={formData.poNo || ''} 
+                                      onChange={e => setFormData({...formData, poNo: e.target.value})}
+                                      placeholder="e.g. PO-2024-001"
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                    />
+                                </div>
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">Customer PO Date</label>
+                                    <input 
+                                      type="date"
+                                      value={formData.poDate || ''} 
+                                      onChange={e => setFormData({...formData, poDate: e.target.value})}
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                    />
+                                </div>
                             </div>
                             <div className="space-y-5">
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">Project</label>
+                                    <input 
+                                      type="text"
+                                      value={formData.project || ''} 
+                                      onChange={e => setFormData({...formData, project: e.target.value})}
+                                      placeholder="Search or enter project..."
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                    />
+                                </div>
                                 <div className="space-y-1.5 flex flex-col">
                                     <label className="text-xs text-[#525c66]">Status</label>
                                     <div className="relative">
@@ -504,8 +543,8 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
                      </div>
 
                      {/* Broker Section */}
-                     <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
-                         <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Sales Broker / Agent</h4>
+                       <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
+                           <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Sales Broker / Agent</h4>
                          <div className="grid grid-cols-2 gap-x-16 gap-y-6">
                             <div className="space-y-5">
                                 <div className="space-y-1.5 flex flex-col">
@@ -536,43 +575,125 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
                             </div>
                          </div>
                      </div>
+                     </div>
+                     )}
 
-                     {/* Custom Fields */}
-                     {customFields.length > 0 && (
-                        <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
-                             <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Custom Information</h4>
-                             <div className="grid grid-cols-2 gap-x-16 gap-y-6">
-                               {customFields.map((f: any) => (
-                                 <div key={f.id} className="space-y-1.5 flex flex-col">
-                                     <label className="text-xs text-[#525c66]">{f.label}</label>
-                                     {f.type === 'select' ? (
-                                        <div className="relative">
-                                           <select 
-                                              value={(formData as any)[f.key] || ''}
-                                              onChange={e => setFormData({...formData, [f.key]: e.target.value})}
-                                              className="w-full px-2.5 py-[6px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126] appearance-none"
-                                           >
-                                               <option value="">{f.placeholder}</option>
-                                               {f.options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-                                           </select>
-                                           <ChevronRight className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8d99a6] pointer-events-none rotate-90"/>
-                                        </div>
-                                     ) : (
-                                        <input 
-                                           type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
-                                           value={(formData as any)[f.key] || ''}
-                                           onChange={e => setFormData({...formData, [f.key]: e.target.value})}
-                                           className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
-                                           placeholder={f.placeholder}
+                     {/* Terms and Custom Fields */}
+                     {activeTab === 'MORE' && (
+                        <div className="space-y-4">
+                            <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
+                                <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Terms & Conditions</h4>
+                                <div className="space-y-5">
+                                    <div className="space-y-1.5 flex flex-col">
+                                        <textarea 
+                                          rows={4}
+                                          value={formData.termsAndConditions || ''} 
+                                          onChange={e => setFormData({...formData, termsAndConditions: e.target.value})}
+                                          className="w-full px-3 py-2 bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126] resize-y"
+                                          placeholder="Enter terms and conditions for this order..."
                                         />
-                                     )}
+                                    </div>
+                                    <div className="space-y-1.5 flex flex-col pt-3">
+                                        <label className="text-xs text-[#525c66] font-medium">Internal Notes / Remarks</label>
+                                        <textarea 
+                                          rows={2}
+                                          value={formData.notes || ''} 
+                                          onChange={e => setFormData({...formData, notes: e.target.value})}
+                                          className="w-full px-3 py-2 bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126] resize-y"
+                                          placeholder="Any internal notes or remarks..."
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {customFields.length > 0 && (
+                            <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
+                                 <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Custom Information</h4>
+                                 <div className="grid grid-cols-2 gap-x-16 gap-y-6">
+                                   {customFields.map((f: any) => (
+                                     <div key={f.id} className="space-y-1.5 flex flex-col">
+                                         <label className="text-xs text-[#525c66]">{f.label}</label>
+                                         {f.type === 'select' ? (
+                                            <div className="relative">
+                                               <select 
+                                                  value={(formData as any)[f.key] || ''}
+                                                  onChange={e => setFormData({...formData, [f.key]: e.target.value})}
+                                                  className="w-full px-2.5 py-[6px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126] appearance-none"
+                                               >
+                                                   <option value="">{f.placeholder}</option>
+                                                   {f.options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                               </select>
+                                               <ChevronRight className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8d99a6] pointer-events-none rotate-90"/>
+                                            </div>
+                                         ) : (
+                                            <input 
+                                               type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
+                                               value={(formData as any)[f.key] || ''}
+                                               onChange={e => setFormData({...formData, [f.key]: e.target.value})}
+                                               className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                               placeholder={f.placeholder}
+                                            />
+                                         )}
+                                     </div>
+                                   ))}
                                  </div>
-                               ))}
+                            </div>
+                            )}
+                        </div>
+                     )}
+                     
+                     {/* Shipping details */}
+                     {activeTab === 'SHIPPING' && (
+                        <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
+                             <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Shipping Information</h4>
+                             <div className="grid grid-cols-2 gap-x-16 gap-y-6">
+                                <div className="space-y-5">
+                                    <div className="space-y-1.5 flex flex-col">
+                                        <label className="text-xs text-[#525c66]">Dispatch Transporter</label>
+                                        <input 
+                                          value={formData.transportName || ''} 
+                                          onChange={e => setFormData({...formData, transportName: e.target.value})}
+                                          className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                          placeholder="e.g. VRL Logistics"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5 flex flex-col">
+                                        <label className="text-xs text-[#525c66]">Vehicle No / LR No.</label>
+                                        <input 
+                                          value={formData.vehicleNo || ''} 
+                                          onChange={e => setFormData({...formData, vehicleNo: e.target.value})}
+                                          className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                          placeholder="e.g. MH 04 XY 1234"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-5">
+                                    <div className="space-y-1.5 flex flex-col">
+                                        <label className="text-xs text-[#525c66]">Expected Delivery Date</label>
+                                        <input 
+                                          type="date"
+                                          value={formData.dueDate || ''} 
+                                          onChange={e => setFormData({...formData, dueDate: e.target.value})}
+                                          className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5 flex flex-col h-full">
+                                        <label className="text-xs text-[#525c66]">Shipping Address</label>
+                                        <textarea
+                                          value={formData.shippingAddress || ''} 
+                                          onChange={e => setFormData({...formData, shippingAddress: e.target.value})}
+                                          rows={3}
+                                          className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126] resize-none"
+                                          placeholder="Enter complete shipping address..."
+                                        />
+                                    </div>
+                                </div>
                              </div>
                         </div>
                      )}
 
                      {/* Items Table */}
+                     {activeTab === 'ITEMS' && (
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
                          <div className="flex justify-between items-center border-b border-[#d1d8dd] pb-2 mb-5">
                              <h4 className="font-semibold text-sm text-[#1c2126]">Items Table</h4>
@@ -590,15 +711,54 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
                             <tbody>
                                {formData.items?.map((it, idx) => (
                                   <tr key={idx} className="border-b border-[#d1d8dd]/50 hover:bg-[#fdfdfd]">
-                                     <td className="py-2 pl-3 text-[#1c2126] font-medium">
+                                     <td className="py-2 pl-3 text-[#1c2126] font-medium border-r border-[#d1d8dd]/50">
                                         <div className="flex items-center gap-3">
                                            <ProductImageThumb productName={it.productName} designs={designs} inventory={inventory} size="sm" />
-                                           <span>{it.productName}</span>
+                                           <input 
+                                              list="prod-list-edit"
+                                              className="w-full bg-transparent text-[13px] outline-none font-medium" 
+                                              value={it.productName}
+                                              onChange={e => {
+                                                  const newItems = [...(formData.items || [])];
+                                                  const d = designs.find(des => des.name === e.target.value || des.sku === e.target.value) || inventory.find(i => i.name === e.target.value);
+                                                  newItems[idx] = { 
+                                                      ...it, 
+                                                      productName: e.target.value,
+                                                      unitPrice: (d as any)?.processCostPerPiece ? (d as any).processCostPerPiece * 1.5 : (d as any)?.pricePerUnit || it.unitPrice
+                                                  };
+                                                  setFormData({...formData, items: newItems});
+                                              }}
+                                           />
+                                           <datalist id="prod-list-edit">{[...designs, ...inventory].map(x => <option key={x.id} value={x.name}/>)}</datalist>
                                         </div>
                                      </td>
-                                     <td className="py-2 px-3 text-[#525c66]">{it.quantity} {it.unit}</td>
-                                     <td className="py-2 px-3 text-[#525c66]">{it.unitPrice.toLocaleString()}</td>
-                                     <td className="py-2 px-3 text-right font-medium text-[#1c2126]">{(it.quantity * it.unitPrice).toLocaleString()}</td>
+                                     <td className="py-2 px-3 border-r border-[#d1d8dd]/50">
+                                         <input 
+                                           type="number" 
+                                           className="w-full bg-transparent text-[13px] outline-none text-[#525c66]" 
+                                           value={it.quantity}
+                                           onChange={e => {
+                                               const newItems = [...(formData.items || [])];
+                                               newItems[idx] = { ...it, quantity: Number(e.target.value) };
+                                               setFormData({...formData, items: newItems});
+                                           }}
+                                         />
+                                     </td>
+                                     <td className="py-2 px-3 border-r border-[#d1d8dd]/50">
+                                         <input 
+                                           type="number" 
+                                           className="w-full bg-transparent text-[13px] outline-none text-[#525c66]" 
+                                           value={it.unitPrice}
+                                           onChange={e => {
+                                               const newItems = [...(formData.items || [])];
+                                               newItems[idx] = { ...it, unitPrice: Number(e.target.value) };
+                                               setFormData({...formData, items: newItems});
+                                           }}
+                                         />
+                                     </td>
+                                     <td className="py-2 px-3 text-right font-medium text-[#1c2126] border-r border-[#d1d8dd]/50">
+                                         {(it.quantity * it.unitPrice).toLocaleString()}
+                                     </td>
                                      <td className="py-2 pr-3 text-right">
                                         <button type="button" onClick={() => removeItem(idx)} className="text-[#ef4444] hover:bg-[#fef2f2] p-1 rounded">
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -639,10 +799,39 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
                                     <span>Sub Total</span>
                                     <span>{(formData.items || []).reduce((acc, it) => acc + (it.quantity * it.unitPrice), 0).toLocaleString()}</span>
                                 </div>
+                                <div className="flex justify-between items-center text-[15px] font-bold text-[#1c2126] mt-2 pt-2 border-t border-[#d1d8dd]">
+                                    <span>Grand Total</span>
+                                    <span>{(subTotal + taxAmount).toLocaleString()}</span>
+                                </div>
+                            </div>
+                         </div>
+                     </div>
+                     )}
+
+                     {activeTab === 'TAXES' && (
+                     <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
+                         <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Taxes and Charges</h4>
+                         <div className="grid grid-cols-2 gap-x-16 gap-y-6">
+                            <div className="space-y-5">
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">Tax Rate (%)</label>
+                                    <input 
+                                       type="number"
+                                       value={formData.taxRate || 0} 
+                                       onChange={e => setFormData({...formData, taxRate: Number(e.target.value)})}
+                                       className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                    />
+                                </div>
+                            </div>
+                         </div>
+                         <div className="flex justify-end mt-8 pt-4 border-t border-[#d1d8dd]">
+                            <div className="flex flex-col gap-2 w-64">
                                 <div className="flex justify-between items-center text-[13px] font-medium text-[#1c2126]">
-                                    <span>Taxes and Charges 
-                                        <input type="number" className="w-10 ml-2 bg-[#f4f5f6] border border-[#d1d8dd] rounded px-1 py-0.5" value={formData.taxRate} onChange={e => setFormData({...formData, taxRate: Number(e.target.value)})} />%
-                                    </span>
+                                    <span>Sub Total</span>
+                                    <span>{subTotal.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[13px] font-medium text-[#1c2126]">
+                                    <span>Taxes</span>
                                     <span>{taxAmount.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-[15px] font-bold text-[#1c2126] mt-2 pt-2 border-t border-[#d1d8dd]">
@@ -652,6 +841,7 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
                             </div>
                          </div>
                      </div>
+                     )}
 
                      <button type="submit" className="hidden">Submit</button>
                  </form>
