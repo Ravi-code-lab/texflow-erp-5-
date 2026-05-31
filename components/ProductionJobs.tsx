@@ -22,6 +22,7 @@ interface ProductionJobsProps {
   designs: Design[];
   machines: Machine[];
   karigars?: Karigar[];
+  inventory?: any[];
   onUpdateJob: (job: ProductionJob) => void;
   onAddJob: (job: ProductionJob) => void;
   onDeleteJob?: (id: string) => void;
@@ -74,7 +75,7 @@ const mockRoutingTemplates = [
 ];
 
 const ProductionJobs: React.FC<ProductionJobsProps> = ({ 
-  jobs, designs, machines, karigars = [], onUpdateJob, onAddJob, onDeleteJob, onAction, currency = '₹', orders = [], garmentSetup
+  jobs, designs, machines, karigars = [], inventory = [], onUpdateJob, onAddJob, onDeleteJob, onAction, currency = '₹', orders = [], garmentSetup
 }) => {
   const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>('LIST');
   const [filter, setFilter] = useState('');
@@ -624,9 +625,13 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
     ]);
   };
 
+  const availableRoutingTemplates = useMemo(() => {
+    return (garmentSetup?.routingTemplates?.length ? garmentSetup.routingTemplates : mockRoutingTemplates);
+  }, [garmentSetup]);
+
   const activeRoutingTemplate = useMemo(() => {
-    return mockRoutingTemplates.find(rt => rt.id === formData.routingTemplateId) || mockRoutingTemplates[0];
-  }, [formData.routingTemplateId]);
+    return availableRoutingTemplates.find((rt: any) => rt.id === formData.routingTemplateId) || availableRoutingTemplates[0];
+  }, [formData.routingTemplateId, availableRoutingTemplates]);
 
   const handleSignOffOperation = (idx: number) => {
     const docId = formData.id || 'draft-new';
@@ -1350,11 +1355,12 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                                                <ul className="list-disc pl-5 text-[11px] text-amber-950 font-semibold space-y-0.5 mt-1.5">
                                                   {shortfalls.map((sh, idx) => {
                                                      const totalRequired = sh.totalRequired;
-                                                     const mockAvailable = Math.round(totalRequired * 0.6);
-                                                     const diff = totalRequired - mockAvailable;
+                                                     const invItem = inventory.find((i: any) => i.name === sh.materialName || i.itemCode === sh.materialName);
+                                                     const realAvailable = invItem ? (invItem.quantity ?? invItem.qty ?? 0) : 0;
+                                                     const diff = totalRequired - realAvailable;
                                                      return (
                                                         <li key={idx}>
-                                                           Deficiency of {diff.toLocaleString()} {sh.unit} for "{sh.materialName}" (Required: {totalRequired} | Available: {mockAvailable})
+                                                           Deficiency of {diff.toLocaleString()} {sh.unit} for "{sh.materialName}" (Required: {totalRequired} | Available: {realAvailable})
                                                         </li>
                                                      );
                                                   })}
@@ -1402,9 +1408,10 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                                                const valCost = totalRequired * (req.estimatedCost || 50);
                                                
                                                // Determinate stock metrics
-                                               const hashVal = req.materialName.charCodeAt(0) + req.materialName.charCodeAt(req.materialName.length - 1);
-                                               const isAvailable = hasGeneratedMR || hashVal % 2 === 0;
-                                               const mockLocalAvailable = isAvailable ? totalRequired + 50 : Math.round(totalRequired * 0.6);
+                                               const invItem = inventory.find((i: any) => i.name === req.materialName || i.itemCode === req.materialName);
+                                               const mockLocalAvailable = hasGeneratedMR
+                                                 ? totalRequired + 50
+                                                 : (invItem ? (invItem.quantity ?? invItem.qty ?? 0) : 0);
                                                const hasDeficiency = mockLocalAvailable < totalRequired;
 
                                                return (

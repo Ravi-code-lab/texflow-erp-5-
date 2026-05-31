@@ -9,6 +9,7 @@ import Masters from './components/Masters';
 import Karigars from './components/Karigars';
 import KarigarKhata from './components/KarigarKhata';
 import Agents from './components/Agents';
+import Gallery from './components/Gallery';
 import Offices from './components/Offices';
 import Employees from './components/Employees';
 import Accounting from './components/Accounting';
@@ -778,7 +779,7 @@ const App: React.FC = () => {
                } as InventoryItem);
            }
            setInventory(newInv);
-           setItem('texflow_inventory', newInv);
+           setItem('inventory', newInv);
        }
     }
   };
@@ -1133,7 +1134,7 @@ const App: React.FC = () => {
     'SALES_RETURN', 'PURCHASE_ORDER', 'PURCHASE_INWARD', 'PURCHASE_RETURN', 'CREDIT_NOTE',
     'DEBIT_NOTE', 'TRACK_LOTS', 'ORDERS', 'DELIVERY_CHALLAN', 'PACKING_SLIPS', 'SAMPLING', 'PAYROLL',
     'DESIGN_CATALOG', 'FABRIC_COSTING', 'DISPATCH_PLANNER', 'UPGRADE', 'PRINT_FORMATS', 'CUSTOMERS',
-    'TALLY_INTEGRATION'
+    'TALLY_INTEGRATION', 'GALLERY'
   ].includes(currentView);
 
   const customSchemas = DOCTYPE_SCHEMAS.filter(schema => ![
@@ -1279,6 +1280,7 @@ const App: React.FC = () => {
                             {currentView === 'QUALITY' && <QualityControl reports={active(qualityReports)} inspections={active(inspections)} jobs={active(production)} designs={active(designs)} inventory={active(inventory)} onAddReport={qualityMgr.add} onUpdateReport={qualityMgr.update} onAddInspection={inspectionMgr.add} currency={currencySymbol} />}
                             {currentView === 'INVENTORY' && <Inventory items={active(inventory)} production={active(production)} designs={active(designs)} onAdd={invMgr.add} onUpdate={invMgr.update} onDelete={invMgr.remove} currency={currencySymbol} />}
                             {currentView === 'CATALOG' && <DesignCatalog designs={active(designs)} inventory={active(inventory)} onAdd={designMgr.add} onUpdate={designMgr.update} onDelete={designMgr.remove} currency={currencySymbol} />}
+                            {currentView === 'GALLERY' && <Gallery items={active(gallery)} onAdd={handleCollection('gallery', gallery, setGallery).add} onUpdate={handleCollection('gallery', gallery, setGallery).update} onDelete={(id) => { const updated = gallery.filter(g => g.id !== id); setGallery(updated); setItem('gallery', updated); }} />}
                             {currentView === 'DESIGN_RECIPE' && <DesignRecipe designs={active(designs)} inventory={active(inventory)} onAdd={designMgr.add} onUpdate={designMgr.update} onDelete={designMgr.remove} onAction={handleAction} currency={currencySymbol} />}
                             {currentView === 'JOB_WORK' && <JobWorkComp jobs={active(jobWorks)} designs={active(designs)} inventory={active(inventory)} onAdd={jobWorkMgr.add} onUpdate={jobWorkMgr.update} currency={currencySymbol} />}
                             {currentView === 'STOCK_TRANSFER' && <StockTransferComp inventory={active(inventory)} transfers={active(transfers)} onAdd={transferMgr.add} onUpdate={transferMgr.update} onDelete={transferMgr.remove} />}
@@ -1396,7 +1398,7 @@ const App: React.FC = () => {
                             )}
                             {currentView === 'CHART_OF_ACCOUNTS' && <ChartOfAccounts />}
                             {currentView === 'TALLY_INTEGRATION' && <TallyIntegration transactions={active(transactions)} onAddTransaction={txnMgr.add} customers={active(customers)} suppliers={active(suppliers)} orders={active(orders)} purchaseOrders={active(purchaseOrders)} currency={currencySymbol} />}
-                            {currentView === 'ACCOUNTING' && <Accounting transactions={active(transactions)} onAddTransaction={txnMgr.add} customers={active(customers)} karigars={active(karigars)} agents={active(agents)} team={active(team)} loans={active(loans)} purchaseOrders={active(purchaseOrders)} salesOrders={active(orders)} currency={currencySymbol} />}
+                            {currentView === 'ACCOUNTING' && <Accounting transactions={active(transactions)} onAddTransaction={txnMgr.add} customers={active(customers)} karigars={active(karigars)} agents={active(agents)} team={active(team)} loans={active(loans)} purchaseOrders={active(purchaseOrders)} salesOrders={active(orders)} suppliers={active(suppliers)} currency={currencySymbol} />}
                             {currentView === 'CASH_BOOK' && <CashBook transactions={active(transactions)} onAddTransaction={txnMgr.add} currency={currencySymbol} />}
                             {currentView === 'EXPENSE_CLAIM' && <ExpenseClaimComp claims={active(expenseClaims)} team={active(team)} onAdd={expenseClaimMgr.add} onUpdate={expenseClaimMgr.update} onDelete={expenseClaimMgr.remove} currency={currencySymbol} />}
                             {currentView === 'AGENT_KHATA' && <AgentKhata agents={active(agents)} onUpdateAgent={agentMgr.update} currency={currencySymbol} />}

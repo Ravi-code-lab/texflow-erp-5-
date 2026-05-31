@@ -6,7 +6,7 @@ import {
   ChevronDown, Scissors, Truck, Receipt, 
   FileText, ClipboardList, Briefcase, 
   Archive, ArrowRightLeft, SearchCheck, Layers, UserCircle, Wallet, Fingerprint, Home, FlaskConical, BookOpen, MapPin, UserCog, Megaphone, ShieldCheck, Banknote, Undo2, ShoppingBag, Activity, FlaskRound, Coins, Landmark,
-  Bell, CheckSquare, Users, Database, Send, PhoneCall, FileCheck, Car, Monitor
+  Bell, CheckSquare, Users, Database, Send, PhoneCall, FileCheck, Car, Monitor, Image
 } from 'lucide-react';
 import { ViewState, TeamMember, UIPreferences, CompanyInfo } from '../types';
 
@@ -23,6 +23,8 @@ interface SidebarProps {
   onProfileClick?: () => void;
   isOpen?: boolean;
   onClose?: () => void;
+  onCommandPalette?: () => void;
+  notificationCount?: number;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -106,6 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'INVENTORY', label: 'Raw Materials', icon: Layers },
         { id: 'OPENING_STOCK', label: 'Opening Stock', icon: Database },
         { id: 'CATALOG', label: 'Product Item', icon: Palette },
+        { id: 'GALLERY', label: 'Image Gallery', icon: Image },
         { id: 'STOCK_TRANSFER', label: 'Stock Entry', icon: ArrowRightLeft },
         { id: 'PACK_DESIGN', label: 'Product Bundle', icon: Archive },
         { id: 'STOCK_AUDIT', label: 'Stock Reconciliation', icon: SearchCheck },

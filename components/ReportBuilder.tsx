@@ -1,3 +1,4 @@
+import { getItem, setItem } from '../utils/indexedDB';
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart4, Check, Download, FileSpreadsheet, Filter, Save, Search, Table2 } from 'lucide-react';
 import { BaseEntity, ViewState } from '../types';
@@ -76,14 +77,9 @@ const ReportBuilder: React.FC<ReportBuilderProps> = ({ collections }) => {
   }, [schema]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setSavedReports(JSON.parse(saved));
-      } catch {
-        setSavedReports([]);
-      }
-    }
+    getItem<any[]>(STORAGE_KEY).then(saved => {
+      if (Array.isArray(saved)) setSavedReports(saved);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -145,7 +141,7 @@ const ReportBuilder: React.FC<ReportBuilderProps> = ({ collections }) => {
     };
     const updated = [nextReport, ...savedReports].slice(0, 12);
     setSavedReports(updated);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    setItem(STORAGE_KEY, updated);
     setReportName('');
   };
 

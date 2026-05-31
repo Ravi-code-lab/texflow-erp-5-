@@ -1,4 +1,5 @@
 
+import { getItem, setItem } from '../utils/indexedDB';
 import React, { useState, useEffect } from 'react';
 import { 
   Building, RefreshCw, Landmark, LayoutGrid, Brush, Shield, 
@@ -64,15 +65,14 @@ const Settings: React.FC<SettingsProps> = ({
   });
 
   useEffect(() => {
-    const raw = localStorage.getItem('erpnext_custom_fields');
-    if (raw) {
-      try { setCustomFields(JSON.parse(raw)); } catch (e) { console.error(e); }
-    }
+    getItem<any[]>('erpnext_custom_fields').then(fields => {
+      if (Array.isArray(fields)) setCustomFields(fields);
+    }).catch(() => {});
   }, []);
 
   const saveCustomFields = (fields: any[]) => {
     setCustomFields(fields);
-    localStorage.setItem('erpnext_custom_fields', JSON.stringify(fields));
+    setItem('erpnext_custom_fields', fields);
   };
   
   // Local form state

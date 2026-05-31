@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 
 const DB_NAME = 'NexusERP_StateCache';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 export const STORES = {
   STAFF: 'staff_registry',
@@ -59,13 +59,99 @@ const openDB = (): Promise<IDBDatabase> => {
 };
 
 const getStoreForKey = (key: string): string => {
+    // ── STAFF ──────────────────────────────────────────────────────────────
     if (key === 'team') return STORES.STAFF;
-    if (key === 'inventory') return STORES.INVENTORY;
-    if (key === 'orders' || key === 'purchaseOrders') return STORES.ORDERS;
-    if (key === 'production' || key === 'jobWorks' || key === 'designs' || key === 'slips') return STORES.PRODUCTION;
-    if (key === 'transactions' || key === 'loans') return STORES.FINANCE;
-    if (key === 'customers' || key === 'suppliers' || key === 'agents' || key === 'karigars' || key === 'gatePasses') return STORES.MASTERS;
+
+    // ── INVENTORY ──────────────────────────────────────────────────────────
+    if (
+        key === 'inventory' ||
+        key === 'stockAudits' ||
+        key === 'transfers' ||
+        key === 'packs' ||
+        key === 'packingSlips' ||
+        key === 'yarnLots' ||
+        key === 'dyeingJobs' ||
+        key === 'fabricCostings' ||
+        key === 'dispatchEntries'
+    ) return STORES.INVENTORY;
+
+    // ── ORDERS ─────────────────────────────────────────────────────────────
+    if (
+        key === 'orders' ||
+        key === 'purchaseOrders' ||
+        key === 'quotations' ||
+        key === 'purchaseInvoices' ||
+        key === 'materialRequests' ||
+        key === 'supplierQuotations' ||
+        key === 'posInvoices' ||
+        key === 'timesheets' ||
+        key === 'expenseClaims' ||
+        key === 'supportTickets' ||
+        key === 'vehicles'
+    ) return STORES.ORDERS;
+
+    // ── PRODUCTION ─────────────────────────────────────────────────────────
+    if (
+        key === 'production' ||
+        key === 'jobWorks' ||
+        key === 'designs' ||
+        key === 'slips' ||
+        key === 'samples' ||
+        key === 'qualityReports' ||
+        key === 'inspections' ||
+        key === 'machines' ||
+        key === 'texflow_manufacturing_pipeline_batches' ||
+        key === 'texflow_garment_manufacturing_setup'
+    ) return STORES.PRODUCTION;
+
+    // ── FINANCE ────────────────────────────────────────────────────────────
+    if (
+        key === 'transactions' ||
+        key === 'loans' ||
+        key === 'cheques' ||
+        key === 'budgets' ||
+        key === 'payrollAdjustments' ||
+        key === 'coa_accounts_v2' ||
+        key === 'coa_company_v2' ||
+        key === 'coa_journals_v2'
+    ) return STORES.FINANCE;
+
+    // ── MASTERS ────────────────────────────────────────────────────────────
+    if (
+        key === 'customers' ||
+        key === 'suppliers' ||
+        key === 'agents' ||
+        key === 'karigars' ||
+        key === 'gatePasses' ||
+        key === 'leads' ||
+        key === 'projects' ||
+        key === 'attendance' ||
+        key === 'leaves' ||
+        key === 'maintenance' ||
+        key === 'gallery'
+    ) return STORES.MASTERS;
+
+    // ── AUDIT ──────────────────────────────────────────────────────────────
     if (key === 'auditLogs' || key === 'productionLogs') return STORES.AUDIT;
+
+    // ── CONFIG (settings, UI, notifications, tasks, dynamic docs) ──────────
+    if (
+        key === 'uiPrefs' ||
+        key === 'companyInfo' ||
+        key === 'notifications' ||
+        key === 'tasks' ||
+        key === 'dynamicDocuments' ||
+        key === 'erpnext_custom_fields' ||
+        key === 'texflow_features' ||
+        key === 'texflow_invoice_config' ||
+        key === 'texflow_shopify_config' ||
+        key === 'texflow_security_config' ||
+        key === 'texflow_communication_config' ||
+        key === 'texflow_advanced_config' ||
+        key === 'texflow_report_builder_saved_reports'
+    ) return STORES.CONFIG;
+
+    // Default fallback
     return STORES.CONFIG;
 };
 

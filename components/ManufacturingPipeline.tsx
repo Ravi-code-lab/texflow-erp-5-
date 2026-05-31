@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { getItem, setItem } from '../utils/indexedDB';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, Warehouse, Droplets, Scale, Scissors, Grid, Sparkles, 
@@ -207,26 +208,23 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
   const [showThermalLabel, setShowThermalLabel] = useState(false);
   const [printedLabelData, setPrintedLabelData] = useState<any>(null);
 
-  // Synchronize with database / cache
+  // Synchronize with indexedDB
+  const [batchesLoaded, setBatchesLoaded] = useState(false);
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setBatches(JSON.parse(stored));
-      } else {
-        setBatches(INITIAL_BATCHES);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_BATCHES));
-      }
-    } catch {
+    getItem<ManufacturingBatch[]>(STORAGE_KEY).then(stored => {
+      setBatches(stored && stored.length > 0 ? stored : INITIAL_BATCHES);
+      setBatchesLoaded(true);
+    }).catch(() => {
       setBatches(INITIAL_BATCHES);
-    }
+      setBatchesLoaded(true);
+    });
   }, []);
 
   useEffect(() => {
-    if (batches.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(batches));
+    if (batchesLoaded && batches.length > 0) {
+      setItem(STORAGE_KEY, batches);
     }
-  }, [batches]);
+  }, [batches, batchesLoaded]);
 
   // Set default selection
   useEffect(() => {

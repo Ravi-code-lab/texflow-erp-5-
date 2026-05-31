@@ -65,6 +65,7 @@ export type ViewState =
   | 'UPGRADE'
   | 'PRINT_FORMATS'
   | 'TALLY_INTEGRATION'
+  | 'GALLERY'
   | string;
 
 export enum Unit { KG = 'KG', METER = 'METER', PIECE = 'PIECE', LITER = 'LITER', BOX = 'BOX', YARD = 'YARD' }
@@ -389,16 +390,51 @@ export interface QualityReport extends BaseEntity { jobId: string; inspectorName
 export interface ProductionLog extends BaseEntity { jobId: string; machineId: string; operatorId: string; quantityProduced: number; wasteProduced: number; timestamp: string; efficiency?: number; }
 export interface Customer extends BaseEntity { 
   name: string; 
-  type: 'RETAILER' | 'WHOLESALER' | 'BRAND'; 
+  type: 'RETAILER' | 'WHOLESALER' | 'BRAND';
+  customerGroup?: string;
+  territory?: string;
   contactPerson: string; 
-  phone: string; 
-  email?: string; 
-  address?: string; 
-  gstin?: string; 
-  status?: 'ACTIVE' | 'INACTIVE';
-  balance?: number;
+  phone: string;
+  altPhone?: string;
+  email?: string;
+  website?: string;
+  address?: string;
+  // Billing Address
+  billingAddress?: string;
+  billingCity?: string;
+  billingState?: string;
+  billingPincode?: string;
+  billingCountry?: string;
+  // Shipping Address
+  shippingAddress?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPincode?: string;
+  shippingCountry?: string;
+  sameAsBilling?: boolean;
+  // GST / Tax
+  gstin?: string;
+  gstCategory?: 'Registered Regular' | 'Registered Composition' | 'Unregistered' | 'SEZ' | 'Overseas' | 'Consumer';
+  pan?: string;
+  tdsApplicable?: boolean;
+  tdsRate?: number;
+  // Credit & Payment
   creditLimit?: number;
+  paymentTerms?: string;
+  currency?: string;
+  priceList?: string;
+  // Bank Details
+  bankName?: string;
+  bankAccount?: string;
+  bankIfsc?: string;
+  bankBranch?: string;
+  // Extra
+  balance?: number;
+  status?: 'ACTIVE' | 'INACTIVE';
   tags?: string[];
+  notes?: string;
+  assignedTo?: string;
+  assignedToName?: string;
 }
 export interface AgentLedgerEntry extends BaseEntity { date: string; type: 'COMMISSION_EARNED' | 'PAYMENT_RECEIVED'; description: string; amount: number; orderId?: string; }
 export interface Agent extends BaseEntity { name: string; phone: string; area: string; commissionRate?: number; balance?: number; ledger?: AgentLedgerEntry[]; }
@@ -460,7 +496,30 @@ export interface Task extends BaseEntity {
 export interface LoanRecord extends BaseEntity { employeeId: string; date: string; type: 'GIVEN' | 'REPAID'; amount: number; notes: string; }
 export interface LoanHistoryEntry extends BaseEntity { employeeId: string; date: string; type: 'GIVEN' | 'REPAID'; amount: number; notes: string; }
 export interface LeaveRequest extends BaseEntity { employeeId: string; startDate: string; endDate: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; reason?: string; }
-export interface GalleryItem extends BaseEntity { title: string; url: string; category: string; date: string; description?: string; }
+export interface GalleryItem extends BaseEntity {
+  title: string;
+  url: string;
+  category: string;
+  date: string;
+  description?: string;
+  tags?: string[];
+  linkedDoctype?: string;
+  linkedId?: string;
+  linkedName?: string;
+  fileSize?: number;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  isFavorite?: boolean;
+  isPublic?: boolean;
+  shareToken?: string;
+  uploadedBy?: string;
+  folder?: string;
+  rating?: number;
+  colorSwatch?: string;
+  notes?: string;
+  viewCount?: number;
+}
 export interface FabricInspection extends BaseEntity { rollNumber: string; fabricName: string; date: string; lengthYds: number; widthInch: number; defects: { points: 1 | 2 | 3 | 4; description: string; locationYds: number; }[]; totalPoints: number; pointsPer100SqYds: number; grade: 'A' | 'B' | 'REJECT'; }
 export interface GatePass extends BaseEntity { number: string; date: string; type: 'INWARD' | 'OUTWARD'; referenceId: string; vehicleNo?: string; driverName?: string; }
 export interface SampleRequest { id: string; designId?: string; customerId?: string; designName: string; customerName?: string; status: 'REQUESTED' | 'DEVELOPING' | 'SENT' | 'DELIVERED' | 'APPROVED' | 'REJECTED'; requestDate: string; expectedDate?: string; sentDate?: string; courierName?: string; trackingNumber?: string; courierCost?: number; sampleCost?: number; rejectionReason?: string; feedback?: string; artisanId?: string; version?: number; description?: string; imageUrl?: string; }

@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { getItem, setItem } from '../utils/indexedDB';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ProductionJob, Karigar, Design, CuttingLog, Machine, ProductionLog, SampleRequest, Order, InventoryItem, GarmentRoutingTemplate, GarmentOperationTemplate, GarmentWorkOrderOperation, GarmentBundleTicket } from '../types';
 import { 
@@ -86,26 +87,18 @@ const DEFAULT_GARMENT_SETUP: GarmentManufacturingSetup = {
   routingTemplates: DEFAULT_ROUTING_TEMPLATES,
 };
 
-const loadGarmentSetup = (): GarmentManufacturingSetup => {
-  if (typeof window === 'undefined') return DEFAULT_GARMENT_SETUP;
-  try {
-    const raw = window.localStorage.getItem(GARMENT_SETUP_KEY);
-    if (!raw) return DEFAULT_GARMENT_SETUP;
-    const parsed = JSON.parse(raw);
-    const parsedStages = Array.isArray(parsed.stages) && parsed.stages.length ? parsed.stages : DEFAULT_GARMENT_SETUP.stages;
-    const stages = parsedStages.map((stage: any) => ({
-      ...(DEFAULT_GARMENT_SETUP.stages.find(defaultStage => defaultStage.id === stage.id) || DEFAULT_GARMENT_SETUP.stages[0]),
-      ...stage,
-      icon: (DEFAULT_GARMENT_SETUP.stages.find(defaultStage => defaultStage.id === stage.id) || DEFAULT_GARMENT_SETUP.stages[0]).icon,
-    }));
-    return {
-      sizes: Array.isArray(parsed.sizes) && parsed.sizes.length ? parsed.sizes : DEFAULT_GARMENT_SETUP.sizes,
-      stages,
-      routingTemplates: Array.isArray(parsed.routingTemplates) && parsed.routingTemplates.length ? parsed.routingTemplates : DEFAULT_GARMENT_SETUP.routingTemplates,
-    };
-  } catch {
-    return DEFAULT_GARMENT_SETUP;
-  }
+const mergeGarmentSetup = (parsed: any): GarmentManufacturingSetup => {
+  const parsedStages = Array.isArray(parsed.stages) && parsed.stages.length ? parsed.stages : DEFAULT_GARMENT_SETUP.stages;
+  const stages = parsedStages.map((stage: any) => ({
+    ...(DEFAULT_GARMENT_SETUP.stages.find(defaultStage => defaultStage.id === stage.id) || DEFAULT_GARMENT_SETUP.stages[0]),
+    ...stage,
+    icon: (DEFAULT_GARMENT_SETUP.stages.find(defaultStage => defaultStage.id === stage.id) || DEFAULT_GARMENT_SETUP.stages[0]).icon,
+  }));
+  return {
+    sizes: Array.isArray(parsed.sizes) && parsed.sizes.length ? parsed.sizes : DEFAULT_GARMENT_SETUP.sizes,
+    stages,
+    routingTemplates: Array.isArray(parsed.routingTemplates) && parsed.routingTemplates.length ? parsed.routingTemplates : DEFAULT_GARMENT_SETUP.routingTemplates,
+  };
 };
 
 const makeWorkOrderOperations = (route?: GarmentRoutingTemplate): GarmentWorkOrderOperation[] =>
@@ -156,7 +149,14 @@ const Production: React.FC<ProductionProps> = ({
   const [isProdLogModalOpen, setIsProdLogModalOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<ProductionJob | null>(null);
   const [customFields, setCustomFields] = useState<any[]>([]);
-  const [garmentSetup, setGarmentSetup] = useState<GarmentManufacturingSetup>(() => loadGarmentSetup());
+  const [garmentSetup, setGarmentSetup] = useState<GarmentManufacturingSetup>(DEFAULT_GARMENT_SETUP);
+  const [garmentSetupLoaded, setGarmentSetupLoaded] = useState(false);
+  useEffect(() => {
+    getItem<any>(GARMENT_SETUP_KEY).then(parsed => {
+      if (parsed) setGarmentSetup(mergeGarmentSetup(parsed));
+      setGarmentSetupLoaded(true);
+    }).catch(() => setGarmentSetupLoaded(true));
+  }, []);
   const [newSize, setNewSize] = useState('');
   const [selectedRouteId, setSelectedRouteId] = useState(DEFAULT_ROUTING_TEMPLATES[0].id);
   const [newOperation, setNewOperation] = useState<Partial<GarmentOperationTemplate>>({
@@ -174,19 +174,13 @@ const Production: React.FC<ProductionProps> = ({
 
   const saveGarmentSetup = (next: GarmentManufacturingSetup) => {
     setGarmentSetup(next);
-    window.localStorage.setItem(GARMENT_SETUP_KEY, JSON.stringify(next));
+    setItem(GARMENT_SETUP_KEY, next);
   };
 
   useEffect(() => {
-    const raw = localStorage.getItem('erpnext_custom_fields');
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        setCustomFields(parsed.filter((f: any) => f.docType === 'ProductionJob'));
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    getItem<any[]>('erpnext_custom_fields').then(parsed => {
+      if (Array.isArray(parsed)) setCustomFields(parsed.filter((f: any) => f.docType === 'ProductionJob'));
+    }).catch(() => {});
   }, []);
   const [formData, setFormData] = useState<Partial<ProductionJob>>({ 
     productName: '',
@@ -1153,7 +1147,7 @@ const Production: React.FC<ProductionProps> = ({
         <ProductionPlan orders={orders} designs={designs} jobs={jobs} onAction={onAction} />
       )}
       {activeTab === 'JOBS' && (
-        <ProductionJobs jobs={jobs} designs={designs} machines={machines} karigars={karigars} onUpdateJob={onUpdateJob} onAddJob={onAddJob} onDeleteJob={onDeleteJob} onAction={onAction} currency={currency} orders={orders} garmentSetup={garmentSetup} />
+        <ProductionJobs jobs={jobs} designs={designs} machines={machines} karigars={karigars} inventory={inventory} onUpdateJob={onUpdateJob} onAddJob={onAddJob} onDeleteJob={onDeleteJob} onAction={onAction} currency={currency} orders={orders} garmentSetup={garmentSetup} />
       )}
       {activeTab === 'WORKSTATIONS' && <Workstations workstations={machines} onAdd={onAddMachine!} onUpdate={onUpdateMachine!} onDelete={onDeleteMachine!} />}
       {activeTab === 'JOBSLIP' && <GenerateJobSlip jobs={jobs} workstations={machines} karigars={karigars} onUpdateJob={onUpdateJob} onUpdateKarigar={onUpdateKarigar} currency={currency} />}

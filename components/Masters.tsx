@@ -107,8 +107,11 @@ const Masters: React.FC<MastersProps> = ({
           )}
           {activeTab === 'CUSTOMERS' && (
             <Customers 
-              customers={customers} 
-              onAdd={onAddCustomer} 
+              customers={customers}
+              team={team}
+              onAdd={onAddCustomer}
+              onUpdate={onUpdateCustomer}
+              onDelete={onDeleteCustomer}
               currency={currency} 
             />
           )}
