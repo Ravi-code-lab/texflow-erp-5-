@@ -1,3 +1,4 @@
+"use strict";
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
@@ -33865,6 +33866,19 @@ ipcMain.handle("db:save-shard", async (_, { key, data }) => {
     }
     return { success: true };
   } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+ipcMain.handle("db:factory-reset", async () => {
+  try {
+    vaultCache = {};
+    if (fs.existsSync(VAULT_FILE)) {
+      fs.rmSync(VAULT_FILE, { force: true });
+    }
+    appendLog("FACTORY RESET: Vault file deleted. App will start fresh on next boot.");
+    return { success: true };
+  } catch (e) {
+    console.error("[FACTORY RESET] Failed:", e);
     return { success: false, error: e.message };
   }
 });

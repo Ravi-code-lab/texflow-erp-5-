@@ -1,1 +1,24 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-macos-accent: #6366f1;
+  --color-macos-border: #e2e8f0;
+  --color-macos-darkBorder: #1e293b;
+}
+
+@layer components {
+  .macos-card {
+    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl;
+  }
+  .macos-input {
+    @apply w-full border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm font-medium bg-black/[0.02] dark:bg-white/[0.02] outline-none focus:border-indigo-500 dark:focus:border-indigo-500 transition-colors;
+  }
+  .macos-btn-primary {
+    @apply px-4 py-2 bg-indigo-500 text-white font-bold rounded-xl shadow-sm hover:brightness-110 active:scale-95 transition-all text-sm;
+  }
+  .glass {
+    @apply bg-white/70 dark:bg-slate-950/70 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm;
+  }
+}

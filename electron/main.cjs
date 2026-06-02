@@ -353,6 +353,22 @@ ipcMain.handle('db:save-shard', async (_, { key, data }) => {
   }
 });
 
+ipcMain.handle('db:factory-reset', async () => {
+  try {
+    // Clear in-memory cache
+    vaultCache = {};
+    // Delete the vault file from disk so next boot starts fresh
+    if (fs.existsSync(VAULT_FILE)) {
+      fs.rmSync(VAULT_FILE, { force: true });
+    }
+    appendLog('FACTORY RESET: Vault file deleted. App will start fresh on next boot.');
+    return { success: true };
+  } catch (e) {
+    console.error('[FACTORY RESET] Failed:', e);
+    return { success: false, error: e.message };
+  }
+});
+
 // ── IPC: Storage / Backup ─────────────────────────────────────────────────────
 ipcMain.handle('storage:info', async () => {
   try {

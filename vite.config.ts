@@ -1,17 +1,22 @@
-import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
-import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
+import * as path from 'path';
+
+export default defineConfig(({ mode }) => {
+  // Casting process to any to avoid TS error about cwd() not existing on Process type in some environments
+  const env = loadEnv(mode, (process as any).cwd(), '');
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve((process as any).cwd(), './'),
       },
     },
-    base: './', // Required for Electron to find assets in the dist folder
+    define: {
+      'process.env.API_KEY': JSON.stringify(env.API_KEY),
+    },
+    base: './', // Important for Electron to find assets
     build: {
       outDir: 'dist',
       emptyOutDir: true,
@@ -19,11 +24,7 @@ export default defineConfig(() => {
     server: {
       port: 3000,
       host: '0.0.0.0',
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify - file watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
-    },
+      allowedHosts: true
+    }
   };
 });
