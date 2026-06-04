@@ -49,7 +49,7 @@ export default function TexBot({ contextData }: TexBotProps) {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed bottom-6 right-6 z-55">
       {/* Bot Launcher Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -107,7 +107,7 @@ export default function TexBot({ contextData }: TexBotProps) {
               onChange={e => setInputVal(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
             />
-            <button onClick={handleSend} className="px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center">
+            <button onClick={handleSend} className="px-3 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center">
               <Send className="w-3.5 h-3.5" />
             </button>
           </div>

@@ -86,8 +86,12 @@ const resolveTitle = (doc: Record<string, any>) =>
 
 const parseTableValue = (value: string) => {
   if (!value.trim()) return [];
-  const parsed = JSON.parse(value);
-  return Array.isArray(parsed) ? parsed : [parsed];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [];
+  }
 };
 
 const DocumentDesk: React.FC<DocumentDeskProps> = ({ collections }) => {

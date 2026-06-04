@@ -35,7 +35,7 @@ const Suppliers: React.FC<SuppliersProps> = ({
     if (raw) {
       try {
         return JSON.parse(raw).filter((f: any) => f.docType === 'Supplier');
-      } catch (e) { console.error("Failed to parse erpnext_custom_fields:", e); }
+      } catch (e) {}
     }
     return [];
   }, [viewMode]);
@@ -60,7 +60,7 @@ const Suppliers: React.FC<SuppliersProps> = ({
     
     const supplier = {
       ...formData,
-      id: formData.id || `SUP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`,
+      id: formData.id || `SUP-${Date.now().toString().slice(-4)}`,
       updatedAt: new Date().toISOString()
     } as Supplier;
 

@@ -46,7 +46,7 @@ export default function SmartPurchase({ production = [], designs = [], inventory
     <div className="bg-indigo-50/40 dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 rounded-xl p-4.5 space-y-3">
       <div className="flex justify-between items-center pb-2 border-b border-indigo-100 dark:border-slate-800">
         <h4 className="text-xs font-black text-slate-800 dark:text-white flex items-center gap-1">
-          <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" />
+          <Sparkles className="w-4 h-4 text-indigo-505 text-indigo-500 animate-pulse" />
           AI Smart Purchase Advisory
         </h4>
         <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-indigo-100 dark:bg-indigo-950/40 text-indigo-750 dark:text-indigo-400 border border-indigo-200/50 uppercase">

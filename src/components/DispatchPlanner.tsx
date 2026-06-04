@@ -65,7 +65,7 @@ export const DispatchPlanner: React.FC<DispatchPlannerProps> = ({
     if (!dispatchNo) return;
 
     // Load dispatch cargo items from the selected sales order
-    const cargoItems: DispatchItem[] = selectedOrder ? selectedOrder.items.map(item => ({
+    const cargoItems: DispatchItem[] = selectedOrder ? (selectedOrder.items || []).map(item => ({
       orderId: selectedOrder.id,
       orderNumber: selectedOrder.id,
       customerName: selectedOrder.customerName,
@@ -335,7 +335,7 @@ export const DispatchPlanner: React.FC<DispatchPlannerProps> = ({
                   ) : (
                     <tr>
                       <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
-                        <Truck className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                        <Truck className="w-8 h-8 text-slate-350 mx-auto mb-2" />
                         No Delivery Notes found. Create one from an outstanding Sales Order.
                       </td>
                     </tr>

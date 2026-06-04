@@ -60,7 +60,7 @@ const openDB = (): Promise<IDBDatabase> => {
 
 const getStoreForKey = (key: string): string => {
     // ── STAFF ──────────────────────────────────────────────────────────────
-    if (key === 'team') return STORES.STAFF;
+    if (key === 'team' || key === 'rolePermissions') return STORES.STAFF;
 
     // ── INVENTORY ──────────────────────────────────────────────────────────
     if (
@@ -72,10 +72,7 @@ const getStoreForKey = (key: string): string => {
         key === 'yarnLots' ||
         key === 'dyeingJobs' ||
         key === 'fabricCostings' ||
-        key === 'dispatchEntries' ||
-        key === 'wasteLogs' ||
-        key === 'brokerLogs' ||
-        key === 'marginCostings'
+        key === 'dispatchEntries'
     ) return STORES.INVENTORY;
 
     // ── ORDERS ─────────────────────────────────────────────────────────────
@@ -114,6 +111,9 @@ const getStoreForKey = (key: string): string => {
         key === 'cheques' ||
         key === 'budgets' ||
         key === 'payrollAdjustments' ||
+        key === 'wasteLogs' ||
+        key === 'brokerLogs' ||
+        key === 'marginCostings' ||
         key === 'coa_accounts_v2' ||
         key === 'coa_company_v2' ||
         key === 'coa_journals_v2'
@@ -131,7 +131,8 @@ const getStoreForKey = (key: string): string => {
         key === 'attendance' ||
         key === 'leaves' ||
         key === 'maintenance' ||
-        key === 'gallery'
+        key === 'gallery' ||
+        key === 'warehouses'
     ) return STORES.MASTERS;
 
     // ── AUDIT ──────────────────────────────────────────────────────────────
@@ -306,16 +307,5 @@ export const clearAllDataFlag = async (): Promise<void> => {
       request.onerror = () => reject(request.error);
     });
   }
-  localStorage.clear();
-
-  // On Electron (server PC), also wipe the physical vault shards from disk.
-  // Without this, hydrateFromNative() re-loads the old team data on next boot,
-  // which prevents the seed admin/admin123 login from working after a factory reset.
-  if (isElectron && ipc) {
-    try {
-      await ipc.invoke('db:factory-reset');
-    } catch (e) {
-      console.error('[FACTORY RESET] IPC call failed:', e);
-    }
-  }
+  try { localStorage.clear(); } catch {}
 };

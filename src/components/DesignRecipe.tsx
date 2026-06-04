@@ -26,6 +26,8 @@ interface BOMOperation {
   hourlyRate?: number;
   costPerHour?: number;
   taskBaseRate?: number;
+  ratePerPiece?: number;
+  rateUnit?: string;
 }
 
 interface BOMScrap {
@@ -87,10 +89,11 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
   });
 
   // Calculate costs recursively for sub-assemblies if a recipe item matches another design SKU or Name! (ERPNext Multi-Level Costing)
-  const getSubAssemblyCost = (name: string): number => {
+  const getSubAssemblyCost = (name: string, visited: Set<string> = new Set()): number => {
+    if (visited.has(name)) return 0; // Cycle guard: prevent infinite recursion
     const subDesign = designs.find(d => d.name === name || d.sku === name);
     if (!subDesign) return 0;
-    
+    visited.add(name);
     // Base cost for design
     return subDesign.processCostPerPiece || 0;
   };
@@ -106,9 +109,12 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
         return acc + (item.quantity * rate * wastageFactor);
     }, 0);
 
-    // 2. Routing Operations Costs (task based calculation)
+    // 2. Routing Operations Costs — prefer ratePerPiece (set in RoutingMaster) over legacy BOM fields
     const operationCost = (formData.operations || []).reduce((acc, op) => {
-      const perUnitCost = op.taskBaseRate !== undefined ? op.taskBaseRate : (op.hourlyRate !== undefined ? op.hourlyRate : 0);
+      const perUnitCost =
+        op.ratePerPiece !== undefined ? op.ratePerPiece :
+        op.taskBaseRate !== undefined ? op.taskBaseRate :
+        op.hourlyRate !== undefined ? op.hourlyRate : 0;
       return acc + perUnitCost;
     }, 0);
 
@@ -132,7 +138,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
       overheads,
       totalLanded: Math.max(0, totalLanded) 
     };
-  }, [formData.recipe, formData.operations, formData.scrapItems, formData.processLossPercent, formData.overheadCharges, inventory]);
+  }, [formData.recipe, formData.operations, formData.scrapItems, formData.processLossPercent, formData.overheadCharges, inventory, designs]);
 
   const filteredDesigns = useMemo(() => {
     return designs.filter(d => {
@@ -147,8 +153,17 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
     e.preventDefault();
     if (!formData.name) return;
 
+    // Sync recipe item estimatedCost to live inventory price before saving
+    const syncedRecipe = (formData.recipe || []).map(rm => {
+      const isSub = designs.some(d => d.name === rm.materialName);
+      if (isSub) return rm;
+      const livePrice = inventory.find(i => i.name === rm.materialName)?.pricePerUnit;
+      return livePrice !== undefined ? { ...rm, estimatedCost: livePrice } : rm;
+    });
+
     const baseUnitItem: Design = { 
-      ...formData, 
+      ...formData,
+      recipe: syncedRecipe,
       processCostPerPiece: calculatedCosting.totalLanded,
       id: editingId || `BOM-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`, 
       updatedAt: new Date().toISOString() 
@@ -167,17 +182,11 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
       setEditingId(design.id);
       setFormData({
         ...design,
-        operations: (design as any).operations || [
-          { operationName: 'Cutting', workstation: 'Cutting Loom Floor', cycleTimeMinutes: 5, hourlyRate: 120, costPerHour: 120 },
-          { operationName: 'Stitching', workstation: 'Tailoring Floor Unit B', cycleTimeMinutes: 25, hourlyRate: 150, costPerHour: 150 },
-          { operationName: 'Quality Inspection', workstation: 'QC Center A', cycleTimeMinutes: 8, hourlyRate: 90, costPerHour: 90 }
-        ],
-        scrapItems: (design as any).scrapItems || [
-          { itemName: 'Shredded Cotton Scrap', quantity: 0.15, unit: 'KG', salvageValue: 25 }
-        ],
+        operations: (design as any).operations || [],
+        scrapItems: (design as any).scrapItems || [],
         bomVersion: (design as any).bomVersion || '1.0.0',
         bomStatus: (design as any).bomStatus || 'ACTIVE',
-        overheadCharges: (design as any).overheadCharges || 15
+        overheadCharges: (design as any).overheadCharges ?? 15
       });
     } else {
       setEditingId(null);
@@ -187,9 +196,9 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
         processLossPercent: 2,
         category: 'KURTI',
         operations: [
-          { operationName: 'Cutting', workstation: 'Cutting Loom Floor', cycleTimeMinutes: 5, hourlyRate: 120, costPerHour: 120 },
-          { operationName: 'Stitching', workstation: 'Tailoring Floor Unit B', cycleTimeMinutes: 25, hourlyRate: 150, costPerHour: 150 },
-          { operationName: 'Finishing & Pressing', workstation: 'Washing Yard', cycleTimeMinutes: 10, hourlyRate: 80, costPerHour: 80 }
+          { operationName: 'Cutting', workstation: 'Cutting Loom Floor', cycleTimeMinutes: 5, ratePerPiece: 8, rateUnit: 'PER_PIECE' },
+          { operationName: 'Stitching', workstation: 'Tailoring Floor Unit B', cycleTimeMinutes: 25, ratePerPiece: 35, rateUnit: 'PER_PIECE' },
+          { operationName: 'Finishing & Pressing', workstation: 'Washing Yard', cycleTimeMinutes: 10, ratePerPiece: 12, rateUnit: 'PER_PIECE' }
         ],
         scrapItems: [
           { itemName: 'Cotton Textile Rag Scrap', quantity: 0.2, unit: 'KG', salvageValue: 20 }
@@ -409,7 +418,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                  {design.recipe.slice(0, 3).map((item, idx) => {
                                     const sub = designs.find(d => d.name === item.materialName);
                                     return (
-                                       <div key={(mat as any).id || (mat as any).name + idx} className="flex justify-between items-center text-xs text-[#525c66] leading-tight">
+                                       <div key={idx} className="flex justify-between items-center text-xs text-[#525c66] leading-tight">
                                          <span className="truncate max-w-[160px] font-medium flex items-center gap-1">
                                            {sub && <GitBranch className="w-3 h-3 text-indigo-500" />}
                                            {item.materialName}
@@ -633,12 +642,19 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                     </tr>
                                  </thead>
                                  <tbody className="divide-y divide-slate-100">
-                                    {formData.recipe.map((rm, idx) => {
+                                    {(formData.recipe || []).map((rm, idx) => {
                                        const isSub = designs.some(d => d.name === rm.materialName);
                                        const mult = 1 + (rm.wastagePercent || 0)/100;
-                                       const valTotal = rm.quantity * (rm.estimatedCost || 0) * mult;
+                                       // Use live inventory price; fall back to stored estimatedCost only if not found
+                                       const liveInvItem = inventory.find(i => i.name === rm.materialName);
+                                       const liveSubDesign = designs.find(d => d.name === rm.materialName);
+                                       const liveRate = isSub
+                                         ? (liveSubDesign?.processCostPerPiece || rm.estimatedCost || 0)
+                                         : (liveInvItem?.pricePerUnit ?? rm.estimatedCost ?? 0);
+                                       const valTotal = rm.quantity * liveRate * mult;
+                                       const priceChanged = !isSub && liveInvItem && liveInvItem.pricePerUnit !== (rm.estimatedCost || 0);
                                        return (
-                                          <tr key={(mat as any).id || (item as any).id || idx} className="hover:bg-slate-50/50 text-xs">
+                                          <tr key={idx} className="hover:bg-slate-50/50 text-xs">
                                              <td className="py-2.5 pl-3 font-semibold text-slate-800 flex items-center gap-1.5 mt-0.5">
                                                 {isSub ? <GitBranch className="w-3.5 h-3.5 text-indigo-500 shrink-0" /> : <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                                                 {rm.materialName}
@@ -650,7 +666,9 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                              </td>
                                              <td className="py-2 px-3 text-right tabular-nums font-medium text-slate-600">{rm.quantity} {rm.unit}</td>
                                              <td className="py-2 px-3 text-right font-medium text-amber-600 tabular-nums">+{rm.wastagePercent || 0}% Info</td>
-                                             <td className="py-2 px-3 text-right font-medium text-slate-600 tabular-nums">{currency}{(rm.estimatedCost || 0).toFixed(2)}</td>
+                                             <td className={`py-2 px-3 text-right font-medium tabular-nums ${priceChanged ? 'text-amber-600' : 'text-slate-600'}`} title={priceChanged ? `BOM rate: ₹${rm.estimatedCost} → Live: ₹${liveRate}` : undefined}>
+                                               {currency}{liveRate.toFixed(2)}{priceChanged && <span className="ml-1 text-[9px] text-amber-500">live</span>}
+                                             </td>
                                              <td className="py-2.5 pr-3 text-right font-bold text-slate-800 tabular-nums">{currency}{valTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                              <td className="py-2.5 pr-2 text-right">
                                                  <button 
@@ -720,13 +738,13 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                 />
                             </div>
                             <div className="w-24 space-y-1">
-                                <label className="text-[10px] text-slate-500 font-bold uppercase">Task Base Rate</label>
+                                <label className="text-[10px] text-slate-500 font-bold uppercase">Rate / Piece (₹)</label>
                                 <input 
                                   type="number" 
                                   className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-center font-semibold"
                                   placeholder="50" 
-                                  value={newOperation.taskBaseRate || ''}
-                                  onChange={e => setNewOperation({...newOperation, taskBaseRate: Number(e.target.value)})}
+                                  value={(newOperation as any).ratePerPiece ?? newOperation.taskBaseRate ?? ''}
+                                  onChange={e => setNewOperation({...newOperation, taskBaseRate: Number(e.target.value), ratePerPiece: Number(e.target.value)} as any)}
                                 />
                             </div>
                             <button 
@@ -741,8 +759,9 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                     operationName: '',
                                     workstation: '',
                                     cycleTimeMinutes: 10,
-                                    taskBaseRate: 50
-                                  });
+                                    taskBaseRate: 0,
+                                    ratePerPiece: 0,
+                                  } as any);
                                 }
                               }}
                               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-[32px] px-3 rounded flex items-center justify-center transition-all"
@@ -767,9 +786,9 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                  </thead>
                                  <tbody className="divide-y divide-slate-100">
                                     {formData.operations.map((op, idx) => {
-                                       const unitOpCost = op.taskBaseRate !== undefined ? op.taskBaseRate : (op.hourlyRate !== undefined ? op.hourlyRate : 0);
+                                       const unitOpCost = op.ratePerPiece !== undefined ? op.ratePerPiece : op.taskBaseRate !== undefined ? op.taskBaseRate : op.hourlyRate !== undefined ? op.hourlyRate : 0;
                                        return (
-                                          <tr key={(mat as any)?.id || (item as any)?.id || idx} className="hover:bg-slate-50/50 text-xs">
+                                          <tr key={idx} className="hover:bg-slate-50/50 text-xs">
                                              <td className="py-2.5 pl-3 font-semibold text-slate-800">{op.operationName}</td>
                                              <td className="py-2 px-3 text-slate-600 font-medium">{op.workstation}</td>
                                              <td className="py-2 px-3 text-center tabular-nums font-semibold text-indigo-600 bg-indigo-50/20">{op.cycleTimeMinutes} Mins</td>
@@ -894,7 +913,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                     {formData.scrapItems.map((s, idx) => {
                                        const reduction = s.quantity * s.salvageValue;
                                        return (
-                                          <tr key={(mat as any)?.id || (item as any)?.id || idx} className="hover:bg-slate-50/50 text-xs">
+                                          <tr key={idx} className="hover:bg-slate-50/50 text-xs">
                                              <td className="py-2.5 pl-3 font-semibold text-emerald-700">{s.itemName}</td>
                                              <td className="py-2 px-3 text-center font-medium text-slate-500 tabular-nums">{s.quantity} {s.unit}</td>
                                              <td className="py-2 px-3 text-right text-slate-500 font-medium tabular-nums">{currency}{s.salvageValue}/{s.unit}</td>
@@ -1008,7 +1027,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                              </div>
                              <div className="grid grid-cols-2 gap-2 mt-2">
                                  {chartData.map((p, idx) => (
-                                    <div key={(item as any)?.id || idx} className="flex items-center gap-2 text-[10px] text-slate-500">
+                                    <div key={idx} className="flex items-center gap-2 text-[10px] text-slate-500">
                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></span>
                                        <span className="truncate">{p.name} ({currency}{Math.round(p.value)})</span>
                                     </div>

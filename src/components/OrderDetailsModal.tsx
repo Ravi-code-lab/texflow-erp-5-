@@ -20,7 +20,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, customer, 
   const [customFields, setCustomFields] = useState<any[]>([]);
 
   useEffect(() => {
-    const raw = localStorage.getItem('erpnext_custom_fields');
+    let raw: string | null = null;
+    try { raw = localStorage.getItem('erpnext_custom_fields'); } catch {}
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
@@ -76,7 +77,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, customer, 
     autoTable(doc, {
       startY: 90,
       head: [["Item Description", "Qty", "Price", "Amount"]],
-      body: order.items.map(item => [
+      body: (order.items || []).map(item => [
           item.productName,
           item.quantity,
           `${currency}${item.unitPrice}`,
@@ -92,7 +93,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, customer, 
     const finalY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFontSize(10);
     
-    const subTotal = order.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+    const subTotal = (order.items || []).reduce((s, i) => s + i.quantity * i.unitPrice, 0);
     
     doc.text("Subtotal:", 140, finalY);
     doc.text(`${currency}${subTotal.toFixed(2)}`, 190, finalY, { align: 'right' });
@@ -137,7 +138,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, customer, 
     doc.text(splitAddr, 14, 65);
 
     const tableColumn = ["Item Description", "SKU / Code", "Ordered Qty", "Shipped Qty", "Box #"];
-    const tableRows = order.items.map((item, i) => [
+    const tableRows = (order.items || []).map((item, i) => [
         item.productName, 
         `SKU-${1000+i}`, // Mock SKU
         `${item.quantity} ${item.unit}`,
@@ -250,8 +251,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, customer, 
                       </tr>
                    </thead>
                    <tbody className="text-xs sm:text-sm">
-                      {order.items.map((item, idx) => (
-                         <tr key={(item as any).id || item.productName + idx} className="border-b border-slate-50 last:border-0">
+                      {(order.items || []).map((item, idx) => (
+                         <tr key={idx} className="border-b border-slate-50 last:border-0">
                             <td className="py-4 px-4 font-medium text-slate-700">
                               <div className="flex items-center gap-3">
                                 <ProductImageThumb productName={item.productName} designs={designs} inventory={inventory} size="sm" />

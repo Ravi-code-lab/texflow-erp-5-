@@ -36,7 +36,7 @@ const Agents: React.FC<AgentsProps> = ({ agents, onAdd, onUpdate, onDelete }) =>
     if (formData.id && onUpdate) {
       onUpdate(formData as Agent);
     } else {
-      onAdd({ ...formData, id: `AG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}` } as Agent);
+      onAdd({ ...formData, id: `AG-${Date.now().toString().slice(-4)}` } as Agent);
     }
     setViewMode('LIST');
     setFormData({ name: '', phone: '', area: '' });

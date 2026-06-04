@@ -17,8 +17,7 @@ import {
   LayoutDashboard, Calendar, LineChart, PieChartIcon, LucideIcon,
   BadgePercent, Coins, Fingerprint, MapPin, FlaskConical, BookMarked,
 } from 'lucide-react';
-import { InventoryItem, ProductionJob, Order, Machine, Karigar, ViewState, UserRole } from '../types';
-import { canAccessView } from '../modules/permissions';
+import { InventoryItem, ProductionJob, Order, Machine, Karigar, ViewState } from '../types';
 import { ERP_MODULE_GROUPS, MODULE_COLOR_MAP, ERPModuleGroupId } from '../modules/registry';
 
 interface DashboardProps {
@@ -30,7 +29,6 @@ interface DashboardProps {
   machines?: Machine[];
   karigars?: Karigar[];
   setView?: (view: ViewState) => void;
-  userRole?: UserRole;
 }
 
 type WorkspaceTab = 'HOME' | 'SELLING' | 'BUYING' | 'MANUFACTURING' | 'STOCK' | 'ACCOUNTS' | 'HR';
@@ -237,16 +235,11 @@ const ShortcutBtn = React.memo(({ item, onClick }: { item: ShortcutItem; onClick
 
 const Dashboard: React.FC<DashboardProps> = ({
   inventory, production, orders, currency = '₹',
-  features, machines = [], karigars = [], setView, userRole = 'ADMIN',
+  features, machines = [], karigars = [], setView,
 }) => {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('HOME');
 
-  // Bug fix: gate navigation with permission check — previously any role could
-  // navigate to any view by clicking Dashboard shortcuts, bypassing canAccessView.
-  const navigateTo = (view: ViewState) => {
-    if (!canAccessView(userRole, view)) return;
-    setView?.(view);
-  };
+  const navigateTo = (view: ViewState) => setView?.(view);
 
   // Stats
   const totalOrders = orders.length;

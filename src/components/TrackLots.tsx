@@ -68,7 +68,7 @@ export default function TrackLots({ jobs, onUpdateJob }: TrackLotsProps) {
               <div key={job.id} className="p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 bg-slate-50/25 dark:bg-slate-950/20 hover:border-slate-300 transition-colors">
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100/60 dark:border-slate-800/50">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-extrabold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded">
+                    <span className="font-mono text-xs font-extrabold text-indigo-650 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded">
                       {job.id}
                     </span>
                     <span className="font-bold text-slate-850 dark:text-slate-200 text-sm">{job.productName}</span>
@@ -94,7 +94,7 @@ export default function TrackLots({ jobs, onUpdateJob }: TrackLotsProps) {
                 <div className="pt-4">
                   <div className="flex justify-between text-[11px] text-slate-400 block mb-2">
                     <span>Manufacturing Line Milestone:</span>
-                    <span className="font-bold font-mono text-slate-700 dark:text-slate-205">{Math.round((currentStageIdx / (STAGES.length - 1)) * 100)}% Completed</span>
+                    <span className="font-bold font-mono text-slate-700 dark:text-slate-205">{job.progress || 0}% Completed</span>
                   </div>
                   <div className="relative">
                     {/* Background track line */}
@@ -102,7 +102,7 @@ export default function TrackLots({ jobs, onUpdateJob }: TrackLotsProps) {
                     
                     {/* Active progress color bar */}
                     <div 
-                      className="absolute top-[15px] left-0 h-1 bg-indigo-500 rounded z-0"
+                      className="absolute top-[15px] left-0 h-1 bg-indigo-505 bg-indigo-500 rounded z-0"
                       style={{ width: `${Math.max(0, (currentStageIdx / (STAGES.length - 1)) * 100)}%` }} 
                     />
 

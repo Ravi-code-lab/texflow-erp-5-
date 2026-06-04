@@ -188,30 +188,6 @@ ipcMain.handle('db:load-all', async () => {
     } catch (error) { return { success: false, error: error.message }; }
 });
 
-// ── Factory Reset: wipe all vault shards + manifest from disk ────────────────
-ipcMain.handle('db:factory-reset', async () => {
-    try {
-        const paths = getVaultPaths();
-        if (!paths) return { success: true }; // nothing to clear
-        // Delete all shard .bin files
-        if (fs.existsSync(paths.shards)) {
-            const files = fs.readdirSync(paths.shards);
-            for (const f of files) {
-                fs.rmSync(path.join(paths.shards, f), { force: true });
-            }
-        }
-        // Delete the manifest so db:load-all returns empty data on next boot
-        if (fs.existsSync(paths.manifest)) {
-            fs.rmSync(paths.manifest, { force: true });
-        }
-        logAction('FACTORY RESET: All vault shards and manifest deleted.');
-        return { success: true };
-    } catch (error) {
-        console.error('[FACTORY RESET] Failed:', error);
-        return { success: false, error: error.message };
-    }
-});
-
 ipcMain.handle('storage:info', async () => {
     const paths = getVaultPaths();
     if (!paths) return null;

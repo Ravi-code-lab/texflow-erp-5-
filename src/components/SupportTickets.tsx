@@ -13,7 +13,7 @@ export default function SupportTickets({ tickets, customers, onAdd, onUpdate, on
   const [isOpen, setIsOpen] = useState(false);
   const [subject, setSubject] = useState('');
   const [customer, setCustomer] = useState(customers[0]?.name || '');
-  const [priority, setPriority] = useState('MEDIUM');
+  const [priority, setPriority] = useState('NORMAL');
   const [description, setDescription] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -26,7 +26,7 @@ export default function SupportTickets({ tickets, customers, onAdd, onUpdate, on
       subject,
       priority,
       status: 'OPEN',
-      date: new Date().toISOString().split('T')[0],
+      creationDate: new Date().toISOString().split('T')[0],
       description
     });
     setIsOpen(false);
@@ -35,10 +35,10 @@ export default function SupportTickets({ tickets, customers, onAdd, onUpdate, on
   };
 
   const handleToggleStatus = (ticket: any) => {
-    const nextStatus = ticket.status === 'OPEN' || ticket.status === 'IN_PROGRESS'
-      ? 'RESOLVED'
-      : 'OPEN';
-    onUpdate({ ...ticket, status: nextStatus });
+    onUpdate({
+      ...ticket,
+      status: ticket.status === 'OPEN' ? 'RESOLVED' : 'OPEN'
+    });
   };
 
   return (
@@ -54,10 +54,10 @@ export default function SupportTickets({ tickets, customers, onAdd, onUpdate, on
         <button
           onClick={() => {
             setCustomer(customers[0]?.name || '');
-            setPriority('MEDIUM');
+            setPriority('NORMAL');
             setIsOpen(true);
           }}
-          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
+          className="px-3.5 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Open Ticket
         </button>
@@ -78,18 +78,15 @@ export default function SupportTickets({ tickets, customers, onAdd, onUpdate, on
                   <span className="font-mono text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 rounded">
                     {t.id}
                   </span>
-                  <span className="text-xs text-slate-400 font-mono">Date: {t.date}</span>
+                  <span className="text-xs text-slate-400 font-mono">Date: {t.creationDate}</span>
                   <span className="font-bold text-slate-500 block">Customer: {t.customerName}</span>
                 </div>
                 <h4 className="font-bold text-slate-800 dark:text-slate-150 text-sm mt-1.5">{t.subject}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t.description || 'No detailed issue statement logged.'}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-350 mt-1">{t.description || 'No detailed issue statement logged.'}</p>
                 
                 <div className="flex gap-4 text-[10px] mt-3.5">
                   <span className={`px-2 py-0.5 rounded font-bold uppercase ${
-                    t.priority === 'CRITICAL' ? 'bg-red-100 text-red-700' :
-                    t.priority === 'HIGH' ? 'bg-rose-50 text-rose-700' :
-                    t.priority === 'MEDIUM' ? 'bg-amber-50 text-amber-700' :
-                    'bg-slate-100 text-slate-600'
+                    t.priority === 'HIGH' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'
                   }`}>
                     Priority: {t.priority}
                   </span>
@@ -106,10 +103,10 @@ export default function SupportTickets({ tickets, customers, onAdd, onUpdate, on
                   onClick={() => handleToggleStatus(t)}
                   className="px-2.5 py-1 border border-slate-200 text-slate-500 hover:text-slate-800 rounded text-[10px] font-bold uppercase transition"
                 >
-                  {t.status === 'OPEN' || t.status === 'IN_PROGRESS' ? 'Resolve' : 'Re-open'}
+                  {t.status === 'OPEN' ? 'Resolve' : 'Re-open'}
                 </button>
                 <button
-                  onClick={() => onDelete(t.id)}
+                  onClick={() => onDelete(t)}
                   className="p-1 text-slate-400 hover:text-rose-600 transition"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -161,10 +158,8 @@ export default function SupportTickets({ tickets, customers, onAdd, onUpdate, on
                   value={priority}
                   onChange={e => setPriority(e.target.value)}
                 >
-                  <option value="LOW">Low</option>
-                  <option value="MEDIUM">Normal Processing</option>
+                  <option value="NORMAL">Normal Processing</option>
                   <option value="HIGH">High Urgency / Defect Alert</option>
-                  <option value="CRITICAL">Critical</option>
                 </select>
               </div>
 
@@ -183,7 +178,7 @@ export default function SupportTickets({ tickets, customers, onAdd, onUpdate, on
               <button type="button" onClick={() => setIsOpen(false)} className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg font-bold text-slate-500 text-xs">
                 Cancel
               </button>
-              <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs">
+              <button type="submit" className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs">
                 File Ticket Case
               </button>
             </div>

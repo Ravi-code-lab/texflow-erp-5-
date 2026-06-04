@@ -13,6 +13,7 @@ interface DeliveryChallanProps {
   customers: Customer[];
   designs?: Design[];
   inventory?: InventoryItem[];
+  initialOrderId?: string;
   onAddChallan: (order: Order) => void;
   onUpdateChallan: (order: Order) => void;
   onAction?: (action: string, data: any) => void;
@@ -21,7 +22,7 @@ interface DeliveryChallanProps {
 }
 
 const DeliveryChallan: React.FC<DeliveryChallanProps> = ({ 
-  orders, customers, designs = [], inventory = [], onAddChallan, onUpdateChallan, onAction, currency = '₹', 
+  orders, customers, designs = [], inventory = [], initialOrderId, onAddChallan, onUpdateChallan, onAction, currency = '₹', 
   companyInfo = { name: 'RAVI-TEXTILE', address: 'Surat, GJ', gstin: '', email: '', website: '', logoUrl: '' }
 }) => {
   const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>('LIST');
@@ -39,6 +40,27 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
     bundles: 1,
     totalWeight: 0
   });
+
+  // Auto-open new challan form pre-linked to a source order (e.g. from CONVERT_TO_DELIVERY_NOTE)
+  useEffect(() => {
+    if (initialOrderId && orders.length > 0) {
+      const sourceOrder = orders.find(o => o.id === initialOrderId);
+      if (sourceOrder) {
+        setFormData({
+          status: 'DRAFT',
+          items: sourceOrder.items || [],
+          orderDate: new Date().toISOString().split('T')[0],
+          customerName: sourceOrder.customerName,
+          shippingAddress: sourceOrder.shippingAddress || '',
+          transportName: sourceOrder.transportName || '',
+          vehicleNo: '',
+          bundles: 1,
+          totalWeight: 0,
+        });
+        setViewMode('FORM');
+      }
+    }
+  }, [initialOrderId, orders]);
 
   const challans = useMemo(() => orders.filter(o => o.id?.startsWith('DC')), [orders]);
 
@@ -60,7 +82,7 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
     } else {
        onAddChallan({
          ...formData,
-         id: `DC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+         id: `DC-${Date.now().toString().slice(-4)}`,
          totalAmount: 0,
          updatedAt: new Date().toISOString()
        } as Order);
@@ -142,7 +164,7 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
     autoTable(doc, {
         startY: nextY + 20,
         head: [['Item Code', 'Item Name', 'Quantity', 'UOM']],
-        body: challan.items.map((it: any) => [
+        body: (challan.items || []).map((it: any) => [
             it.productId || '',
             it.productName || '',
             it.quantity,

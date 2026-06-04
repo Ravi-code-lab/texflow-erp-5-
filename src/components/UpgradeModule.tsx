@@ -821,7 +821,7 @@ export const UpgradeModule: React.FC = () => {
                   { text: 'bench show-config', command: 'bench show-config' }
                 ].map((macro, idx) => (
                   <button 
-                    key={macro.command || idx}
+                    key={idx}
                     onClick={() => setTerminalInput(macro.command)}
                     className="px-3 py-1.5 text-[10px] font-mono font-black border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:border-indigo-500 rounded text-slate-700 dark:text-slate-300 transition-colors"
                   >

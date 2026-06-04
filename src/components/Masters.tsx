@@ -35,16 +35,21 @@ interface MastersProps {
   onDeleteTeam: (id: string) => void;
   onDeleteKarigar: (id: string) => void;
   onDeleteSupplier: (id: string) => void;
+  warehouses: any[];
+  onAddWarehouse: (w: any) => void;
+  onUpdateWarehouse: (w: any) => void;
+  onDeleteWarehouse: (id: string) => void;
   currency?: string;
 }
 
 const Masters: React.FC<MastersProps> = ({ 
   initialTab,
-  customers, team, agents, karigars, suppliers,
+  customers, team, agents, karigars, suppliers, warehouses,
   onAddCustomer, onUpdateCustomer, onAddAgent, onUpdateAgent, onDeleteAgent,
   onAddKarigar, onUpdateKarigar, onAddSupplier, onUpdateSupplier, 
   onAddTeam, onUpdateTeam,
   onDeleteCustomer, onDeleteKarigar, onDeleteSupplier, onDeleteTeam,
+  onAddWarehouse, onUpdateWarehouse, onDeleteWarehouse,
   currency = '₹'
 }) => {
   const [activeTab, setActiveTab] = useState<MasterTab>(initialTab || 'EMPLOYEES');
@@ -125,7 +130,12 @@ const Masters: React.FC<MastersProps> = ({
             />
           )}
           {activeTab === 'OFFICES' && (
-            <Offices />
+            <Offices 
+              warehouses={warehouses}
+              onAdd={onAddWarehouse}
+              onUpdate={onUpdateWarehouse}
+              onDelete={onDeleteWarehouse}
+            />
           )}
       </div>
     </div>

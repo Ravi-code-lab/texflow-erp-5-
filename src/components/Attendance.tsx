@@ -713,8 +713,8 @@ const Attendance: React.FC<AttendanceProps> = ({
                   const s = recordsMap.get(`${t.id}_${selectedDate}`)?.status;
                   return (s === AttendanceStatus.PRESENT || s === AttendanceStatus.HOLIDAY) ? acc + (t.dailyWage || 0) : acc;
               }, 0).toLocaleString()}`, icon: Landmark, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' }
-            ].map((stat) => (
-              <div key={stat.label} className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-3 shadow-sm">
+            ].map((stat, i) => (
+              <div key={i} className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-3 shadow-sm">
                 <div className={`p-2 rounded-lg ${stat.bg} ${stat.color}`}><stat.icon className="w-4 h-4"/></div>
                 <div><p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{stat.label}</p><h3 className="text-[11px] font-black text-slate-800 dark:text-white tabular-nums">{stat.val}</h3></div>
               </div>

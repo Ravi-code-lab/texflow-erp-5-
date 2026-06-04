@@ -91,7 +91,7 @@ const PurchaseInward: React.FC<PurchaseInwardProps> = ({
           }
        }
        // Update inventory quantities
-       pr.items.forEach(item => {
+       (pr.items || []).forEach(item => {
           const invItem = inventory.find(i => i.name === item.productName);
           if (invItem) {
              onUpdateInventory({
@@ -119,7 +119,7 @@ const PurchaseInward: React.FC<PurchaseInwardProps> = ({
     autoTable(doc, {
         startY: 50,
         head: [['Item Name', 'Quantity', 'Rate', 'Amount']],
-        body: r.items.map((it: any) => [
+        body: (r.items || []).map((it: any) => [
             it.productName,
             `${it.quantity} ${it.unit}`,
             `${currency}${it.unitPrice}`,

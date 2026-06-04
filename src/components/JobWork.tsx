@@ -85,6 +85,8 @@ export default function JobWorkComp({
     description: '', 
     issuedQuantity: 100, 
     receivedQuantity: 0, 
+    issuedLengthCm: undefined,
+    receivedLengthCm: undefined,
     rate: 120, 
     unit: 'Meter' 
   });
@@ -106,7 +108,7 @@ export default function JobWorkComp({
     const totalCount = jobs.length;
     const pendingQty = jobs.reduce((s, j) => {
       if (j.status === 'ISSUED' || j.status === 'IN_PROGRESS' || j.status === 'DRAFT') {
-        return s + j.items.reduce((sum, item) => sum + (item.issuedQuantity - item.receivedQuantity), 0);
+        return s + (j.items || []).reduce((sum, item) => sum + (item.issuedQuantity - item.receivedQuantity), 0);
       }
       return s;
     }, 0);
@@ -123,11 +125,11 @@ export default function JobWorkComp({
     const totalYieldPercentage = (() => {
       if (completedJobs.length === 0) return 98.4; // standard fallback typical for mills
       const sumYield = completedJobs.reduce((acc, j) => {
-        const issued = j.items.reduce((s, i) => s + i.issuedQuantity, 0);
-        const recv = j.items.reduce((s, l) => s + l.receivedQuantity, 0);
+        const issued = (j.items || []).reduce((s, i) => s + i.issuedQuantity, 0);
+        const recv = (j.items || []).reduce((s, l) => s + l.receivedQuantity, 0);
         return acc + (issued > 0 ? (recv / issued) * 100 : 100);
       }, 0);
-      return Math.round((sumYield / completedJobs.length) * 10) / 10;
+      return completedJobs.length > 0 ? Math.round((sumYield / completedJobs.length) * 10) / 10 : 0;
     })();
 
     return {
@@ -173,7 +175,9 @@ export default function JobWorkComp({
       unit: itemInput.unit || 'Meter',
       wastagePercent: 0,
       rejectedQuantity: 0,
-      receiptHistory: []
+      receiptHistory: [],
+      issuedLengthCm: Number(itemInput.issuedLengthCm) || undefined,
+      receivedLengthCm: 0,
     };
 
     setFormData(prev => ({
@@ -205,7 +209,7 @@ export default function JobWorkComp({
     let rawMaterialsCount = 0;
     const consolidatedBOM: Record<string, { name: string; qty: number; unit: string }> = {};
 
-    formData.items.forEach(item => {
+    (formData.items || []).forEach(item => {
       const design = designs.find(d => d.name === item.description);
       const expectedCount = item.issuedQuantity || 0;
 
@@ -296,7 +300,7 @@ export default function JobWorkComp({
       vendorName: formData.vendorName,
       process: formData.process || 'STITCHING',
       issueDate: formData.issueDate || new Date().toISOString().split('T')[0],
-      expectedDate: formData.expectedDate || new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      expectedDate: formData.expectedDate || new Date(Date.now() + 10 * 864 * 100000).toISOString().split('T')[0],
       status: 'ISSUED', // Submitted order shifts to Issued / transit
       items: compiledItems,
       suppliedItems: formData.suppliedItems || [],
@@ -375,14 +379,17 @@ export default function JobWorkComp({
   };
 
   // Simulates ERPNext Quality Purchase Receipt 
-  const handleProcessReceiptSim = (accepted: Record<number, number>, rejected: Record<number, number>) => {
+  const handleProcessReceiptSim = (accepted: Record<number, number>, rejected: Record<number, number>, acceptedLengthCm: Record<number, number>) => {
     const updatedItems = (formData.items || []).map((item, idx) => {
       const acceptVal = accepted[idx] ?? item.issuedQuantity;
       const rejectVal = rejected[idx] ?? 0;
+      const receivedLength = acceptedLengthCm[idx] ?? (item.issuedLengthCm || 0);
+
       return {
         ...item,
         receivedQuantity: acceptVal,
         rejectedQuantity: rejectVal,
+        receivedLengthCm: receivedLength,
         wastagePercent: Math.round(((item.issuedQuantity - acceptVal) / item.issuedQuantity) * 100)
       };
     });
@@ -666,8 +673,17 @@ export default function JobWorkComp({
                         className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-all cursor-pointer group h-12"
                       >
                         <td className="p-3 text-center">
-                          <div className={`w-8 h-8 mx-auto rounded flex items-center justify-center border ${processConf.bg}`}>
-                            <processConf.icon className={`w-4 h-4 ${processConf.color}`} />
+                          <div className="flex flex-col items-center gap-1">
+                            <div className={`w-8 h-8 rounded flex items-center justify-center border ${processConf.bg}`}>
+                              <processConf.icon className={`w-4 h-4 ${processConf.color}`} />
+                            </div>
+                            <ProductImageThumb
+                              productName={job.items?.[0]?.description || ''}
+                              sku={job.styleCode}
+                              designs={designs}
+                              inventory={inventory}
+                              size="sm"
+                            />
                           </div>
                         </td>
                         <td className="p-3">
@@ -889,6 +905,7 @@ export default function JobWorkComp({
                     <tr className="bg-slate-50 border-b">
                       <th className="p-2">Garment SKU Pattern</th>
                       <th className="p-2 text-center">Unit</th>
+                      <th className="p-2 text-right">Length (cm)</th>
                       <th className="p-2 text-right">Ordered Qty</th>
                       <th className="p-2 text-right">Inward Recv</th>
                       <th className="p-2 text-right">Svc Rate</th>
@@ -900,6 +917,11 @@ export default function JobWorkComp({
                       <tr key={i}>
                         <td className="p-2 font-bold uppercase">{item.description}</td>
                         <td className="p-2 text-center">{item.unit}</td>
+                        <td className="p-2 text-right font-mono text-[10px]">
+                          {item.issuedLengthCm ? (
+                            <span>{item.issuedLengthCm} → {item.receivedLengthCm || '?'}</span>
+                          ) : '—'}
+                        </td>
                         <td className="p-2 text-right font-mono font-bold">{item.issuedQuantity}</td>
                         <td className="p-2 text-right font-mono font-bold text-emerald-600">{item.receivedQuantity}</td>
                         <td className="p-1 px-2 text-right font-mono">{currency}{item.rate}</td>
@@ -1233,49 +1255,63 @@ export default function JobWorkComp({
                       <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Add Expected Product Row</span>
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
                         
-                        <div className="sm:col-span-6">
-                          <label className="text-[8px] font-black uppercase text-slate-500 block mb-1">Select Garment / Design Pattern Name</label>
-                          <select
-                            value={itemInput.description}
-                            onChange={e => setItemInput({ ...itemInput, description: e.target.value })}
-                            className="w-full text-xs font-bold border border-[#d1d8dd] rounded p-2 bg-white dark:bg-slate-900 outline-none text-slate-800 dark:text-white"
-                          >
-                            <option value="">Choose item SKU...</option>
-                            {designs.map(d => (
-                              <option key={d.id} value={d.name}>{d.name} ({d.sku})</option>
-                            ))}
-                          </select>
-                        </div>
+                        <div className="sm:col-span-12 grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+                          <div className="sm:col-span-5">
+                            <label className="text-[8px] font-black uppercase text-slate-500 block mb-1">Select Garment / Design / Fabric Name</label>
+                            <input
+                              type="text"
+                              value={itemInput.description || ''}
+                              onChange={e => setItemInput({ ...itemInput, description: e.target.value })}
+                              list="designs-list"
+                              placeholder="Choose or type item SKU..."
+                              className="w-full text-xs font-bold border border-[#d1d8dd] rounded p-2 bg-white dark:bg-slate-900 outline-none text-slate-800 dark:text-white"
+                            />
+                            <datalist id="designs-list">
+                              {designs.map(d => <option key={d.id} value={d.name}>{d.name} ({d.sku})</option>)}
+                            </datalist>
+                          </div>
+  
+                          <div className="sm:col-span-2">
+                            <label className="text-[8px] font-black uppercase text-slate-500 block mb-1">Length (cm) Optional</label>
+                            <input 
+                              type="number" 
+                              value={itemInput.issuedLengthCm || ''}
+                              onChange={e => setItemInput({ ...itemInput, issuedLengthCm: Number(e.target.value) })}
+                              placeholder="e.g. 100"
+                              className="w-full text-xs font-mono font-bold text-center border border-[#d1d8dd] rounded p-1.5"
+                            />
+                          </div>
 
-                        <div className="sm:col-span-2">
-                          <label className="text-[8px] font-black uppercase text-slate-500 block mb-1">Target Qty</label>
-                          <input 
-                            type="number" 
-                            value={itemInput.issuedQuantity || ''}
-                            onChange={e => setItemInput({ ...itemInput, issuedQuantity: Number(e.target.value) })}
-                            className="w-full text-xs font-mono font-bold text-center border border-[#d1d8dd] rounded p-1.5"
-                          />
-                        </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-[8px] font-black uppercase text-slate-500 block mb-1">Target Qty</label>
+                            <input 
+                              type="number" 
+                              value={itemInput.issuedQuantity || ''}
+                              onChange={e => setItemInput({ ...itemInput, issuedQuantity: Number(e.target.value) })}
+                              className="w-full text-xs font-mono font-bold text-center border border-[#d1d8dd] rounded p-1.5"
+                            />
+                          </div>
 
-                        <div className="sm:col-span-2">
-                          <label className="text-[8px] font-black uppercase text-slate-500 block mb-1">Service Rate (₹)</label>
-                          <input 
-                            type="number" 
-                            value={itemInput.rate || ''}
-                            onChange={e => setItemInput({ ...itemInput, rate: Number(e.target.value) })}
-                            className="w-full text-xs font-mono font-bold text-center border border-[#d1d8dd] rounded p-1.5"
-                          />
-                        </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-[8px] font-black uppercase text-slate-500 block mb-1">Service Rate (₹)</label>
+                            <input 
+                              type="number" 
+                              value={itemInput.rate || ''}
+                              onChange={e => setItemInput({ ...itemInput, rate: Number(e.target.value) })}
+                              className="w-full text-xs font-mono font-bold text-center border border-[#d1d8dd] rounded p-1.5"
+                            />
+                          </div>
 
-                        <div className="sm:col-span-2">
-                          <button
-                            type="button"
-                            onClick={handleAddItem}
-                            className="w-full bg-[#1b6bf9] hover:bg-[#1456d1] text-white text-[10px] font-black uppercase tracking-wider h-9 rounded shadow-sm focus:outline-none flex items-center justify-center gap-1"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add</span>
-                          </button>
+                          <div className="sm:col-span-1">
+                            <button
+                              type="button"
+                              onClick={handleAddItem}
+                              className="w-full bg-[#1b6bf9] hover:bg-[#1456d1] text-white text-[10px] font-black uppercase tracking-wider h-9 rounded shadow-sm focus:outline-none flex items-center justify-center gap-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1300,9 +1336,15 @@ export default function JobWorkComp({
                             />
                             <div>
                               <p className="font-extrabold text-slate-800 dark:text-white uppercase text-xs">{item.description}</p>
-                              <span className="text-[10px] font-semibold text-slate-500 block uppercase mt-0.5">
-                                Unit Rate: {currency}{item.rate} • Subtotal: {currency}{amount.toLocaleString()}
-                              </span>
+                              {item.issuedLengthCm ? (
+                                <span className="text-[10px] font-semibold text-slate-500 block mt-0.5">
+                                  Length: <span className="text-slate-800 dark:text-slate-200">{item.issuedLengthCm} cm</span> | Unit Rate: {currency}{item.rate} • Subtotal: {currency}{amount.toLocaleString()}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-semibold text-slate-500 block uppercase mt-0.5">
+                                  Unit Rate: {currency}{item.rate} • Subtotal: {currency}{amount.toLocaleString()}
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -1668,23 +1710,27 @@ export default function JobWorkComp({
 interface ReceiptInwardProps {
   items: JobWorkItem[];
   onClose: () => void;
-  onSubmit: (accepted: Record<number, number>, rejected: Record<number, number>) => void;
+  onSubmit: (accepted: Record<number, number>, rejected: Record<number, number>, acceptedLengthCm: Record<number, number>) => void;
 }
 
 function ReceiptInwardForm({ items, onClose, onSubmit }: ReceiptInwardProps) {
   const [accepted, setAccepted] = useState<Record<number, number>>({});
   const [rejected, setRejected] = useState<Record<number, number>>({});
+  const [acceptedLengthCm, setAcceptedLengthCm] = useState<Record<number, number>>({});
 
   useEffect(() => {
     // default set standard qty values to accelerate workflow
     const initialAccept: Record<number, number> = {};
     const initialReject: Record<number, number> = {};
+    const initialAcceptLength: Record<number, number> = {};
     items.forEach((item, idx) => {
       initialAccept[idx] = item.issuedQuantity;
       initialReject[idx] = 0;
+      initialAcceptLength[idx] = item.issuedLengthCm || 0;
     });
     setAccepted(initialAccept);
     setRejected(initialReject);
+    setAcceptedLengthCm(initialAcceptLength);
   }, [items]);
 
   return (
@@ -1709,17 +1755,25 @@ function ReceiptInwardForm({ items, onClose, onSubmit }: ReceiptInwardProps) {
           const currentReject = rejected[idx] ?? 0;
           const wastagePercent = Math.round(((expectVal - currentAccept) / (expectVal || 1)) * 100);
 
+          const expectLength = item.issuedLengthCm || 0;
+          const currentLength = acceptedLengthCm[idx] ?? expectLength;
+          let lengthLossCm = 0;
+          if (expectLength > 0) {
+            lengthLossCm = expectLength - currentLength;
+          }
+
           return (
             <div key={idx} className="p-4 border rounded-xl bg-white space-y-3 flex flex-col justify-between shadow-sm">
-              <div className="flex justify-between items-<ctrl94>">
+              <div className="flex justify-between items-start">
                 <div>
                   <p className="font-extrabold text-xs uppercase text-slate-800">{item.description}</p>
                   <p className="text-[10px] text-slate-400 font-bold block uppercase mt-0.5">Original Expect Target: {expectVal} {item.unit}</p>
+                  {expectLength > 0 && <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Issued Length: <span className="font-mono text-slate-700">{expectLength} cm</span></p>}
                 </div>
                 <div className="text-right">
                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block font-mono">Dynamic Yarn variance wastage</span>
-                  <span className={`text-[10px] font-black bg-rose-50 border border-rose-100 ${wastagePercent > 10 ? 'text-rose-600 bg-rose-50' : 'text-slate-400 bg-slate-50'} p-0.5 px-2 rounded mt-0.5 block`}>
-                    {wastagePercent}% loss
+                  <span className={`text-[10px] font-black bg-rose-50 border border-rose-100 ${(wastagePercent > 10 || lengthLossCm > 0) ? 'text-rose-600 bg-rose-50' : 'text-slate-400 bg-slate-50'} p-0.5 px-2 rounded mt-0.5 block`}>
+                    {expectLength > 0 ? `${lengthLossCm} cm loss` : `${wastagePercent}% loss`}
                   </span>
                 </div>
               </div>
@@ -1750,6 +1804,21 @@ function ReceiptInwardForm({ items, onClose, onSubmit }: ReceiptInwardProps) {
                   />
                 </div>
               </div>
+              
+              {expectLength > 0 && (
+                <div className="mt-2 pt-2 border-t border-slate-100">
+                  <label className="block text-[9px] font-black text-slate-600 uppercase tracking-wider mb-1">Received Length (cm)</label>
+                  <input 
+                    type="number"
+                    value={currentLength}
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      setAcceptedLengthCm({ ...acceptedLengthCm, [idx]: val });
+                    }}
+                    className="w-full text-xs font-mono font-bold border border-[#d1d8dd] rounded p-1.5 focus:outline-[#1b6bf9]" 
+                  />
+                </div>
+              )}
             </div>
           );
         })}
@@ -1761,7 +1830,7 @@ function ReceiptInwardForm({ items, onClose, onSubmit }: ReceiptInwardProps) {
         </button>
         <button 
           type="button" 
-          onClick={() => onSubmit(accepted, rejected)} 
+          onClick={() => onSubmit(accepted, rejected, acceptedLengthCm)} 
           className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold shadow-md"
         >
           Verify QA & Inward Stock

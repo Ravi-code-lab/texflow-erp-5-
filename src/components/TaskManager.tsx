@@ -42,7 +42,7 @@ export default function TaskManager({ tasks, team, onAddTask, onUpdateTask, onDe
       <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
         <div>
           <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
-            <CheckSquare className="w-5 h-5 text-indigo-500" />
+            <CheckSquare className="w-5 h-5 text-indigo-505 text-indigo-500" />
             Internal Workstation Tasks & SLA Queue
           </h3>
           <p className="text-xs text-slate-401 text-slate-400">Distribute tasks to operators and craftsmen under strict manufacturing SLA terms.</p>
@@ -52,7 +52,7 @@ export default function TaskManager({ tasks, team, onAddTask, onUpdateTask, onDe
             setAssignee(team[0]?.name || '');
             setIsOpen(true);
           }}
-          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+          className="px-3.5 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Dispatch Task
         </button>
@@ -96,7 +96,7 @@ export default function TaskManager({ tasks, team, onAddTask, onUpdateTask, onDe
 
               <button
                 onClick={() => onDeleteTask(t.id)}
-                className="p-1 hover:bg-slate-50 dark:hover:bg-slate-850 rounded text-slate-400 hover:text-rose-605 transition"
+                className="p-1 hover:bg-slate-50 dark:hover:bg-slate-850 rounded text-slate-350 hover:text-rose-605 transition"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -156,7 +156,7 @@ export default function TaskManager({ tasks, team, onAddTask, onUpdateTask, onDe
               <button type="button" onClick={() => setIsOpen(false)} className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg font-bold text-slate-500 text-xs">
                 Cancel
               </button>
-              <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs">
+              <button type="submit" className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs">
                 Confirm Allocation
               </button>
             </div>

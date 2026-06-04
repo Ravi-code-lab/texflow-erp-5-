@@ -5,7 +5,7 @@ import {
   MoreHorizontal, ArrowLeft, Save, ChevronLeft, ChevronRight,
   Trash2
 } from 'lucide-react';
-import { resolveSupplierLink } from '../modules/documentEngine';
+import ProductImageThumb from './ProductImageThumb';
 
 interface PurchaseInvoiceProps {
   purchaseInvoices: PurchaseOrder[];
@@ -46,18 +46,12 @@ const PurchaseInvoiceComp: React.FC<PurchaseInvoiceProps> = ({
     e.preventDefault();
     if (!formData.supplierName || !formData.items?.length) return;
 
-    let supplierId: string;
-    try {
-      supplierId = resolveSupplierLink(suppliers, formData.supplierId || formData.supplierName);
-    } catch (err: any) {
-      alert(err.message);
-      return;
-    }
+    const supplier = suppliers.find(s => s.name === formData.supplierName);
 
     const oData = {
       ...formData,
-      id: formData.id || `PINV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-      supplierId,
+      id: formData.id || `PINV-${Date.now().toString().slice(-4)}`,
+      supplierId: formData.supplierId || supplier?.id || 'SUP-XXX',
       totalAmount: subTotal + taxAmount
     } as PurchaseOrder;
 
@@ -228,6 +222,7 @@ const PurchaseInvoiceComp: React.FC<PurchaseInvoiceProps> = ({
                              <table className="w-full mt-4 text-left border-collapse">
                                 <thead>
                                    <tr className="bg-[#f4f5f6] text-xs text-[#525c66] border-y border-[#d1d8dd]">
+                                      <th className="py-2 pl-3 font-medium w-10"></th>
                                       <th className="py-2 pl-3 font-medium">Item</th>
                                       <th className="py-2 px-3 font-medium text-right">Quantity</th>
                                       <th className="py-2 px-3 font-medium text-right">Rate</th>
@@ -236,8 +231,11 @@ const PurchaseInvoiceComp: React.FC<PurchaseInvoiceProps> = ({
                                    </tr>
                                 </thead>
                                 <tbody>
-                                   {formData.items.map((item, idx) => (
+                                   {(formData.items || []).map((item, idx) => (
                                       <tr key={idx} className="border-b border-[#d1d8dd]/50">
+                                         <td className="py-2 pl-2">
+                                           <ProductImageThumb productName={item.productName} inventory={inventory} size="sm" />
+                                         </td>
                                          <td className="py-2 pl-3 font-semibold text-[#1c2126]">{item.productName}</td>
                                          <td className="py-2 px-3 text-right">{item.quantity}</td>
                                          <td className="py-2 px-3 text-right">{item.unitPrice}</td>

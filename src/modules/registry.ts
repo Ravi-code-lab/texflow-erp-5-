@@ -167,7 +167,7 @@ export const ERP_MODULE_GROUPS: ERPModuleGroup[] = [
     description: 'Inventory management, stock entries and item ledgers',
     items: [
       { id: 'INVENTORY', label: 'Item Master', doctype: 'Item', module: 'stock', icon: PackageSearch, description: 'Manage raw material and item records', keywords: ['item', 'material', 'product', 'fabric', 'yarn'] },
-      { id: 'OPENING_STOCK', label: 'Opening Stock', doctype: 'Stock Opening', module: 'stock', icon: Database, description: 'Set initial stock quantities and valuations' },
+      { id: 'OPENING_STOCK', label: 'Ready Stock', doctype: 'Stock Opening', module: 'stock', icon: Database, description: 'Printed fabric, ready PC and finished goods store' },
       { id: 'CATALOG', label: 'Product Catalog', doctype: 'Item Variant', module: 'stock', icon: Palette, description: 'Design catalog with variants and images', keywords: ['design', 'catalog', 'product'] },
       { id: 'STOCK_TRANSFER', label: 'Stock Entry', doctype: 'Stock Entry', module: 'stock', icon: ArrowRightLeft, description: 'Material transfers between warehouses' },
       { id: 'STOCK_AUDIT', label: 'Stock Reconciliation', doctype: 'Stock Reconciliation', module: 'stock', icon: SearchCheck, description: 'Physical audit and stock reconciliation' },

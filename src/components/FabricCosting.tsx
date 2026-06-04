@@ -609,7 +609,7 @@ export const FabricCostingWorkspace: React.FC<FabricCostingProps> = ({
               <div className="space-y-1.5 pt-4">
                 <span className="font-black text-[10px] uppercase tracking-wider text-slate-400">Value Stream Allocation Percent</span>
                 <div className="h-5 w-full bg-slate-100 rounded overflow-hidden flex select-none text-[9px] font-black tracking-tight text-white font-mono">
-                  <div className="h-full bg-slate-800 flex items-center justify-center truncate" style={{ width: `${Math.round((rawMaterialCost / finalSellingPriceGross) * 100) || 30}%` }} title="Raw material">
+                  <div className="h-full bg-slate-800 flex items-center justify-center truncate" style={{ width: `${finalSellingPriceGross > 0 ? Math.round((rawMaterialCost / finalSellingPriceGross) * 100) : 30}%` }} title="Raw material">
                     RAW ({(Math.round((rawMaterialCost / finalSellingPriceGross) * 100)) || 30}%)
                   </div>
                   <div className="h-full bg-indigo-600 flex items-center justify-center truncate" style={{ width: `${Math.round((processingCost / finalSellingPriceGross) * 100) || 20}%` }} title="Wet & Dry treatment">
@@ -637,7 +637,7 @@ export const FabricCostingWorkspace: React.FC<FabricCostingProps> = ({
 
             <div className="bg-[#eff6ff] border border-blue-200 rounded-xl p-4 text-xs space-y-2">
               <h5 className="font-bold text-blue-900 flex items-center gap-1">
-                <AlertCircle className="w-4 h-4 text-blue-600" />
+                <AlertCircle className="w-4 h-4 text-blue-650" />
                 Dobby Loom Yield
               </h5>
               <p className="text-blue-800 leading-relaxed text-[11px]">

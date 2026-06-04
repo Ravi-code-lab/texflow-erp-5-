@@ -58,10 +58,7 @@ const Orders: React.FC<OrdersProps> = ({
     return ad > 0 ? (subTotal * ad / 100) : 0;
   }, [subTotal, formData.additionalDiscount]);
 
-  // Bug fix: fixed-amount discount (additionalDiscountAmt field) was collected
-  // in the form but never subtracted from the grand total. Apply it after % discount.
-  const fixedDiscountAmt = (formData as any).additionalDiscountAmt || 0;
-  const taxableAmount = Math.max(0, subTotal - additionalDiscountAmt - fixedDiscountAmt);
+  const taxableAmount = subTotal - additionalDiscountAmt;
   const taxAmt = taxableAmount * ((formData.taxRate || 0) / 100);
   const grandTotal = taxableAmount + taxAmt;
 
@@ -81,7 +78,7 @@ const Orders: React.FC<OrdersProps> = ({
     if (!formData.customerName || !formData.items?.length) return;
     const orderData = {
       ...formData,
-      id: formData.id || `ORD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`,
+      id: formData.id || `ORD-${Date.now().toString().slice(-4)}`,
       totalAmount: grandTotal,
     } as Order;
     if (formData.id) onUpdateOrder(orderData);
@@ -103,7 +100,7 @@ const Orders: React.FC<OrdersProps> = ({
 
   const duplicateOrder = (o: Order) => {
     const dup = { ...o, id: '', status: 'PENDING' as any, paymentStatus: 'UNPAID' as any, orderDate: new Date().toISOString().split('T')[0] };
-    onAddOrder({ ...dup, id: `ORD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}` } as Order);
+    onAddOrder({ ...dup, id: `ORD-${Date.now().toString().slice(-4)}` } as Order);
   };
 
   const shareWhatsApp = () => {
@@ -385,7 +382,7 @@ const Orders: React.FC<OrdersProps> = ({
                         setNewItem({...newItem, productName: e.target.value, unitPrice: (d as any)?.processCostPerPiece ? (d as any).processCostPerPiece * 1.5 : (d as any)?.pricePerUnit || 0});
                       }} />
                     <datalist id="prod-list">{[...designs,...inventory].map(x => <option key={x.id} value={x.name}/>)}</datalist>
-                    <input type="number" className={inputCls + " w-20"} placeholder="Qty" min="0" value={newItem.quantity || ''} onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})} />
+                    <input type="number" className={inputCls + " w-20"} placeholder="Qty" value={newItem.quantity || ''} readOnly />
                     <input type="number" className={inputCls + " w-24"} placeholder="Rate" value={newItem.unitPrice || ''}
                       onChange={e => setNewItem({...newItem, unitPrice: Number(e.target.value)})} />
                     <input type="number" className={inputCls + " w-20"} placeholder="Disc %" value={(newItem as any).discount || ''}
@@ -419,7 +416,7 @@ const Orders: React.FC<OrdersProps> = ({
                         {(formData.items || []).map((item, idx) => {
                           const discountedAmt = item.quantity * item.unitPrice * (1 - ((item as any).discount || 0) / 100);
                           return (
-                            <tr key={(item as any).id || item.productName + idx} className="border-b border-[#d1d8dd]/50 hover:bg-[#f4f5f6]/50">
+                            <tr key={idx} className="border-b border-[#d1d8dd]/50 hover:bg-[#f4f5f6]/50">
                               <td className="py-2 pl-3 font-semibold text-[#1c2126]">{item.productName}</td>
                               <td className="py-2 px-3">
                                 <input className="w-full text-[11px] text-[#8d99a6] bg-transparent border-0 outline-none focus:bg-white focus:border focus:border-[#d1d8dd] focus:rounded px-1 transition-all"

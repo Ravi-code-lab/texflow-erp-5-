@@ -401,7 +401,7 @@ const Production: React.FC<ProductionProps> = ({
     saveGarmentSetup({
       ...garmentSetup,
       routingTemplates: garmentSetup.routingTemplates.map(route =>
-        route.id === selectedRoute.id ? { ...route, operations: route.operations.filter(operation => operation.id !== operationId) } : route
+        route.id === selectedRoute.id ? { ...route, operations: (route.operations || []).filter(operation => operation.id !== operationId) } : route
       ),
     });
   };
@@ -693,7 +693,7 @@ const Production: React.FC<ProductionProps> = ({
                       <span className="text-sm font-black">{route.name}</span>
                       <span className="text-[10px] font-black uppercase tracking-widest opacity-70">{route.category}</span>
                     </div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 mt-1">{route.operations.length} operations</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 mt-1">{(route.operations || []).length} operations</p>
                   </button>
                 ))}
               </div>

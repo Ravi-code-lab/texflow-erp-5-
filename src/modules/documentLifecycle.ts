@@ -1,11 +1,5 @@
 import { AuditLog, BaseEntity } from '../types';
 
-// Monotonic counter so audit IDs are unique even when two events fire in the same millisecond
-let _auditCounter = 0;
-function genAuditId(): string {
-  return `AUDIT-${Date.now().toString(36).toUpperCase()}-${(++_auditCounter).toString(36).toUpperCase()}`;
-}
-
 /**
  * Stamps a new document with created-by metadata.
  */
@@ -70,7 +64,7 @@ export function createAuditLog(
 ): AuditLog {
   const now = new Date().toISOString();
   return {
-    id: genAuditId(),
+    id: `AUDIT-${Date.now().toString(36).toUpperCase()}`,
     entityType,
     entityId,
     action,

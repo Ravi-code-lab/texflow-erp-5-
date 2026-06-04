@@ -113,7 +113,7 @@ const QualityControl: React.FC<QualityControlProps> = ({ reports, inspections = 
 
   const handleAnalyze = async () => {
     setAnalyzing(true);
-    const result = await analyzeQualityTrends(reports, geminiApiKey);
+    const result = await analyzeQualityTrends(reports);
     setAnalysis(result);
     setAnalyzing(false);
   };
@@ -133,7 +133,7 @@ const QualityControl: React.FC<QualityControlProps> = ({ reports, inspections = 
   const handleVisualAnalyze = async () => {
     if (!selectedImage) return;
     setVisualAnalyzing(true);
-    const result = await analyzeFabricDefect(selectedImage, geminiApiKey);
+    const result = await analyzeFabricDefect(selectedImage);
     setVisualAnalysis(result);
     setVisualAnalyzing(false);
   };

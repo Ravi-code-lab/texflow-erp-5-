@@ -1,10 +1,8 @@
 import { GoogleGenAI } from '@google/genai';
 
-// Accept an optional runtime API key (from user Settings → Security → Gemini API Key).
-// Falls back to the build-time env var so existing deployments keep working.
-function getGeminiClient(runtimeKey?: string): GoogleGenAI | null {
-  const key = runtimeKey ||
-    (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined);
+// Safe lazy initialization helper to avoid module-load crashes if key is missing
+function getGeminiClient(): GoogleGenAI | null {
+  const key = typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined;
   if (!key) return null;
   try {
     return new GoogleGenAI({ apiKey: key });
@@ -13,8 +11,8 @@ function getGeminiClient(runtimeKey?: string): GoogleGenAI | null {
   }
 }
 
-export async function analyzeProjectHealth(projectData: any, apiKey?: string): Promise<string> {
-  const client = getGeminiClient(apiKey);
+export async function analyzeProjectHealth(projectData: any): Promise<string> {
+  const client = getGeminiClient();
   if (client) {
     try {
       const response = await client.models.generateContent({
@@ -27,12 +25,15 @@ export async function analyzeProjectHealth(projectData: any, apiKey?: string): P
     }
   }
 
-  // Fallback analysis report
-  return `### Project Health & Analysis Report (Offline Fallback)\n* **Risk Assessment**: Moderate routing alignment constraints.\n* **Bottlenecks**: Workstation efficiency at STITCHING is currently at 84% capacity.\n* **Recommendations**: Consolidated stitching tasks into double shifts for upcoming lot batches. Enhance quality inspection rates on the early cutting steps.`;
+  // Beautiful fallback analysis report
+  return `### Project Health & Analysis Report (Offline Fallback)
+* **Risk Assessment**: Moderate routing alignment constraints.
+* **Bottlenecks**: Workstation efficiency at STITCHING is currently at 84% capacity.
+* **Recommendations**: Consolidated stitching tasks into double shifts for upcoming lot batches. Enhance quality inspection rates on the early cutting steps.`;
 }
 
-export async function analyzeQualityTrends(qualityData: any, apiKey?: string): Promise<string> {
-  const client = getGeminiClient(apiKey);
+export async function analyzeQualityTrends(qualityData: any): Promise<string> {
+  const client = getGeminiClient();
   if (client) {
     try {
       const response = await client.models.generateContent({
@@ -45,11 +46,14 @@ export async function analyzeQualityTrends(qualityData: any, apiKey?: string): P
     }
   }
 
-  return `### AI Quality Trend Analysis (Offline Fallback)\n* **Error Rate**: 1.8% defect density observed across cotton fabric inputs.\n* **Core Cause**: Thread count mismatches detected on high-speed loom feed lines.\n* **Actionable Advice**: Adjust tension rollers on active warp beams. Schedule physical audit of raw yarn packages before dispatch.`;
+  return `### AI Quality Trend Analysis (Offline Fallback)
+* **Error Rate**: 1.8% defect density observed across cotton fabric inputs.
+* **Core Cause**: Thread count mismatches detected on high-speed loom feed lines.
+* **Actionable Advice**: Adjust tension rollers on active warp beams. Schedule physical audit of raw yarn packages before dispatch.`;
 }
 
-export async function analyzeFabricDefect(defectDetails: any, apiKey?: string): Promise<any> {
-  const client = getGeminiClient(apiKey);
+export async function analyzeFabricDefect(defectDetails: any): Promise<any> {
+  const client = getGeminiClient();
   if (client) {
     try {
       const response = await client.models.generateContent({

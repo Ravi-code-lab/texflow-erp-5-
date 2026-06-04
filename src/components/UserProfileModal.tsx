@@ -24,7 +24,7 @@ export default function UserProfileModal({ isOpen, onClose, user, onUpdate, onLo
         </button>
 
         <div className="text-center pb-4">
-          <div className="w-16 h-16 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 flex items-center justify-center mx-auto mb-3">
+          <div className="w-16 h-16 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 flex items-center justify-center mx-auto mb-3">
             <User className="w-8 h-8" />
           </div>
           <h3 className="font-bold text-slate-800 dark:text-white text-base">User Profile Configuration</h3>
@@ -64,7 +64,7 @@ export default function UserProfileModal({ isOpen, onClose, user, onUpdate, onLo
           <button
             type="submit"
             onClick={() => {
-              onUpdate({ ...user, name, email, role });
+              onUpdate({ ...user, name, email });
               onClose();
             }}
             className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors"

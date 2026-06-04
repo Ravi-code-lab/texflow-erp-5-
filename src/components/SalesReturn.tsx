@@ -106,7 +106,7 @@ const SalesReturn: React.FC<SalesReturnProps> = ({
 
     // 1. ERPNext Inventory Restock update trigger
     if (autoRestock && onUpdateInventory && inventory && inventory.length > 0) {
-      formData.items.forEach(item => {
+      (formData.items || []).forEach(item => {
         const itemLower = item.productName.toLowerCase();
         const matchedInv = inventory.find(i => i.name.toLowerCase() === itemLower);
         if (matchedInv) {
@@ -125,7 +125,7 @@ const SalesReturn: React.FC<SalesReturnProps> = ({
         date: formData.orderDate || new Date().toISOString().split('T')[0],
         description: `Ref Return ${returnData.id} for ${formData.customerName}: ${reasonsText}`,
         amount: calculatedTotal,
-        type: 'EXPENSE',
+        type: 'CREDIT',
         category: 'SALES_RETURN',
         paymentMethod: 'LEDGER_ADJUSTMENT',
         subType: 'CREDIT_NOTE',
@@ -167,7 +167,7 @@ const SalesReturn: React.FC<SalesReturnProps> = ({
     const inv = orders.find(o => o.id === linkedInvoiceId);
     if (inv && inv.items) {
       // Copy items but allow setting return quantity
-      const pulled = inv.items.map(item => ({
+      const pulled = (inv.items || []).map(item => ({
         ...item,
         quantity: item.quantity
       }));
@@ -491,7 +491,7 @@ const SalesReturn: React.FC<SalesReturnProps> = ({
                                   </tr>
                                </thead>
                                <tbody>
-                                  {formData.items.map((item, idx) => (
+                                  {(formData.items || []).map((item, idx) => (
                                      <tr key={idx} className="border-b border-[#d1d8dd]/50 hover:bg-[#fcfdfd] text-xs">
                                         <td className="py-2.5 pl-3 font-semibold text-slate-800">
                                            <div className="flex items-center gap-2">

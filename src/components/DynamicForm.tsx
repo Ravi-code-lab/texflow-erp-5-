@@ -101,7 +101,7 @@ function NumberField({ field, value, onChange, readOnly, isCurrency }: FieldProp
       <input
         type="number"
         value={value ?? ''}
-        onChange={e => onChange(field.fieldtype === 'Int' ? parseInt(e.target.value) : parseFloat(e.target.value))}
+        onChange={e => { const v = field.fieldtype === 'Int' ? parseInt(e.target.value) : parseFloat(e.target.value); if (!isNaN(v)) onChange(v); }}
         placeholder="0"
         className={`${readOnly ? readonlyBase : inputBase} ${isCurrency ? 'pl-7' : ''}`}
         disabled={readOnly}
@@ -380,21 +380,22 @@ export function DynamicForm<T extends Record<string, any>>({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = async () => {
+  const handleSave = async (overrides?: Record<string, any>) => {
     if (readOnly || !validate()) return;
     setSaving(true);
     setSaveError(null);
     try {
+      const effectiveValues = overrides ? { ...values, ...overrides } : values;
       let doc: T;
       if (isEditMode) {
         doc = prepareDocumentUpdate(
-          values as any,
+          effectiveValues as any,
           initialValues as any,
           currentUser
         ) as any;
       } else {
-        const created = createERPDocument(schema!.view, values as T, {
-          status: values.status,
+        const created = createERPDocument(schema!.view, effectiveValues as T, {
+          status: effectiveValues.status,
         });
         doc = prepareDocumentCreate(created as any, currentUser) as any;
       }
@@ -409,8 +410,8 @@ export function DynamicForm<T extends Record<string, any>>({
   const handleWorkflowAction = async (toStatus: string) => {
     if (readOnly) return;
     setValue('status', toStatus);
-    // Slight delay so state settles, then auto-save
-    setTimeout(() => handleSave(), 0);
+    // Pass the new status directly to avoid stale closure over `values`
+    await handleSave({ status: toStatus });
   };
 
   if (!schema) {

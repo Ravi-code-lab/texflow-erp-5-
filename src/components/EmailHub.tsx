@@ -61,15 +61,9 @@ export default function EmailHub({
       });
       const data = await res.json();
       if (res.ok) {
-        // Guard: data or data.emails may be null/false if the mailbox is not open
-        if (!data || data === false) {
-          setEmails([]);
-          setError("Mailbox is not accessible. Please check your SMTP/IMAP configuration.");
-          return;
-        }
-        setEmails(Array.isArray(data.emails) ? data.emails : []);
+        setEmails(data.emails || []);
       } else {
-        setError(data?.error || "Failed to fetch emails");
+        setError(data.error || "Failed to fetch emails");
       }
     } catch (err: any) {
       setError(err.message || "Network Error");
@@ -80,7 +74,7 @@ export default function EmailHub({
 
   const handleSend = async () => {
     if (!composeData.to || !composeData.subject) {
-       setError("Please fill in both To address and Subject before sending.");
+       alert("Please fill to and subject.");
        return;
     }
     
@@ -106,13 +100,12 @@ export default function EmailHub({
        if (res.ok) {
           setIsComposing(false);
           setComposeData({ to: '', subject: '', body: '' });
-          // Bug fix: replaced blocking alert() with inline success state
-          setError(null);
+          alert("Email sent!");
        } else {
-          setError("Failed to send: " + (data?.error || "Unknown error"));
+          alert("Error sending: " + data.error);
        }
     } catch(err: any) {
-       setError("Send error: " + (err?.message || "Network failure"));
+       alert("Error: " + err.message);
     } finally {
        setSending(false);
     }
@@ -255,8 +248,8 @@ export default function EmailHub({
                             placeholder="Recipient email address"
                          />
                          <datalist id="contact-emails">
-                            {contactEmails.map((c) => (
-                               <option key={c.email} value={c.email}>{c.name} ({c.type})</option>
+                            {contactEmails.map((c, i) => (
+                               <option key={i} value={c.email}>{c.name} ({c.type})</option>
                             ))}
                          </datalist>
                       </div>
@@ -327,7 +320,7 @@ export default function EmailHub({
                             ${selectedEmail.html}
                           `} 
                           className="w-full h-full border-none"
-                          sandbox="allow-popups allow-popups-to-escape-sandbox"
+                          sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
                           title="Email Content"
                         />
                      </div>
@@ -346,7 +339,7 @@ export default function EmailHub({
                         </h4>
                         <div className="flex flex-wrap gap-3">
                            {selectedEmail.attachments.map((att, i) => (
-                              <div key={(att.filename || 'file') + '_' + i} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 max-w-xs hover:bg-slate-100 transition-colors cursor-pointer">
+                              <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 max-w-xs hover:bg-slate-100 transition-colors cursor-pointer">
                                  <div className="w-8 h-8 rounded bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase shrink-0">
                                     {att.filename?.split('.').pop()?.substring(0, 3) || 'FILE'}
                                  </div>

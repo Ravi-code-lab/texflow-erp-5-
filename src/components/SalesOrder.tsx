@@ -44,7 +44,8 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
   const [customFields, setCustomFields] = useState<any[]>([]);
 
   useEffect(() => {
-    const raw = localStorage.getItem('erpnext_custom_fields');
+    let raw: string | null = null;
+    try { raw = localStorage.getItem('erpnext_custom_fields'); } catch {}
     if (raw) {
       try {
         const parsed = JSON.parse(raw);

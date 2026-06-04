@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Design, InventoryItem, RecipeItem, DesignLaborCost } from '../types';
 import {
   Palette, Search, Plus, Filter,
@@ -141,12 +141,33 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
       const r = m?.pricePerUnit || item.estimatedCost || 0;
       return acc + item.quantity * r * (1 + (item.wastagePercent || 0) / 100);
     }, 0);
-    const lab = Object.values(form.laborCosts || {}).reduce((a: number, b: any) => a + (Number(b) || 0), 0);
+    const lab = Object.values(form.laborCosts || {}).reduce((a: number, b: any) => a + (Number(b) || 0), 0) - (form.laborCosts?.printingRate || 0);
     const sub = mat + lab;
     const loss = sub * ((form.processLossPercent || 0) / 100);
     const landed = sub + loss;
     return { mat, lab, loss, landed, wsp: landed * (1 + (form.targetMargin || 0) / 100) };
   }, [form.recipe, form.laborCosts, form.processLossPercent, form.targetMargin, inventory]);
+
+  useEffect(() => {
+    if (form.laborCosts?.printingRate !== undefined && form.laborCosts.printingRate > 0) {
+      const pRate = form.laborCosts.printingRate;
+      const mtrQty = (form.recipe || []).reduce((acc: number, item: any) => {
+        return acc + ((item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR') ? (Number(item.quantity) || 0) : 0);
+      }, 0);
+      const calculatedPrinting = pRate * mtrQty;
+      
+      if (form.laborCosts.printing !== calculatedPrinting) {
+        // use a distinct update so we don't cause render loops
+        setForm((prev: any) => ({
+          ...prev,
+          laborCosts: {
+            ...prev.laborCosts,
+            printing: calculatedPrinting
+          }
+        }));
+      }
+    }
+  }, [form.recipe, form.laborCosts?.printingRate]);
 
   const handleSave = () => {
     if (!form.name) return;
@@ -573,6 +594,36 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
                     </div>
                   </FF>
                 ))}
+                
+                <div className="col-span-4 border-t pt-4 mt-2">
+                  <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest mb-3">Printing Calculation (Auto)</h4>
+                  <div className="grid grid-cols-4 gap-x-6 gap-y-4">
+                    <FF label="Printing Rate (per Meter)">
+                      <div className="relative"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[#8d99a6]">{currency}</span>
+                        <input type="number" min={0} className={inp + ' pl-6'} value={form.laborCosts?.printingRate || ''} 
+                          onChange={e => {
+                            const pRate = Number(e.target.value);
+                            const mtrQty = (form.recipe || []).reduce((acc: number, item: any) => {
+                              return acc + ((item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR') ? (Number(item.quantity) || 0) : 0);
+                            }, 0);
+                            set({ laborCosts: { ...form.laborCosts, printingRate: pRate, printing: pRate * mtrQty } });
+                          }} 
+                        />
+                      </div>
+                    </FF>
+                    <FF label="Total Fabric (Meters)">
+                      <div className="relative">
+                        <input type="text" readOnly className={inp + ' bg-slate-50 font-mono'} value={(form.recipe || []).reduce((acc: number, item: any) => acc + ((item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR') ? (Number(item.quantity) || 0) : 0), 0) + ' MTR'} />
+                      </div>
+                    </FF>
+                    <FF label="Printing Cost (Auto)">
+                      <div className="relative"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[#8d99a6]">{currency}</span>
+                        <input type="number" readOnly className={inp + ' pl-6 bg-slate-50 font-bold text-[#1b6bf9]'} value={form.laborCosts?.printing || ''} />
+                      </div>
+                    </FF>
+                  </div>
+                </div>
+
                 <FF label="Process Loss %" hint="% overhead on wastage"><input type="number" min={0} max={100} className={inp} value={form.processLossPercent || ''} onChange={e => set({ processLossPercent: Number(e.target.value) })} /></FF>
               </div>
             </Card>
@@ -689,7 +740,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
                   </tr></thead>
                   <tbody>
                     {(form.qualitySpecs || []).map((s: any, idx: number) => (
-                      <tr key={(row as any).id || (mat as any)?.name || idx} className="border-b border-[#f0f2f5] hover:bg-[#f7f9fb]">
+                      <tr key={s.id || s.name || idx} className="border-b border-[#f0f2f5] hover:bg-[#f7f9fb]">
                         <td className="py-2.5 pl-3 text-[13px] font-medium">{s.param}</td>
                         <td className="py-2.5 px-3 text-[12px] text-[#525c66]">{s.value}</td>
                         <td className="py-2.5 px-3 text-[12px] text-[#525c66]">{s.tolerance || '—'}</td>
@@ -726,7 +777,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
                   </tr></thead>
                   <tbody>
                     {(form.supplierList || []).map((s: any, idx: number) => (
-                      <tr key={(row as any).id || (mat as any)?.name || idx} className="border-b border-[#f0f2f5] hover:bg-[#f7f9fb]">
+                      <tr key={s.id || s.name || idx} className="border-b border-[#f0f2f5] hover:bg-[#f7f9fb]">
                         <td className="py-2.5 pl-3 text-[13px] font-medium flex items-center gap-2"><Truck className="w-3.5 h-3.5 text-[#8d99a6]" />{s.name}</td>
                         <td className="py-2.5 px-3 text-[12px] text-[#525c66]">{s.leadTime || '—'}</td>
                         <td className="py-2.5 px-3 text-[12px] text-[#525c66]">{s.minQty || '—'}</td>

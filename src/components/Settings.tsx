@@ -13,8 +13,9 @@ import {
 import { exportAllDataToZip, restoreDataFromZip, clearAllDataFlag } from '../utils/indexedDB';
 import { 
   TeamMember, UIPreferences, CompanyInfo, 
-  InvoiceConfig, ShopifyConfig, SecurityConfig, CommunicationConfig, AdvancedConfig
+  InvoiceConfig, ShopifyConfig, SecurityConfig, CommunicationConfig, AdvancedConfig, RolePermission, UserRole
 } from '../types';
+import { ERP_MODULE_GROUPS } from '../modules/registry';
 
 const isElectron = typeof window !== 'undefined' && (window as any).process && (window as any).process.type === 'renderer';
 const ipc = isElectron ? (window as any).require('electron').ipcRenderer : null;
@@ -38,6 +39,10 @@ interface SettingsProps {
   companyInfo: CompanyInfo;
   onUpdateCompanyInfo: (info: CompanyInfo) => void;
   lastSync: string;
+  rolePermissions?: RolePermission[];
+  onAddRolePermission?: (rp: RolePermission) => void;
+  onUpdateRolePermission?: (rp: RolePermission) => void;
+  onDeleteRolePermission?: (id: string) => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({ 
@@ -47,9 +52,13 @@ const Settings: React.FC<SettingsProps> = ({
   securityConfig, onUpdateSecurityConfig,
   communicationConfig, onUpdateCommunicationConfig,
   advancedConfig, onUpdateAdvancedConfig,
-  lastSync
+  lastSync,
+  rolePermissions = [],
+  onAddRolePermission,
+  onUpdateRolePermission,
+  onDeleteRolePermission
 }) => {
-  const [activeTab, setActiveTab] = useState<'COMPANY' | 'BILLING' | 'MODULES' | 'CUSTOMIZER' | 'THEME' | 'STORAGE' | 'INTEGRATIONS' | 'SECURITY' | 'SERVER' | 'COMMUNICATION' | 'ADVANCED'>('COMPANY');
+  const [activeTab, setActiveTab] = useState<'COMPANY' | 'BILLING' | 'MODULES' | 'CUSTOMIZER' | 'THEME' | 'STORAGE' | 'INTEGRATIONS' | 'SECURITY' | 'RBAC' | 'SERVER' | 'COMMUNICATION' | 'ADVANCED'>('COMPANY');
   const [isSaving, setIsSaving] = useState(false);
   const [vaultStatus, setVaultStatus] = useState<any>(null);
   
@@ -225,71 +234,7 @@ const Settings: React.FC<SettingsProps> = ({
     });
   };
 
-  const moduleGroups = [
-    {
-      id: 'SALES',
-      label: 'Sales Matrix',
-      icon: ShoppingCart,
-      subs: [
-        { id: 'ORDERS', label: 'Sales Orders' },
-        { id: 'DELIVERY_CHALLAN', label: 'Delivery Challans' },
-        { id: 'TAX_INVOICE', label: 'Tax Invoices' },
-        { id: 'SALES_RETURN', label: 'Sales Returns' },
-        { id: 'CREDIT_NOTE', label: 'Credit Notes' },
-        { id: 'CRM', label: 'Lead & Sampling' }
-      ]
-    },
-    {
-      id: 'PURCHASING',
-      label: 'Procurement Hub',
-      icon: Truck,
-      subs: [
-        { id: 'PURCHASE_ORDER', label: 'Purchase Orders' },
-        { id: 'PURCHASE_INWARD', label: 'Stock Inward (GRN)' },
-        { id: 'PURCHASE_RETURN', label: 'Purchase Returns' },
-        { id: 'DEBIT_NOTE', label: 'Debit Notes' }
-      ]
-    },
-    {
-      id: 'PRODUCTION',
-      label: 'Manufacturing Unit',
-      icon: Factory,
-      subs: [
-        { id: 'DESIGN_RECIPE', label: 'SKU Recipes / BOM' },
-        { id: 'SAMPLING', label: 'Sample Tracker' },
-        { id: 'PRODUCTION', label: 'Work Order / Job Slips' },
-        { id: 'TRACK_LOTS', label: 'Lot Convergence' },
-        { id: 'JOB_WORK', label: 'External Jobwork' },
-        { id: 'QUALITY', label: 'Quality Audit' }
-      ]
-    },
-    {
-      id: 'INVENTORY',
-      label: 'Material & Assets',
-      icon: Boxes,
-      subs: [
-        { id: 'INVENTORY', label: 'Opening Stock' },
-        { id: 'CATALOG', label: 'Product Catalog' },
-        { id: 'STOCK_TRANSFER', label: 'Godown Transfer' },
-        { id: 'PACK_DESIGN', label: 'Set / Combo Design' },
-        { id: 'STOCK_AUDIT', label: 'Physical Audit' },
-        { id: 'ASSETS', label: 'Machine Assets' }
-      ]
-    },
-    {
-      id: 'FINANCE',
-      label: 'Financial Khata Hub',
-      icon: Wallet,
-      subs: [
-        { id: 'ACCOUNTING', label: 'Party Ledger' },
-        { id: 'KARIGAR_KHATA', label: 'Karigar Settlement' },
-        { id: 'AGENT_KHATA', label: 'Broker Payouts' },
-        { id: 'CASH_BOOK', label: 'Cash / Bank Book' },
-        { id: 'ATTENDANCE', label: 'Staff Attendance' },
-        { id: 'PAYROLL', label: 'Payroll & Loans' }
-      ]
-    }
-  ];
+
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 animate-fade-in font-sans">
@@ -314,6 +259,7 @@ const Settings: React.FC<SettingsProps> = ({
                 { id: 'MODULES', label: 'Modules', icon: LayoutGrid },
                 { id: 'CUSTOMIZER', label: 'DocType', icon: Settings2 },
                 { id: 'INTEGRATIONS', label: 'Integrations', icon: Store },
+                { id: 'RBAC', label: 'Roles (RBAC)', icon: Fingerprint },
                 { id: 'SECURITY', label: 'Security', icon: ShieldCheck },
                 { id: 'SERVER', label: 'LAN Server', icon: Server },
                 { id: 'COMMUNICATION', label: 'Network', icon: Globe },
@@ -342,6 +288,7 @@ const Settings: React.FC<SettingsProps> = ({
                     { id: 'MODULES', label: 'Module Control', icon: LayoutGrid },
                     { id: 'CUSTOMIZER', label: 'DocType Customizer', icon: Settings2 },
                     { id: 'INTEGRATIONS', label: 'Integrations', icon: Store },
+                    { id: 'RBAC', label: 'Roles (RBAC)', icon: Fingerprint },
                     { id: 'SECURITY', label: 'Security & Auth', icon: ShieldCheck },
                     { id: 'SERVER', label: 'LAN Server', icon: Server },
                     { id: 'COMMUNICATION', label: 'Comm. Network', icon: Globe },
@@ -719,6 +666,64 @@ const Settings: React.FC<SettingsProps> = ({
                     </div>
                   )}
 
+                  {activeTab === 'RBAC' && (
+                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm space-y-6 animate-fade-in">
+                        <div className="flex justify-between items-end border-b pb-4 mb-4">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase flex items-center gap-2">
+                                  <Fingerprint className="w-4 h-4" /> Role Permissions
+                                </h3>
+                                <p className="text-[10px] text-slate-500 uppercase mt-1 tracking-wider">Restrict module access by user role</p>
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-4">
+                           {['MANAGER', 'ACCOUNTANT', 'SALES', 'WORKER'].map((role) => (
+                               <div key={role} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+                                  <div className="bg-slate-50 dark:bg-slate-950 p-3 px-4 font-bold text-xs uppercase tracking-widest text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                                      Role: {role}
+                                  </div>
+                                  <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 bg-white dark:bg-slate-900">
+                                      {[ 'CRM', 'ORDERS', 'INVENTORY', 'PRODUCTION', 'ACCOUNTING', 'TEAM', 'PROJECTS', 'PURCHASE_ORDER', 'POS', 'REPORTS', 'SETTINGS' ].map(mod => {
+                                          const rp = rolePermissions?.find(r => r.role === role && r.module === mod);
+                                          const isAllowed = rp ? rp.canRead : true;
+                                          
+                                          return (
+                                              <label key={mod} className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-all ${isAllowed ? 'border-green-200 bg-green-50 dark:bg-green-900/10 dark:border-green-900/30 text-green-700 dark:text-green-400' : 'border-slate-200 bg-slate-50 dark:bg-slate-950 dark:border-slate-800 text-slate-400'}`}>
+                                                  <input 
+                                                     type="checkbox" 
+                                                     checked={isAllowed}
+                                                     className="hidden"
+                                                     onChange={() => {
+                                                        if (rp && onUpdateRolePermission) {
+                                                            onUpdateRolePermission({...rp, canRead: !rp.canRead});
+                                                        } else if (onAddRolePermission) {
+                                                            onAddRolePermission({
+                                                                id: `rp_${Date.now()}_${Math.random().toString(36).substring(2,6)}`,
+                                                                role: role as UserRole,
+                                                                module: mod,
+                                                                canRead: false,
+                                                                canCreate: true,
+                                                                canUpdate: true,
+                                                                canDelete: true,
+                                                            });
+                                                        }
+                                                     }}
+                                                  />
+                                                  <div className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 ${isAllowed ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800'}`}>
+                                                     {isAllowed && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
+                                                  </div>
+                                                  <span className="text-[10px] font-bold tracking-widest truncate">{mod.replace(/_/g, ' ')}</span>
+                                              </label>
+                                          )
+                                      })}
+                                  </div>
+                               </div>
+                           ))}
+                        </div>
+                     </div>
+                  )}
+
                   {activeTab === 'SECURITY' && (
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm space-y-6 animate-fade-in">
                         <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase border-b pb-2 mb-4 flex items-center gap-2">
@@ -896,16 +901,24 @@ const Settings: React.FC<SettingsProps> = ({
 
                   {activeTab === 'MODULES' && (
                     <div className="space-y-6 animate-fade-in">
-                        {moduleGroups.map(group => (
+                        {ERP_MODULE_GROUPS.map(group => (
                           <div key={group.id} className="space-y-2">
                              <div className="flex items-center gap-2 mb-2">
                                 <group.icon className="w-4 h-4 text-slate-400" />
-                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{group.label}</h3>
+                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{group.title}</h3>
                              </div>
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {group.subs.map(sub => (
+                                {group.items.map(sub => (
                                    <div key={sub.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm">
-                                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-tight">{sub.label}</span>
+                                      <div className="flex items-center gap-3">
+                                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${features[sub.id] !== false ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                                              <sub.icon className="w-4 h-4" />
+                                          </div>
+                                          <div>
+                                              <h4 className="font-bold text-sm text-slate-800 dark:text-white capitalize">{sub.label}</h4>
+                                              <p className="text-xs text-slate-500 line-clamp-1">{sub.description}</p>
+                                          </div>
+                                      </div>
                                       <div className="relative">
                                          <input type="checkbox" className="sr-only peer" checked={features[sub.id] !== false} onChange={() => toggleFeature(sub.id)} id={`feat-${sub.id}`} />
                                          <label htmlFor={`feat-${sub.id}`} className="block w-10 h-5 bg-slate-200 dark:bg-slate-700 rounded-full peer-checked:bg-indigo-600 cursor-pointer relative transition-colors">

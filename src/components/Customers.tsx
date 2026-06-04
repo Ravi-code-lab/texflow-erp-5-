@@ -582,7 +582,7 @@ const Customers: React.FC<CustomersProps> = ({
                   {formData.id && (
                     <div className="mt-4 pt-4 border-t border-[#d1d8dd] grid grid-cols-2 gap-4 text-[13px] text-[#525c66]">
                       <InfoRow label="Customer ID" value={formData.id} />
-                      <InfoRow label="Created" value={formData.id ? new Date(parseInt(formData.id.split('-')[1] || '0') + 1700000000000).toLocaleDateString('en-IN') : '—'} />
+                      <InfoRow label="Created" value={formData.id ? formData.id.split('-').length > 1 ? new Date(parseInt(formData.id.split('-')[1] || '0') + 1700000000000).toLocaleDateString('en-IN') : '—' : '—'} />
                     </div>
                   )}
                 </Card>

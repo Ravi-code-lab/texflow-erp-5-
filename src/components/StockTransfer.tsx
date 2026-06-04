@@ -1,27 +1,30 @@
 import React, { useState } from 'react';
-import { ArrowLeftRight, Plus, Eye, Trash2, ShieldAlert } from 'lucide-react';
+import { ArrowLeftRight, Plus, Eye, Trash2, ShieldAlert, Package } from 'lucide-react';
 
 interface StockTransferProps {
   inventory: any[];
   transfers: any[];
+  warehouses?: any[];
   onAdd: (transfer: any) => void;
   onUpdate: (transfer: any) => void;
   onDelete: (transfer: any) => void;
 }
 
-export default function StockTransfer({ inventory, transfers, onAdd, onDelete, onUpdate }: StockTransferProps) {
+export default function StockTransfer({ inventory, transfers, warehouses = [], onAdd, onDelete }: StockTransferProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [material, setMaterial] = useState('');
   const [qty, setQty] = useState(0);
-  const [source, setSource] = useState('Central Warehouse');
-  const [dest, setDest] = useState('Production Floor');
+  const defaultSource = warehouses.length > 0 ? warehouses[0]?.name || 'Central Warehouse' : 'Central Warehouse';
+  const defaultDest = warehouses.length > 1 ? warehouses[1]?.name || 'Production Floor' : 'Production Floor';
+  const [source, setSource] = useState(defaultSource);
+  const [dest, setDest] = useState(defaultDest);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!material || qty <= 0) return;
 
     onAdd({
-      id: `TRF-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`,
+      id: `TRF-${Date.now().toString().slice(-4)}`,
       materialName: material,
       quantity: Number(qty),
       sourceWarehouse: source,
@@ -50,7 +53,7 @@ export default function StockTransfer({ inventory, transfers, onAdd, onDelete, o
             setQty(10);
             setIsOpen(true);
           }}
-          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
+          className="px-3.5 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Trigger Transfer
         </button>
@@ -81,7 +84,17 @@ export default function StockTransfer({ inventory, transfers, onAdd, onDelete, o
               {transfers.map(trf => (
                 <tr key={trf.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
                   <td className="p-3 font-mono font-bold text-slate-800 dark:text-white">{trf.id}</td>
-                  <td className="p-3 font-semibold text-slate-700 dark:text-slate-200">{trf.materialName}</td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const inv = inventory.find((i: any) => i.name === trf.materialName);
+                        return inv?.imageUrl
+                          ? <img src={inv.imageUrl} alt="" className="w-7 h-7 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" referrerPolicy="no-referrer" />
+                          : <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0"><Package className="w-3.5 h-3.5 text-slate-400" /></div>;
+                      })()}
+                      <span className="font-semibold text-slate-700 dark:text-slate-200">{trf.materialName}</span>
+                    </div>
+                  </td>
                   <td className="p-3 text-right font-mono font-bold text-slate-705 dark:text-slate-300">{trf.quantity}</td>
                   <td className="p-3 text-slate-450">{trf.sourceWarehouse}</td>
                   <td className="p-3 text-slate-450">{trf.destinationWarehouse}</td>
@@ -92,7 +105,7 @@ export default function StockTransfer({ inventory, transfers, onAdd, onDelete, o
                     </span>
                   </td>
                   <td className="p-3 text-center">
-                    <button onClick={() => onDelete(trf)} className="p-1 text-slate-400 hover:text-rose-600 transition">
+                    <button onClick={() => onDelete(trf)} className="p-1 text-slate-350 hover:text-rose-600 transition">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -139,23 +152,47 @@ export default function StockTransfer({ inventory, transfers, onAdd, onDelete, o
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Source Location</label>
-                  <input
-                    role="textbox"
-                    type="text"
-                    className="w-full p-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none"
-                    value={source}
-                    onChange={e => setSource(e.target.value)}
-                  />
+                  {warehouses.length > 0 ? (
+                    <select
+                      className="w-full p-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none"
+                      value={source}
+                      onChange={e => setSource(e.target.value)}
+                    >
+                      {warehouses.map((w: any) => (
+                        <option key={w.id} value={w.name}>{w.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      role="textbox"
+                      type="text"
+                      className="w-full p-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none"
+                      value={source}
+                      onChange={e => setSource(e.target.value)}
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Destination</label>
-                  <input
-                    role="textbox"
-                    type="text"
-                    className="w-full p-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none"
-                    value={dest}
-                    onChange={e => setDest(e.target.value)}
-                  />
+                  {warehouses.length > 0 ? (
+                    <select
+                      className="w-full p-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none"
+                      value={dest}
+                      onChange={e => setDest(e.target.value)}
+                    >
+                      {warehouses.map((w: any) => (
+                        <option key={w.id} value={w.name}>{w.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      role="textbox"
+                      type="text"
+                      className="w-full p-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none"
+                      value={dest}
+                      onChange={e => setDest(e.target.value)}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -170,7 +207,7 @@ export default function StockTransfer({ inventory, transfers, onAdd, onDelete, o
               </button>
               <button 
                 type="submit" 
-                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs"
+                className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs"
               >
                 Confirm Dispatch
               </button>

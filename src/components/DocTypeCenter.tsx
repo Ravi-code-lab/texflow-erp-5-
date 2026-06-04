@@ -611,7 +611,7 @@ const DocTypeCenter: React.FC<DocTypeCenterProps> = ({ stats, userRole = 'ADMIN'
                 onClick={() => setCenterSubTab('details')}
                 className={`px-5 py-3 text-xs font-black uppercase tracking-wider flex items-center gap-2 border-b-2 transition-all ${
                   centerSubTab === 'details'
-                    ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                    ? 'border-indigo-650 text-indigo-650 dark:border-indigo-400 dark:text-indigo-400'
                     : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
@@ -622,7 +622,7 @@ const DocTypeCenter: React.FC<DocTypeCenterProps> = ({ stats, userRole = 'ADMIN'
                 onClick={() => setCenterSubTab('scripts')}
                 className={`px-5 py-3 text-xs font-black uppercase tracking-wider flex items-center gap-2 border-b-2 transition-all ${
                   centerSubTab === 'scripts'
-                    ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                    ? 'border-indigo-650 text-indigo-650 dark:border-indigo-400 dark:text-indigo-400'
                     : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
@@ -750,7 +750,7 @@ const DocTypeCenter: React.FC<DocTypeCenterProps> = ({ stats, userRole = 'ADMIN'
                           className={`p-3 text-left border rounded-lg transition-all ${
                             selectedPresetIndex === idx
                               ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-300 shadow-sm'
-                              : 'bg-slate-50 dark:bg-slate-950 border-slate-250 dark:border-slate-800 hover:border-slate-400'
+                              : 'bg-slate-50 dark:bg-slate-950 border-slate-250 dark:border-slate-800 hover:border-slate-350'
                           }`}
                         >
                           <p className="text-xs font-black text-slate-800 dark:text-slate-200">{preset.name}</p>
@@ -888,7 +888,7 @@ const DocTypeCenter: React.FC<DocTypeCenterProps> = ({ stats, userRole = 'ADMIN'
                               ? 'text-emerald-400 font-bold'
                               : log.includes('State mutated')
                               ? 'text-cyan-400'
-                              : 'text-slate-400'
+                              : 'text-slate-350'
                           }`}
                         >
                           <span className="text-slate-600 mr-1.5">❯</span>

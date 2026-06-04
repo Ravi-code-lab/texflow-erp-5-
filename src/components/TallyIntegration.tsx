@@ -582,7 +582,7 @@ export const TallyIntegration: React.FC<TallyIntegrationProps> = ({
                         <span className="text-slate-600">No logs generated. Connect or trigger manual sync.</span>
                      ) : (
                         syncLogs.map((log, index) => (
-                           <div key={`log-${index}-${log.slice(0, 20)}`} className="opacity-90 hover:opacity-100 hover:bg-white/5 px-2 py-0.5 rounded break-words">
+                           <div key={index} className="opacity-90 hover:opacity-100 hover:bg-white/5 px-2 py-0.5 rounded break-words">
                               {log}
                            </div>
                         ))

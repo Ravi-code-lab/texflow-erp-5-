@@ -5,6 +5,7 @@ import {
   MoreHorizontal, ArrowLeft, Save, ChevronLeft, ChevronRight,
   Trash2, MessageSquare
 } from 'lucide-react';
+import ProductImageThumb from './ProductImageThumb';
 
 interface QuotationProps {
   quotations: Order[];
@@ -63,7 +64,7 @@ const Quotation: React.FC<QuotationProps> = ({
 
     const oData = {
       ...formData,
-      id: formData.id || `QTN-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`,
+      id: formData.id || `QTN-${Date.now().toString().slice(-4)}`,
       agentCommissionAmount: commissionAmount,
       totalAmount: subTotal + taxAmount
     } as Order;
@@ -248,6 +249,7 @@ const Quotation: React.FC<QuotationProps> = ({
                              <table className="w-full mt-4 text-left border-collapse">
                                 <thead>
                                    <tr className="bg-[#f4f5f6] text-xs text-[#525c66] border-y border-[#d1d8dd]">
+                                      <th className="py-2 pl-3 font-medium w-10"></th>
                                       <th className="py-2 pl-3 font-medium">Item</th>
                                       <th className="py-2 px-3 font-medium text-right">Quantity</th>
                                       <th className="py-2 px-3 font-medium text-right">Price</th>
@@ -256,8 +258,11 @@ const Quotation: React.FC<QuotationProps> = ({
                                    </tr>
                                 </thead>
                                 <tbody>
-                                   {formData.items.map((item, idx) => (
-                                      <tr key={(item as any).id || item.productName + idx} className="border-b border-[#d1d8dd]/50">
+                                   {(formData.items || []).map((item, idx) => (
+                                      <tr key={idx} className="border-b border-[#d1d8dd]/50">
+                                         <td className="py-2 pl-2">
+                                           <ProductImageThumb productName={item.productName} designs={designs} inventory={inventory} size="sm" />
+                                         </td>
                                          <td className="py-2 pl-3 font-semibold text-[#1c2126]">{item.productName}</td>
                                          <td className="py-2 px-3 text-right">{item.quantity}</td>
                                          <td className="py-2 px-3 text-right">{item.unitPrice}</td>

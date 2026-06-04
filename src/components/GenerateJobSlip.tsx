@@ -118,7 +118,8 @@ const GenerateJobSlip: React.FC<JobCardProps> = ({
     if (!selectedTemplate) return;
 
     // Build the apparel operations
-    const preparedOps: GarmentWorkOrderOperation[] = selectedTemplate.operations.map(op => ({
+    if (!selectedTemplate.operations?.length) return;
+    const preparedOps: GarmentWorkOrderOperation[] = (selectedTemplate.operations || []).map(op => ({
       id: `${op.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: op.name,
       stage: op.stage,

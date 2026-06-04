@@ -10,6 +10,7 @@ interface ProductionPlanProps {
   orders: Order[];
   designs: Design[];
   jobs: ProductionJob[];
+  inventory?: any[];
   onAction?: (action: string, data: any) => void;
 }
 
@@ -28,7 +29,7 @@ const SIMULATED_MATERIAL_STOCK: Record<string, { stock: number; unit: string; ra
   'Ivory Cambric Office Shirt': { stock: 300, unit: 'Meters', ratePerUnit: 65 }
 };
 
-export default function ProductionPlan({ orders, designs, jobs, onAction }: ProductionPlanProps) {
+export default function ProductionPlan({ orders, designs, jobs, inventory = [], onAction }: ProductionPlanProps) {
   const [activePlan, setActivePlan] = useState<any | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -38,7 +39,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
 
   // Aggregate standard demand across all active sales orders to initiate a plan
   const handleCreatePlan = () => {
-     const flatItems = pendingOrders.flatMap(o => o.items.map((i: OrderItem) => {
+     const flatItems = pendingOrders.flatMap(o => (o.items || []).map((i: OrderItem) => {
        const design = designs.find(d => d.name === i.productName);
        return {
          orderId: o.id,
@@ -77,9 +78,21 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
   const materialAnalysis = useMemo(() => {
     if (!activePlan || !activePlan.items) return [];
 
+    // Build a live stock lookup from real inventory prop (name → qty, price)
+    const liveStock: Record<string, { stock: number; unit: string; ratePerUnit: number }> = {};
+    (inventory || []).forEach((item: any) => {
+      if (item.name) {
+        liveStock[item.name] = {
+          stock: Number(item.quantity ?? 0),
+          unit: item.unit || 'Units',
+          ratePerUnit: Number(item.pricePerUnit ?? item.costPrice ?? 0),
+        };
+      }
+    });
+
     const requirementsMap: Record<string, { materialName: string; requiredQty: number; unit: string; availableQty: number; ratePerUnit: number }> = {};
 
-    activePlan.items.forEach((item: any) => {
+    (activePlan.items || []).forEach((item: any) => {
       const quantity = Number(item.plannedQuantity || 0);
       if (quantity <= 0) return;
 
@@ -94,7 +107,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
           const unitStr = String(r.unit || 'Units');
 
           if (!requirementsMap[name]) {
-            const stockData = SIMULATED_MATERIAL_STOCK[name] || { stock: 800, unit: unitStr, ratePerUnit: 50 };
+            const stockData = liveStock[name] || { stock: 0, unit: unitStr, ratePerUnit: 0 };
             requirementsMap[name] = {
               materialName: name,
               requiredQty: 0,
@@ -109,24 +122,26 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
         // Fallback recipe (Standard fabric 1.8 meters per dress + thread)
         const principalFabricName = design?.composition || `${item.productName} Fabric`;
         if (!requirementsMap[principalFabricName]) {
+          const stockData = liveStock[principalFabricName] || { stock: 0, unit: 'Meters', ratePerUnit: 0 };
           requirementsMap[principalFabricName] = {
             materialName: principalFabricName,
             requiredQty: 0,
-            unit: 'Meters',
-            availableQty: SIMULATED_MATERIAL_STOCK[principalFabricName]?.stock || 350,
-            ratePerUnit: SIMULATED_MATERIAL_STOCK[principalFabricName]?.ratePerUnit || 75
+            unit: stockData.unit,
+            availableQty: stockData.stock,
+            ratePerUnit: stockData.ratePerUnit
           };
         }
         requirementsMap[principalFabricName].requiredQty += (1.8 * quantity);
 
         const threadName = 'Standard polyester threads';
         if (!requirementsMap[threadName]) {
+          const stockData = liveStock[threadName] || { stock: 0, unit: 'Cones', ratePerUnit: 0 };
           requirementsMap[threadName] = {
             materialName: threadName,
             requiredQty: 0,
-            unit: 'Cones',
-            availableQty: SIMULATED_MATERIAL_STOCK[threadName]?.stock || 120,
-            ratePerUnit: SIMULATED_MATERIAL_STOCK[threadName]?.ratePerUnit || 40
+            unit: stockData.unit,
+            availableQty: stockData.stock,
+            ratePerUnit: stockData.ratePerUnit
           };
         }
         requirementsMap[threadName].requiredQty += (0.05 * quantity);
@@ -134,7 +149,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
     });
 
     return Object.values(requirementsMap);
-  }, [activePlan, designs]);
+  }, [activePlan, designs, inventory]);
 
   // Total calculated material and labor costing to fabricate the plan
   const valuationTotals = useMemo(() => {
@@ -146,7 +161,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
     });
 
     if (activePlan?.items) {
-      activePlan.items.forEach((item: any) => {
+      (activePlan.items || []).forEach((item: any) => {
         const qty = Number(item.plannedQuantity || 0);
         const design = designs.find(d => d.name === item.productName);
         if (design && design.laborCosts) {
@@ -156,6 +171,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
             Number(design.laborCosts.embroidery || 0) +
             Number(design.laborCosts.washing || 0) +
             Number(design.laborCosts.finishing || 0) +
+            Number(design.laborCosts.printing || 0) +
             Number(design.laborCosts.packing || 0);
           laborCostNum += (pieceLabor > 0 ? pieceLabor * qty : 145 * qty);
         } else {
@@ -179,7 +195,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
        let raisedWorkOrdersCount = 0;
 
        // 1. Convert to individual work order jobs
-       activePlan.items.filter((i: any) => Number(i.plannedQuantity || 0) > 0).forEach((item: any) => {
+       (activePlan.items || []).filter((i: any) => Number(i.plannedQuantity || 0) > 0).forEach((item: any) => {
           onAction('CONVERT_TO_WORK_ORDER_FROM_RECIPE', {
               name: item.productName,
               quantity: Number(item.plannedQuantity),
@@ -230,7 +246,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
 
   const handleRemoveItemFromPlan = (idx: number) => {
     if (!activePlan) return;
-    const filtered = activePlan.items.filter((_: any, i: number) => i !== idx);
+    const filtered = (activePlan.items || []).filter((_: any, i: number) => i !== idx);
     setActivePlan({ ...activePlan, items: filtered });
   };
 
@@ -320,7 +336,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
                              Fulfill Pending
                            </span>
                            <p className="text-sm font-black text-slate-800 mt-1">
-                             {order.items.reduce((s, i) => s + i.quantity, 0)} Units
+                             {(order.items || []).reduce((s, i) => s + i.quantity, 0)} Units
                            </p>
                         </div>
                         <span className="p-1 px-2 text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-lg select-none cursor-pointer" onClick={handleCreatePlan}>
@@ -408,7 +424,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
                 </div>
 
                 <div className="space-y-3">
-                  {activePlan.items.map((item: any, idx: number) => (
+                  {(activePlan.items || []).map((item: any, idx: number) => (
                     <div key={(item as any).id || (item as any).designName + idx} className="p-4 border border-slate-200 hover:border-slate-300 rounded-xl bg-slate-50/10 flex flex-col sm:flex-row sm:items-center gap-4">
                        <div className="flex-1 min-w-0">
                           <p className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-tight">SO Ref: {item.orderId || 'Manual Build'}</p>
@@ -556,7 +572,7 @@ export default function ProductionPlan({ orders, designs, jobs, onAction }: Prod
                   { label: 'Estimated Tailoring/Labor Fees', val: valuationTotals.laborCost },
                   { label: 'Overhead & Machinery Wear (Sim.)', val: Math.round(valuationTotals.estimatedTotal * 0.08) }
                 ].map((cost, idx) => (
-                  <div key={(mat as any).id || (mat as any).itemName + idx} className="flex justify-between items-center text-xs font-bold text-slate-600">
+                  <div key={idx} className="flex justify-between items-center text-xs font-bold text-slate-600">
                     <span>{cost.label}</span>
                     <span className="tabular-nums text-slate-700">₹{cost.val.toLocaleString()}</span>
                   </div>

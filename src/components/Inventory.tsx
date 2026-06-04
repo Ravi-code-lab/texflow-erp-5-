@@ -8,11 +8,12 @@ import {
   MapPin, Hash, Calendar, DollarSign, Boxes,
   ClipboardList, ArrowRightLeft, History, CheckCircle,
   ChevronUp, MoreHorizontal, Printer, Copy, Star,
-  ShoppingCart, Zap, Activity
+  ShoppingCart, Zap, Activity, ImageIcon
 } from 'lucide-react';
 import SmartPurchase from './SmartPurchase';
 import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './ListPage';
 import { Order, ProductionJob, Design } from '../types';
+import { commitImage } from '../utils/imageUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ interface BatchEntry {
 const ITEM_GROUPS = [
   'Fabric', 'Yarn', 'Chemicals/Dye', 'Accessories',
   'Packaging Material', 'Finished Goods', 'Semi-Finished',
-  'Consumables', 'Tools & Equipment'
+  'Consumables', 'Tools & Equipment', 'Printing'
 ];
 
 const UOMS = [
@@ -84,6 +85,7 @@ const TYPE_MAP: Record<string, MaterialType | string> = {
   'Semi-Finished': 'WIP',
   'Consumables': 'CONSUMABLE',
   'Tools & Equipment': 'ASSET',
+  'Printing': 'PRINTING',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -426,8 +428,11 @@ const EMPTY_FORM = (): Partial<InventoryItem> => ({
 });
 
 const Inventory: React.FC<InventoryProps> = ({
-  items, orders = [], production = [], designs = [], onAdd, onUpdate, onDelete, currency = '₹'
+  items: allItems, orders = [], production = [], designs = [], onAdd, onUpdate, onDelete, currency = '₹'
 }) => {
+  // Exclude Ready Stock items (added via Opening Stock module) — they belong to a separate register
+  const items = useMemo(() => allItems.filter(i => i.doctype !== 'READY_STOCK'), [allItems]);
+
   const [viewMode, setViewMode] = useState<ViewMode>('LIST');
   const [formData, setFormData] = useState<Partial<InventoryItem>>(EMPTY_FORM());
   const [formTab, setFormTab] = useState<FormTab>('DETAILS');
@@ -474,10 +479,20 @@ const Inventory: React.FC<InventoryProps> = ({
       key: 'name', label: 'Item Name', width: 220,
       render: r => (
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center shrink-0">
-            <Package className="w-3 h-3 text-indigo-500" />
+          <div className="w-8 h-8 rounded-lg overflow-hidden bg-indigo-50 dark:bg-indigo-900/30 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
+            {r.imageUrl
+              ? <img src={r.imageUrl} alt={r.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              : <Package className="w-4 h-4 text-indigo-400" />
+            }
           </div>
-          <span className="font-medium text-[#1c2126] dark:text-slate-100 truncate">{r.name}</span>
+          <div className="flex flex-col overflow-hidden">
+            <span className="font-medium text-[#1c2126] dark:text-slate-100 truncate">{r.name}</span>
+            {(r.widthInch || r.lengthCm) && (
+              <span className="text-[10px] text-slate-500">
+                {r.widthInch ? `W: ${r.widthInch}" ` : ''}{r.lengthCm ? `L: ${r.lengthCm}cm` : ''}
+              </span>
+            )}
+          </div>
         </div>
       ),
       sortValue: r => r.name,
@@ -821,6 +836,33 @@ const Inventory: React.FC<InventoryProps> = ({
                   </div>
                 </SectionCard>
 
+                {/* ── Item Image ── */}
+                <SectionCard title="Item Image" icon={ImageIcon}>
+                  <div className="flex items-start gap-5">
+                    <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                      {formData.imageUrl
+                        ? <img src={formData.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        : <Package className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                      }
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <label className="flex items-center gap-2 px-3 py-2 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg text-[12px] font-semibold text-indigo-700 dark:text-indigo-300 cursor-pointer hover:bg-indigo-100 transition-colors w-max">
+                        <Upload className="w-3.5 h-3.5" />
+                        Upload Photo
+                        <input type="file" accept="image/*" className="hidden" onChange={async e => {
+                          const f = e.target.files?.[0];
+                          if (f) { const url = await commitImage(f, 600); setField({ imageUrl: url }); }
+                        }} />
+                      </label>
+                      {formData.imageUrl && (
+                        <button type="button" onClick={() => setField({ imageUrl: '' })}
+                          className="text-[11px] text-red-500 hover:underline">Remove image</button>
+                      )}
+                      <p className="text-[11px] text-slate-400">Upload a photo of this raw material or accessory for easy visual identification in documents and production modules.</p>
+                    </div>
+                  </div>
+                </SectionCard>
+
                 {customFields.length > 0 && (
                   <SectionCard title="Custom Fields" icon={Zap}>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-5">
@@ -885,6 +927,18 @@ const Inventory: React.FC<InventoryProps> = ({
                       <input type="number" min="0" step="0.01" value={formData.minStockLevel || 0}
                         onChange={e => setField({ minStockLevel: Number(e.target.value) })} className={inputCls} />
                     </FieldRow>
+                    {['FABRIC', 'YARN', 'LINING', 'INTERLINING', 'PRINTING', 'TRIMS', 'OTHER'].includes(formData.type || '') && (
+                      <>
+                        <FieldRow label="Width (Inch)">
+                          <input type="number" min="0" step="0.01" value={formData.widthInch || ''}
+                            onChange={e => setField({ widthInch: Number(e.target.value) })} className={inputCls} placeholder="e.g. 58" />
+                        </FieldRow>
+                        <FieldRow label="Length (cm)">
+                          <input type="number" min="0" step="0.01" value={formData.lengthCm || ''}
+                            onChange={e => setField({ lengthCm: Number(e.target.value) })} className={inputCls} placeholder="e.g. 100" />
+                        </FieldRow>
+                      </>
+                    )}
                     <FieldRow label="Batch Number">
                       <input value={formData.batchNumber || ''} onChange={e => setField({ batchNumber: e.target.value })}
                         className={inputCls} placeholder="e.g. BATCH-2026-001" />

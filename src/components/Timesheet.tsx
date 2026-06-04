@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, Plus, Trash2 } from 'lucide-react';
+import { Clock, Plus, Trash2, Check, Award } from 'lucide-react';
 
 interface TimesheetProps {
   timesheets: any[];
@@ -11,7 +11,7 @@ interface TimesheetProps {
   onDelete: (timesheet: any) => void;
 }
 
-export default function Timesheet({ timesheets, team, projects, tasks, onAdd, onDelete, onUpdate }: TimesheetProps) {
+export default function Timesheet({ timesheets, team, projects, tasks, onAdd, onDelete }: TimesheetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [employee, setEmployee] = useState(team[0]?.name || '');
   const [project, setProject] = useState(projects[0]?.name || 'Factory Operations');
@@ -23,7 +23,7 @@ export default function Timesheet({ timesheets, team, projects, tasks, onAdd, on
     if (!employee || hours <= 0) return;
 
     onAdd({
-      id: `TS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`,
+      id: `TS-${Date.now().toString().slice(-4)}`,
       employeeName: employee,
       projectName: project,
       hours: Number(hours),
@@ -40,7 +40,7 @@ export default function Timesheet({ timesheets, team, projects, tasks, onAdd, on
       <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
         <div>
           <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
-            <Clock className="w-5 h-5 text-indigo-500" />
+            <Clock className="w-5 h-5 text-indigo-505 text-indigo-500" />
             Timesheet & Labor Worklogs
           </h3>
           <p className="text-xs text-slate-400">Map employee task hours against ongoing projects and estimate karigar costs.</p>
@@ -52,7 +52,7 @@ export default function Timesheet({ timesheets, team, projects, tasks, onAdd, on
             setHours(8);
             setIsOpen(true);
           }}
-          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+          className="px-3.5 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Log Shift hours
         </button>
@@ -88,7 +88,7 @@ export default function Timesheet({ timesheets, team, projects, tasks, onAdd, on
                   <td className="p-3 text-right font-mono text-slate-805 font-bold tabular-nums">{ts.hours} hrs</td>
                   <td className="p-3 text-slate-500 italic font-medium truncate max-w-xs">{ts.remarks}</td>
                   <td className="p-3 text-center">
-                    <button onClick={() => onDelete(ts)} className="p-1 text-slate-400 hover:text-rose-600 transition">
+                    <button onClick={() => onDelete(ts)} className="p-1 text-slate-350 hover:text-rose-600 transition">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -163,7 +163,7 @@ export default function Timesheet({ timesheets, team, projects, tasks, onAdd, on
               <button type="button" onClick={() => setIsOpen(false)} className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg font-bold text-slate-500 text-xs">
                 Cancel
               </button>
-              <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs">
+              <button type="submit" className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs">
                 Submit Timesheet
               </button>
             </div>

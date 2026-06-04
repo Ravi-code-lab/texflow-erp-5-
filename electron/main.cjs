@@ -316,11 +316,13 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 
-  // Auto-start LAN server if previously enabled
+  // Auto-start LAN server if previously enabled (Defaulting to true)
   try {
     const cfg = fs.existsSync(CFG_FILE) ? JSON.parse(fs.readFileSync(CFG_FILE, 'utf8')) : {};
-    if (cfg.lanAutoStart) startLanServer(mainWindow).catch(e => console.error('[LAN] Auto-start failed:', e.message));
-  } catch (e) { /* ignore */ }
+    if (cfg.lanAutoStart !== false) startLanServer(mainWindow).catch(e => console.error('[LAN] Auto-start failed:', e.message));
+  } catch (e) {
+    startLanServer(mainWindow).catch(err => console.error('[LAN] Auto-start failed:', err.message));
+  }
 }
 
 app.whenReady().then(createWindow);
@@ -349,22 +351,6 @@ ipcMain.handle('db:save-shard', async (_, { key, data }) => {
     }
     return { success: true };
   } catch (e) {
-    return { success: false, error: e.message };
-  }
-});
-
-ipcMain.handle('db:factory-reset', async () => {
-  try {
-    // Clear in-memory cache
-    vaultCache = {};
-    // Delete the vault file from disk so next boot starts fresh
-    if (fs.existsSync(VAULT_FILE)) {
-      fs.rmSync(VAULT_FILE, { force: true });
-    }
-    appendLog('FACTORY RESET: Vault file deleted. App will start fresh on next boot.');
-    return { success: true };
-  } catch (e) {
-    console.error('[FACTORY RESET] Failed:', e);
     return { success: false, error: e.message };
   }
 });

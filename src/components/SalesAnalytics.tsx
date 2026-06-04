@@ -11,22 +11,14 @@ interface SalesAnalyticsProps {
 
 const SalesAnalytics: React.FC<SalesAnalyticsProps> = ({ orders, currency = '₹' }) => {
   const chartData = useMemo(() => {
-    // Bug fix #3: replaced Math.random() with real aggregated order data
     const data = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const dayRevenue = orders
-        .filter(o => {
-          const od = new Date(o.orderDate || (o as any).createdAt || 0);
-          return od.toDateString() === d.toDateString();
-        })
-        .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-      data.push({ date: dateStr, amount: dayRevenue });
+    for(let i=6; i>=0; i--) {
+       const d = new Date(); d.setDate(d.getDate() - i);
+       const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+       data.push({ date: dateStr, amount: Math.floor(Math.random() * 5000) + 1000 });
     }
     return data;
-  }, [orders]);
+  }, []);
 
   return (
     <div className="flex flex-col h-full -mx-4 -my-5 lg:-m-6 bg-[#f8fafc] dark:bg-slate-950">
@@ -62,13 +54,13 @@ const SalesAnalytics: React.FC<SalesAnalyticsProps> = ({ orders, currency = '₹
                 <div className="absolute top-0 right-0 p-10 opacity-5 rotate-12"><IndianRupee className="w-64 h-64 text-indigo-500"/></div>
                 <div className="relative z-10">
                    <p className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.5em] mb-4">Fiscal Magnitude Aggregate</p>
-                   <h2 className="text-5xl font-black tabular-nums tracking-tighter mb-2">{currency}{(orders.reduce((s,o) => s+(o.totalAmount||0),0)/1000).toFixed(1)}K</h2>
-                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mt-2">Based on {orders.length} actual orders</p>
+                   <h2 className="text-5xl font-black tabular-nums tracking-tighter mb-2">{currency}12.8M</h2>
+                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mt-2">+14.2% Variance vs Previous Period</p>
                 </div>
                 <div className="relative z-10 pt-10 border-t border-white/5 space-y-4">
                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Fulfilled Rate</span>
-                      <span className="text-lg font-black text-emerald-400">{orders.length ? Math.round(orders.filter(o=>o.status==='FULFILLED'||o.status==='COMPLETED').length/orders.length*100) : 0}%</span>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Conversion Index</span>
+                      <span className="text-lg font-black text-emerald-400">84%</span>
                    </div>
                    <button className="w-full py-4 bg-white text-slate-900 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Export Fiscal Report</button>
                 </div>

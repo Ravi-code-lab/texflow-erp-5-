@@ -6,15 +6,25 @@ import BaseModal from './BaseModal';
 
 interface PurchaseReturnProps {
   purchaseOrders: PurchaseOrder[];
+  suppliers?: any[];
   onAddReturn: (poId: string, reason: string) => void;
   currency?: string;
 }
 
 const PurchaseReturn: React.FC<PurchaseReturnProps> = ({ 
-  purchaseOrders, onAddReturn, currency = '₹' 
+  purchaseOrders, suppliers = [], onAddReturn, currency = '₹' 
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPO, setSelectedPO] = useState<string>('');
+
+  // Resolve current supplier name from the suppliers master (not the stale PO snapshot)
+  const resolveSupplierName = (po: PurchaseOrder) => {
+    if (suppliers.length > 0 && po.supplierId) {
+      const supplier = suppliers.find((s: any) => s.id === po.supplierId);
+      if (supplier) return supplier.name;
+    }
+    return po.supplierName || '—';
+  };
   const [reason, setReason] = useState('');
 
   const returnedPos = useMemo(() => purchaseOrders.filter(po => po.status === 'CANCELLED'), [purchaseOrders]);
@@ -54,7 +64,7 @@ const PurchaseReturn: React.FC<PurchaseReturnProps> = ({
                  <span className="text-[10px] font-mono text-rose-500 font-black uppercase">#{po.id}</span>
                  <AlertTriangle className="w-4 h-4 text-rose-400"/>
               </div>
-              <h4 className="font-black text-slate-800 dark:text-white uppercase mb-2 truncate">{po.supplierName}</h4>
+              <h4 className="font-black text-slate-800 dark:text-white uppercase mb-2 truncate">{resolveSupplierName(po)}</h4>
               <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl mb-4">
                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-widest">Debit Magnitude</p>
                 <p className="text-xl font-black text-rose-600 tabular-nums">{currency}{po.totalAmount.toLocaleString()}</p>
@@ -86,7 +96,7 @@ const PurchaseReturn: React.FC<PurchaseReturnProps> = ({
                       onChange={e => setSelectedPO(e.target.value)}
                     >
                         <option value="">Select Received PO...</option>
-                        {availablePos.map(po => <option key={po.id} value={po.id}>{po.id} - {po.supplierName} ({currency}{po.totalAmount})</option>)}
+                        {availablePos.map(po => <option key={po.id} value={po.id}>{po.id} - {resolveSupplierName(po)} ({currency}{po.totalAmount})</option>)}
                     </select>
                   </div>
 

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Design, Karigar, Machine, ProductionJob } from '../types';
 import BaseModal from './BaseModal';
+import ProductImageThumb from './ProductImageThumb';
 
 export interface PipelineStageLog {
   stageId: string;
@@ -258,7 +259,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
     const defaultMetrics: Record<string, string> = {};
     
     if (stageId === 'GRAY_ORDER') {
-      defaultMetrics.poNumber = logsMetrics.poNumber || `PO-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`;
+      defaultMetrics.poNumber = logsMetrics.poNumber || `PO-${Date.now().toString().slice(-4)}`;
       defaultMetrics.weaveSupplier = logsMetrics.weaveSupplier || '';
       defaultMetrics.ratePerMeter = String(logsMetrics.ratePerMeter || '');
     } else if (stageId === 'GRAY_INVENTORY') {
@@ -292,7 +293,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
       defaultMetrics.minorDefects = String(logsMetrics.minorDefects || '0');
       defaultMetrics.qcStatusResult = logsMetrics.qcStatusResult || 'PASS';
     } else if (stageId === 'PACKING') {
-      defaultMetrics.cartonBarcode = logsMetrics.cartonBarcode || `BOX-BAR-${Date.now().toString(36).toUpperCase()}`;
+      defaultMetrics.cartonBarcode = logsMetrics.cartonBarcode || `BOX-BAR-${Date.now().toString().slice(-4)}`;
       defaultMetrics.boxSequenceNumber = logsMetrics.boxSequenceNumber || 'BOX-A1';
       defaultMetrics.isHandoffReady = logsMetrics.isHandoffReady || 'YES';
     }
@@ -336,7 +337,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
           completedAt: new Date().toISOString().split('T')[0],
           completedBy: 'Staff Operator',
           notes: 'Batch initiated into production line.',
-          metrics: firstStage === 'GRAY_ORDER' ? { poNumber: `PO-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}` } : {}
+          metrics: firstStage === 'GRAY_ORDER' ? { poNumber: `PO-${Date.now().toString().slice(-4)}` } : {}
         }
       }
     };
@@ -487,8 +488,8 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
           { label: 'Pending Processing', value: batches.filter(b => b.currentStageId !== 'PACKING').length, color: 'text-amber-600', desc: 'In-progress status' },
           { label: 'Finished Output', value: batches.filter(b => b.currentStageId === 'PACKING').length, color: 'text-emerald-600', desc: 'Packed and stored' },
           { label: 'Total Planned Units', value: batches.reduce((sum, b) => sum + b.totalQty, 0).toLocaleString(), color: 'text-slate-600', desc: 'Meters / Pieces active' },
-        ].map((item) => (
-          <div key={item.label} className="bg-white border rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        ].map((item, i) => (
+          <div key={i} className="bg-white border rounded-xl p-4 shadow-sm flex flex-col justify-between">
             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{item.label}</span>
             <div className="flex items-baseline gap-2 mt-2">
               <p className={`text-2xl font-black ${item.color}`}>{item.value}</p>
@@ -514,7 +515,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
             <h3 className="text-sm font-black uppercase text-slate-500 tracking-wider">Production Batches</h3>
             <button 
               onClick={() => {
-                setNewBatchId(`BND-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`);
+                setNewBatchId(`BND-${Date.now().toString().slice(-4)}`);
                 setShowCreateModal(true);
               }}
               className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold tracking-tight px-3 py-1.5 rounded-lg transition-colors shadow-sm"
@@ -566,8 +567,15 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
                     }}
                     className={`p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-indigo-600 bg-indigo-50/10' : 'border-slate-200 bg-slate-50/30 hover:border-slate-300'}`}
                   >
-                    <div className="flex justify-between items-start">
-                      <div className="min-w-0">
+                    <div className="flex justify-between items-start gap-2">
+                      <ProductImageThumb
+                        productName={batch.designName}
+                        sku={batch.styleCode}
+                        designs={designs}
+                        size="sm"
+                        className="shrink-0 mt-0.5"
+                      />
+                      <div className="min-w-0 flex-1">
                         <span className="text-[10px] font-extrabold uppercase bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 tabular-nums">
                           {batch.id}
                         </span>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FileText, Printer, ShieldCheck, Download, Award } from 'lucide-react';
+import ProductImageThumb from './ProductImageThumb';
 
 interface TaxInvoiceProps {
   orders: any[];
@@ -14,7 +15,7 @@ interface TaxInvoiceProps {
 }
 
 
-export default function TaxInvoice({ orders, customers, currency = '₹', companyInfo }: TaxInvoiceProps) {
+export default function TaxInvoice({ orders, customers, currency = '₹', companyInfo, designs = [], inventory = [] }: TaxInvoiceProps) {
   const [selectedOrderId, setSelectedOrderId] = useState(orders[0]?.id || '');
 
   const order = orders.find(o => o.id === selectedOrderId) || orders[0];
@@ -110,6 +111,7 @@ export default function TaxInvoice({ orders, customers, currency = '₹', compan
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800/20 font-bold text-slate-400 text-[9px] uppercase tracking-wider border-b border-slate-100 dark:border-slate-850">
+                  <th className="p-2.5 w-10"></th>
                   <th className="p-2.5">Item Description</th>
                   <th className="p-2.5 text-right w-20">Qty</th>
                   <th className="p-2.5 text-right w-24">Price/Unit</th>
@@ -117,8 +119,11 @@ export default function TaxInvoice({ orders, customers, currency = '₹', compan
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-850 font-medium">
-                {order.items.map((i: any, idx: number) => (
-                  <tr key={(item as any).id || item.productName + idx}>
+                {(order.items || []).map((i: any, idx: number) => (
+                  <tr key={idx}>
+                    <td className="p-2">
+                      <ProductImageThumb productName={i.productName} designs={designs} inventory={inventory} size="sm" />
+                    </td>
                     <td className="p-2.5 font-bold text-slate-700 dark:text-slate-205">{i.productName}</td>
                     <td className="p-2.5 text-right font-mono tabular-nums">{i.quantity}</td>
                     <td className="p-2.5 text-right font-mono tabular-nums">{currency}{Math.round(i.unitPrice).toLocaleString('en-IN')}</td>

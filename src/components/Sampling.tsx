@@ -60,7 +60,7 @@ const Sampling: React.FC<SamplingProps> = ({
     e.preventDefault();
     const sample = {
       ...formData,
-      id: editingId || `SMP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`,
+      id: editingId || `SMP-${Date.now().toString().slice(-4)}`,
       updatedAt: new Date().toISOString()
     } as SampleRequest;
 

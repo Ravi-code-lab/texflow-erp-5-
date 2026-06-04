@@ -62,7 +62,7 @@ export default function SupplierQuotation({ quotations, suppliers, inventory, on
             setRate(15);
             setIsOpen(true);
           }}
-          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
+          className="px-3.5 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Add Quote
         </button>
@@ -105,7 +105,7 @@ export default function SupplierQuotation({ quotations, suppliers, inventory, on
                     </button>
                   </td>
                   <td className="p-3 text-center">
-                    <button onClick={() => onDelete(q)} className="p-1 text-slate-400 hover:text-rose-600 transition">
+                    <button onClick={() => onDelete(q)} className="p-1 text-slate-350 hover:text-rose-600 transition">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -180,7 +180,7 @@ export default function SupplierQuotation({ quotations, suppliers, inventory, on
               <button type="button" onClick={() => setIsOpen(false)} className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg font-bold text-slate-500 text-xs">
                 Cancel
               </button>
-              <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs font-semibold">
+              <button type="submit" className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs font-semibold">
                 Submit Price Quote
               </button>
             </div>

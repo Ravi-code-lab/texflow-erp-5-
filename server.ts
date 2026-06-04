@@ -5,6 +5,7 @@ import nodemailer from "nodemailer";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import crypto from "crypto";
+import { GoogleGenAI } from "@google/genai";
 
 // ── Simple in-memory rate limiter ────────────────────────────────────────────
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -166,7 +167,7 @@ async function startServer() {
       const messages: any[] = [];
       try {
         const status = client.mailbox;
-        const total = status?.exists ?? 0;
+        const total = status && typeof status === 'object' && 'exists' in status ? status.exists : 0;
 
         // FIX #8: Skip fetch entirely when mailbox is empty — avoids IMAP range error
         if (total > 0) {

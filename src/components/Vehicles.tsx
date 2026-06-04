@@ -9,7 +9,7 @@ interface VehiclesProps {
   currency?: string;
 }
 
-export default function Vehicles({ vehicles, onAdd, onDelete, onUpdate, currency = '₹' }: VehiclesProps) {
+export default function Vehicles({ vehicles, onAdd, onDelete, currency = '₹' }: VehiclesProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [plate, setPlate] = useState('');
   const [model, setModel] = useState('');
@@ -21,7 +21,7 @@ export default function Vehicles({ vehicles, onAdd, onDelete, onUpdate, currency
     if (!plate.trim() || !model.trim()) return;
 
     onAdd({
-      id: `VEH-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`,
+      id: `VEH-${Date.now().toString().slice(-4)}`,
       plateNumber: plate,
       vehicleModel: model,
       driverName: driver || 'Direct Pool Driver',
@@ -49,7 +49,7 @@ export default function Vehicles({ vehicles, onAdd, onDelete, onUpdate, currency
             setStatus('AVAILABLE');
             setIsOpen(true);
           }}
-          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+          className="px-3.5 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Add Delivery Van
         </button>
@@ -86,7 +86,7 @@ export default function Vehicles({ vehicles, onAdd, onDelete, onUpdate, currency
               </div>
 
               <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800 mt-4">
-                <button onClick={() => onDelete(v)} className="p-1 text-slate-400 hover:text-rose-600 font-bold text-xs flex items-center gap-1 transition">
+                <button onClick={() => onDelete(v)} className="p-1 text-slate-350 hover:text-rose-650 font-bold text-xs flex items-center gap-1 transition">
                   <Trash2 className="w-3.5 h-3.5" /> Discard Van
                 </button>
               </div>
@@ -159,7 +159,7 @@ export default function Vehicles({ vehicles, onAdd, onDelete, onUpdate, currency
               <button type="button" onClick={() => setIsOpen(false)} className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg font-bold text-slate-500 text-xs">
                 Cancel
               </button>
-              <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs">
+              <button type="submit" className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs">
                 Acquire Vehicle Slot
               </button>
             </div>

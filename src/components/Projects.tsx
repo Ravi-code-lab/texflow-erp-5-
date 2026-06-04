@@ -28,7 +28,8 @@ const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444'];
 const Projects: React.FC<ProjectsProps> = ({ 
   projects, team, customers, 
   onAddProject, onUpdateProject, onDeleteProject, 
-  currency = '₹', geminiApiKey
+  currency = '₹',
+  geminiApiKey
 }) => {
   const [viewMode, setViewMode] = useState<'KANBAN' | 'TIMELINE'>('KANBAN');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -69,7 +70,7 @@ const Projects: React.FC<ProjectsProps> = ({
   const handleAiAnalyze = async (project: Project) => {
     setAnalyzing(true);
     setAiAnalysis(null);
-    const result = await analyzeProjectHealth(project, geminiApiKey);
+    const result = await analyzeProjectHealth(project);
     setAiAnalysis(result);
     setAnalyzing(false);
   };
@@ -86,7 +87,7 @@ const Projects: React.FC<ProjectsProps> = ({
         endDate: '',
         spent: 0,
         isTemplate: true,
-        tasks: project.tasks.map(t => ({...t, status: 'TODO', id: `TSK-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`}))
+        tasks: (project.tasks || []).map((t, i) => ({...t, status: 'TODO', id: `TSK-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`}))
       };
       onAddProject(template);
     }
@@ -99,7 +100,7 @@ const Projects: React.FC<ProjectsProps> = ({
         ...projectForm,
         name: template.name.replace(' (Template)', ''),
         description: template.description,
-        tasks: template.tasks.map(t => ({...t, id: `TSK-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, status: 'TODO'})),
+        tasks: template.tasks.map((t, i) => ({...t, id: `TSK-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`, status: 'TODO'})),
         clientName: template.clientName,
         budget: template.budget
       });
@@ -248,7 +249,7 @@ const Projects: React.FC<ProjectsProps> = ({
                             ) : null;
                          })()}
 
-                         {project.tasks.map(task => {
+                         {(project.tasks || []).map(task => {
                              if (!task.dueDate) return null;
                              const due = new Date(task.dueDate);
                              const dayIndex = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -273,8 +274,8 @@ const Projects: React.FC<ProjectsProps> = ({
   };
 
   const renderProjectCard = (project: Project) => {
-    const completedTasks = project.tasks.filter(t => t.status === 'DONE').length;
-    const totalTasks = project.tasks.length;
+    const completedTasks = (project.tasks || []).filter(t => t.status === 'DONE').length;
+    const totalTasks = (project.tasks || []).length;
     const taskProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     return (

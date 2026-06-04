@@ -143,7 +143,7 @@ const PackingList: React.FC<PackingSlipProps> = ({
     autoTable(doc, {
         startY: 95,
         head: [['S.No.', 'Item Name', 'Quantity', 'UOM', 'Net Wt (kg)', 'Gross Wt (kg)']],
-        body: slip.items.map((it: any, index: number) => [
+        body: (slip.items || []).map((it: any, index: number) => [
             index + 1,
             it.productName || '',
             it.quantity,
