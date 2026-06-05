@@ -667,60 +667,33 @@ const Settings: React.FC<SettingsProps> = ({
                   )}
 
                   {activeTab === 'RBAC' && (
-                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm space-y-6 animate-fade-in">
-                        <div className="flex justify-between items-end border-b pb-4 mb-4">
-                            <div>
-                                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase flex items-center gap-2">
-                                  <Fingerprint className="w-4 h-4" /> Role Permissions
-                                </h3>
-                                <p className="text-[10px] text-slate-500 uppercase mt-1 tracking-wider">Restrict module access by user role</p>
-                            </div>
+                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 shadow-sm flex flex-col items-center gap-4 animate-fade-in text-center">
+                        <div className="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900">
+                           <ShieldCheck className="w-10 h-10 text-indigo-500" />
                         </div>
-                        
-                        <div className="space-y-4">
-                           {['MANAGER', 'ACCOUNTANT', 'SALES', 'WORKER'].map((role) => (
-                               <div key={role} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-                                  <div className="bg-slate-50 dark:bg-slate-950 p-3 px-4 font-bold text-xs uppercase tracking-widest text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                                      Role: {role}
-                                  </div>
-                                  <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 bg-white dark:bg-slate-900">
-                                      {[ 'CRM', 'ORDERS', 'INVENTORY', 'PRODUCTION', 'ACCOUNTING', 'TEAM', 'PROJECTS', 'PURCHASE_ORDER', 'POS', 'REPORTS', 'SETTINGS' ].map(mod => {
-                                          const rp = rolePermissions?.find(r => r.role === role && r.module === mod);
-                                          const isAllowed = rp ? rp.canRead : true;
-                                          
-                                          return (
-                                              <label key={mod} className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-all ${isAllowed ? 'border-green-200 bg-green-50 dark:bg-green-900/10 dark:border-green-900/30 text-green-700 dark:text-green-400' : 'border-slate-200 bg-slate-50 dark:bg-slate-950 dark:border-slate-800 text-slate-400'}`}>
-                                                  <input 
-                                                     type="checkbox" 
-                                                     checked={isAllowed}
-                                                     className="hidden"
-                                                     onChange={() => {
-                                                        if (rp && onUpdateRolePermission) {
-                                                            onUpdateRolePermission({...rp, canRead: !rp.canRead});
-                                                        } else if (onAddRolePermission) {
-                                                            onAddRolePermission({
-                                                                id: `rp_${Date.now()}_${Math.random().toString(36).substring(2,6)}`,
-                                                                role: role as UserRole,
-                                                                module: mod,
-                                                                canRead: false,
-                                                                canCreate: true,
-                                                                canUpdate: true,
-                                                                canDelete: true,
-                                                            });
-                                                        }
-                                                     }}
-                                                  />
-                                                  <div className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 ${isAllowed ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800'}`}>
-                                                     {isAllowed && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
-                                                  </div>
-                                                  <span className="text-[10px] font-bold tracking-widest truncate">{mod.replace(/_/g, ' ')}</span>
-                                              </label>
-                                          )
-                                      })}
-                                  </div>
-                               </div>
-                           ))}
+                        <div>
+                           <h3 className="text-base font-black text-slate-800 dark:text-slate-100">Role Access Manager</h3>
+                           <p className="text-sm text-slate-500 mt-1 max-w-md">
+                             Role-Based Access Control has been upgraded to a dedicated full-page manager with per-module CRUD permissions, role matrix view, and preset templates.
+                           </p>
                         </div>
+                        <div className="flex flex-col gap-2 w-full max-w-xs">
+                           <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-600">
+                             <div className="flex items-center gap-2 bg-sky-50 border border-sky-100 rounded-lg p-2">
+                               <span className="text-sky-500">👁️</span> Read Access
+                             </div>
+                             <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-lg p-2">
+                               <span className="text-emerald-500">➕</span> Create Access
+                             </div>
+                             <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-lg p-2">
+                               <span className="text-amber-500">✏️</span> Edit Access
+                             </div>
+                             <div className="flex items-center gap-2 bg-rose-50 border border-rose-100 rounded-lg p-2">
+                               <span className="text-rose-500">🗑️</span> Delete Access
+                             </div>
+                           </div>
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-semibold">Navigate to <strong>System Tools → Role Access Control</strong> in the sidebar to manage permissions.</p>
                      </div>
                   )}
 

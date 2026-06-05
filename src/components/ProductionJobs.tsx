@@ -49,12 +49,12 @@ import {
   Pie,
 } from "recharts";
 
-import ProductImageThumb from "./ProductImageThumb";
 import { WorkOrderStockModals } from "./work-orders/WorkOrderStockModals";
 import { WorkOrderConnections } from "./work-orders/WorkOrderConnections";
 import { WorkOrderJobCards } from "./work-orders/WorkOrderJobCards";
 import { WorkOrderPrintDesk } from "./work-orders/WorkOrderPrintDesk";
 import { WorkOrderFinancials } from "./work-orders/WorkOrderFinancials";
+import ProductImageThumb from "./ProductImageThumb";
 
 interface ProductionJobsProps {
   jobs: ProductionJob[];
@@ -508,42 +508,14 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
   }, [selectedDesign, formData.quantity]);
 
   // Calculate ERPNext costs
-  const availableRoutingTemplates = useMemo(() => {
-    return garmentSetup?.routingTemplates?.length
-      ? garmentSetup.routingTemplates
-      : mockRoutingTemplates;
-  }, [garmentSetup]);
-
-  const activeRoutingTemplate = useMemo(() => {
-    return (
-      availableRoutingTemplates.find(
-        (rt: any) => rt.id === formData.routingTemplateId,
-      ) || availableRoutingTemplates[0]
-    );
-  }, [formData.routingTemplateId, availableRoutingTemplates]);
-
-
   const costingSummary = useMemo(() => {
     const materialCost = batchRequirements.reduce((acc, item) => {
-      // Use live inventory price; fall back to stored estimatedCost only if item not found
-      const livePrice = inventory.find((i: any) => i.name === item.materialName)?.pricePerUnit
-        ?? item.estimatedCost
-        ?? 50;
-      return acc + item.totalRequired * livePrice;
+      return acc + item.totalRequired * (item.estimatedCost || 50);
     }, 0);
 
-    // Use actual operation rates from the job's operations or active routing template
-    const jobOps: any[] = formData.operations?.length
-      ? formData.operations
-      : (activeRoutingTemplate?.operations || []);
-    const laborCostPerPiece = jobOps.length > 0
-      ? jobOps.reduce((sum: number, op: any) => {
-          const rate = op.ratePerPiece ?? op.defaultRate ?? 0;
-          return sum + (op.rateUnit === 'PER_HOUR'
-            ? rate * ((op.plannedHours ?? 1))
-            : rate);
-        }, 0)
-      : (selectedDesign?.processCostPerPiece ?? 0);
+    const laborCostPerPiece = selectedDesign
+      ? (selectedDesign.processCostPerPiece || 150) * 0.3
+      : 45;
     const estimatedLaborCost = (formData.quantity || 0) * laborCostPerPiece;
 
     const actualMaterialsCost = formData.materialsIssued ? materialCost : 0;
@@ -568,13 +540,10 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
     };
   }, [
     batchRequirements,
-    inventory,
     selectedDesign,
     formData.quantity,
-    formData.operations,
     formData.materialsIssued,
     formData.actualLaborCosts,
-    activeRoutingTemplate,
   ]);
 
   const handleSave = (e?: React.FormEvent) => {
@@ -1005,6 +974,20 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
       ...prev,
     ]);
   };
+
+  const availableRoutingTemplates = useMemo(() => {
+    return garmentSetup?.routingTemplates?.length
+      ? garmentSetup.routingTemplates
+      : mockRoutingTemplates;
+  }, [garmentSetup]);
+
+  const activeRoutingTemplate = useMemo(() => {
+    return (
+      availableRoutingTemplates.find(
+        (rt: any) => rt.id === formData.routingTemplateId,
+      ) || availableRoutingTemplates[0]
+    );
+  }, [formData.routingTemplateId, availableRoutingTemplates]);
 
   const handleSignOffOperation = (idx: number) => {
     const docId = formData.id || "draft-new";

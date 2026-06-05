@@ -76,6 +76,12 @@ export type ViewState =
   | "TASK_WASHING"
   | "TASK_FINISHING"
   | "TASK_PACKING"
+  | "WORK_ORDER_TASKS"
+  | "MFG_DASHBOARD"
+  | "JOB_CARD_SUMMARY"
+  | "OPERATIONS_MASTER"
+  | "ROUTING_MASTER"
+  | "ROLE_ACCESS"
   | string;
 
 export enum Unit {
@@ -200,22 +206,6 @@ export interface InventoryItem extends BaseEntity {
   tags?: string[];
   widthInch?: number;
   lengthCm?: number;
-  // Extended Ready Stock fields
-  lotNumber?: string;
-  colorShade?: string;
-  fabricComposition?: string;
-  imageUrls?: string[];
-  fabricMetering?: Array<{
-    direction: 'L' | 'R';
-    meters: number;
-    lotNumber?: string;
-    rollCount?: number;
-    notes?: string;
-  }>;
-  pcSizes?: Array<{
-    size: string;
-    qty: number;
-  }>;
 }
 
 export interface DesignOption {
@@ -587,7 +577,6 @@ export interface ProductionJob extends BaseEntity {
   cuttingLogs?: CuttingLog[];
   productionLogs?: ProductionLog[];
   sizeWise?: Record<string, number>;
-  completedAt?: string;
 }
 export interface KarigarLedgerEntry extends BaseEntity {
   date: string;

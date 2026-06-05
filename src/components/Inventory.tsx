@@ -428,11 +428,8 @@ const EMPTY_FORM = (): Partial<InventoryItem> => ({
 });
 
 const Inventory: React.FC<InventoryProps> = ({
-  items: allItems, orders = [], production = [], designs = [], onAdd, onUpdate, onDelete, currency = '₹'
+  items, orders = [], production = [], designs = [], onAdd, onUpdate, onDelete, currency = '₹'
 }) => {
-  // Exclude Ready Stock items (added via Opening Stock module) — they belong to a separate register
-  const items = useMemo(() => allItems.filter(i => i.doctype !== 'READY_STOCK'), [allItems]);
-
   const [viewMode, setViewMode] = useState<ViewMode>('LIST');
   const [formData, setFormData] = useState<Partial<InventoryItem>>(EMPTY_FORM());
   const [formTab, setFormTab] = useState<FormTab>('DETAILS');

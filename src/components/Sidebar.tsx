@@ -56,6 +56,8 @@ import {
   CalendarDays,
   Hammer,
   GitBranch,
+  Shield,
+  Workflow,
 } from "lucide-react";
 import { ViewState, TeamMember, UIPreferences, CompanyInfo } from "../types";
 
@@ -163,17 +165,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: "MFG_DASHBOARD", label: "Mfg Dashboard", icon: LayoutGrid },
         { id: "PRODUCTION_PLAN", label: "Production Plan", icon: CalendarDays },
         { id: "PRODUCTION", label: "Work Orders", icon: ClipboardList },
-        { id: "TASK_CUTTING", label: "Cutting Tasks", icon: Scissors },
-        { id: "TASK_STITCHING", label: "Stitching Tasks", icon: Layers },
-        { id: "TASK_EMBROIDERY", label: "Embroidery Tasks", icon: Image },
-        { id: "TASK_PRINTING", label: "Printing Tasks", icon: Palette },
-        { id: "TASK_WASHING", label: "Washing Tasks", icon: Recycle },
-        { id: "TASK_FINISHING", label: "Finishing Tasks", icon: CheckSquare },
-        { id: "TASK_PACKING", label: "Packing Tasks", icon: Archive },
+        { id: "WORK_ORDER_TASKS", label: "Task Pages", icon: Layers },
         { id: "JOB_CARD_SUMMARY", label: "Job Card Summary", icon: BarChart2 },
         { id: "WORKSTATIONS", label: "Workstations", icon: Hammer },
-        { id: "OPERATIONS_MASTER", label: "Operations", icon: Settings2 },
-        { id: "ROUTING_MASTER", label: "Routing Master", icon: GitBranch },
+        { id: "OPERATIONS_MASTER", label: "Operations Master", icon: Settings2 },
+        { id: "ROUTING_MASTER", label: "Routing Master", icon: Workflow },
         { id: "TRACK_LOTS", label: "Tracking", icon: MapPin },
         { id: "FABRIC_COSTING", label: "Garment Costing", icon: Coins },
         {
@@ -238,6 +234,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: "DATA_IMPORT", label: "Data Import Tool", icon: Archive },
         { id: "WORKFLOW_INBOX", label: "Workflow Inbox", icon: CheckSquare },
         { id: "REPORT_BUILDER", label: "Report Builder", icon: FileText },
+        { id: "ROLE_ACCESS", label: "Role Access Control", icon: Shield },
         { id: "SETTINGS", label: "Settings", icon: ShieldCheck },
       ],
     },

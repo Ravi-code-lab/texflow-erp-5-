@@ -85,19 +85,14 @@ import { TallyIntegration } from "./components/TallyIntegration";
 import { PrintFormatBuilder } from "./components/PrintFormatBuilder";
 import { FabricCostingWorkspace } from "./components/FabricCosting";
 import { DispatchPlanner } from "./components/DispatchPlanner";
-import TaskPageCutting from "./components/work-orders/TaskPageCutting";
+import WorkOrderTaskHub from "./components/work-orders/WorkOrderTaskHub";
 import MfgDashboard from "./components/work-orders/MfgDashboard";
 import JobCardSummary from "./components/work-orders/JobCardSummary";
 import OperationsMaster from "./components/work-orders/OperationsMaster";
+import RoleAccessManager from "./components/RoleAccessManager";
 import RoutingMaster from "./components/work-orders/RoutingMaster";
 import ProductionPlan from "./components/ProductionPlan";
 import WorkstationsComp from "./components/Workstations";
-import TaskPageStitching from "./components/work-orders/TaskPageStitching";
-import TaskPageEmbroidery from "./components/work-orders/TaskPageEmbroidery";
-import TaskPagePrinting from "./components/work-orders/TaskPagePrinting";
-import TaskPageWashing from "./components/work-orders/TaskPageWashing";
-import TaskPageFinishing from "./components/work-orders/TaskPageFinishing";
-import TaskPagePacking from "./components/work-orders/TaskPagePacking";
 import { GenericListPage } from "./components/GenericListPage";
 import {
   InventoryItem,
@@ -1277,9 +1272,6 @@ const App: React.FC = () => {
   const effectiveFeatures = useMemo(() => {
     let ef = { ...features };
     if (currentUser && currentUser.role !== "ADMIN") {
-      // by default, if a RolePermission exists for this role and module, it takes precedence.
-      // Wait, the way ERPNext does it, if you *defined* role permissions, maybe it overrides.
-      // Let's just say: if there is a permission rule turning off readability, we disable it.
       rolePermissions.forEach((rp) => {
         if (rp.role === currentUser.role && rp.canRead === false) {
           ef[rp.module] = false;
@@ -1288,6 +1280,16 @@ const App: React.FC = () => {
     }
     return ef;
   }, [features, currentUser, rolePermissions]);
+
+  /** Returns CRUD flags for a given module for the current user */
+  const checkPermission = (module: string) => {
+    if (!currentUser || currentUser.role === "ADMIN") {
+      return { canRead: true, canCreate: true, canUpdate: true, canDelete: true };
+    }
+    const rp = rolePermissions.find(p => p.role === currentUser.role && p.module === module);
+    if (!rp) return { canRead: true, canCreate: true, canUpdate: true, canDelete: true }; // default full
+    return { canRead: rp.canRead, canCreate: rp.canCreate, canUpdate: rp.canUpdate, canDelete: rp.canDelete };
+  };
 
   const handleDyeingJobUpdate = (job: DyeingJob) => {
     dyeingMgr.update(job);
@@ -1493,12 +1495,11 @@ const App: React.FC = () => {
             (i) => i.name.trim().toLowerCase() === rm.materialName.trim().toLowerCase()
           );
           if (idx >= 0) {
-            const wastageFactor = 1 + (rm.wastagePercent || 0) / 100;
             newInv[idx] = {
               ...newInv[idx],
               quantity: Math.max(
                 0,
-                newInv[idx].quantity - rm.quantity * wastageFactor * updatedJob.quantity,
+                newInv[idx].quantity - rm.quantity * updatedJob.quantity,
               ),
             };
           }
@@ -2308,6 +2309,7 @@ const App: React.FC = () => {
     "REPORT_BUILDER",
     "AUDIT_TRAIL",
     "TASKS",
+    "WORK_ORDER_TASKS",
     "TASK_CUTTING",
     "TASK_STITCHING",
     "TASK_EMBROIDERY",
@@ -2319,6 +2321,7 @@ const App: React.FC = () => {
     "JOB_CARD_SUMMARY",
     "OPERATIONS_MASTER",
     "ROUTING_MASTER",
+    "ROLE_ACCESS",
     "PRODUCTION_PLAN",
     "WORKSTATIONS",
     "TIMESHEET",
@@ -2879,53 +2882,28 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "TASK_CUTTING" && (
-                  <TaskPageCutting
+                {(currentView === "WORK_ORDER_TASKS" ||
+                  currentView === "TASK_CUTTING" ||
+                  currentView === "TASK_STITCHING" ||
+                  currentView === "TASK_EMBROIDERY" ||
+                  currentView === "TASK_PRINTING" ||
+                  currentView === "TASK_WASHING" ||
+                  currentView === "TASK_FINISHING" ||
+                  currentView === "TASK_PACKING") && (
+                  <WorkOrderTaskHub
                     production={active(production)}
                     onUpdateWorkOrder={handleJobUpdate}
                     karigars={active(karigars)}
-                  />
-                )}
-                {currentView === "TASK_STITCHING" && (
-                  <TaskPageStitching
-                    production={active(production)}
-                    onUpdateWorkOrder={handleJobUpdate}
-                    karigars={active(karigars)}
-                  />
-                )}
-                {currentView === "TASK_EMBROIDERY" && (
-                  <TaskPageEmbroidery
-                    production={active(production)}
-                    onUpdateWorkOrder={handleJobUpdate}
-                    karigars={active(karigars)}
-                  />
-                )}
-                {currentView === "TASK_PRINTING" && (
-                  <TaskPagePrinting
-                    production={active(production)}
-                    onUpdateWorkOrder={handleJobUpdate}
-                    karigars={active(karigars)}
-                  />
-                )}
-                {currentView === "TASK_WASHING" && (
-                  <TaskPageWashing
-                    production={active(production)}
-                    onUpdateWorkOrder={handleJobUpdate}
-                    karigars={active(karigars)}
-                  />
-                )}
-                {currentView === "TASK_FINISHING" && (
-                  <TaskPageFinishing
-                    production={active(production)}
-                    onUpdateWorkOrder={handleJobUpdate}
-                    karigars={active(karigars)}
-                  />
-                )}
-                {currentView === "TASK_PACKING" && (
-                  <TaskPagePacking
-                    production={active(production)}
-                    onUpdateWorkOrder={handleJobUpdate}
-                    karigars={active(karigars)}
+                    initialTab={
+                      currentView === "TASK_CUTTING" ? "Cutting"
+                      : currentView === "TASK_STITCHING" ? "Stitching"
+                      : currentView === "TASK_EMBROIDERY" ? "Embroidery"
+                      : currentView === "TASK_PRINTING" ? "Printing"
+                      : currentView === "TASK_WASHING" ? "Washing"
+                      : currentView === "TASK_FINISHING" ? "Finishing"
+                      : currentView === "TASK_PACKING" ? "Packing"
+                      : "Fabric Inspection"
+                    }
                   />
                 )}
                 {currentView === "MFG_DASHBOARD" && (
@@ -2945,6 +2923,14 @@ const App: React.FC = () => {
                 )}
                 {currentView === "ROUTING_MASTER" && (
                   <RoutingMaster />
+                )}
+                {currentView === "ROLE_ACCESS" && (
+                  <RoleAccessManager
+                    rolePermissions={rolePermissions}
+                    onAddRolePermission={rolePermMgr.add}
+                    onUpdateRolePermission={rolePermMgr.update}
+                    onDeleteRolePermission={(id) => rolePermMgr.remove(id)}
+                  />
                 )}
                 {currentView === "PRODUCTION_PLAN" && (
                   <ProductionPlan
