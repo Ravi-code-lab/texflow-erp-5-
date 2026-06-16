@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { ProductionJob as WorkOrder } from "../../types";
+import { ProductionJob as WorkOrder, Design } from "../../types";
 import {
   CheckCircle2, Timer, Clock, Search, Filter, Download,
   ChevronDown, TrendingUp, AlertCircle, BarChart2, Calendar,
@@ -8,42 +8,94 @@ import {
 
 interface Props {
   production: WorkOrder[];
+  designs?: Design[];
 }
 
 const TASK_NAMES = ["Cutting", "Stitching", "Embroidery", "Printing", "Washing", "Finishing", "Packing"];
 
+// Stages that operate on uncut/gray fabric (tracked in meters) rather than finished pieces.
+// Cutting itself is excluded — cut job cards are conventionally tracked by pieces to cut.
+const FABRIC_STAGES = new Set([
+  "FABRIC_INSPECTION", "FABRIC_PRINTING", "DYEING", "EMBROIDERY_FABRIC",
+  "SEQUIN_FABRIC", "GSMLOT_TEST", "SHRINKAGE_TEST", "COLOUR_FASTNESS",
+  "SUBLIMATION", "MARKER_MAKING", "SPREADING",
+]);
+
 const TASK_CONFIG: Record<string, { color: string; bg: string; border: string; icon: string }> = {
-  Cutting:    { color: "text-rose-700",    bg: "bg-rose-50",    border: "border-rose-200",   icon: "✂️" },
-  Stitching:  { color: "text-indigo-700",  bg: "bg-indigo-50",  border: "border-indigo-200", icon: "🧵" },
-  Embroidery: { color: "text-violet-700",  bg: "bg-violet-50",  border: "border-violet-200", icon: "🌸" },
-  Printing:   { color: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200",  icon: "🖨️" },
-  Washing:    { color: "text-cyan-700",    bg: "bg-cyan-50",    border: "border-cyan-200",   icon: "🫧" },
-  Finishing:  { color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: "✨" },
-  Packing:    { color: "text-sky-700",     bg: "bg-sky-50",     border: "border-sky-200",    icon: "📦" },
+  "Fabric Inspection": { color: "text-slate-700", bg: "bg-slate-50", border: "border-slate-200", icon: "🔍" },
+  "Dyeing":            { color: "text-blue-700",  bg: "bg-blue-50",  border: "border-blue-200", icon: "🎨" },
+  Cutting:             { color: "text-rose-700",  bg: "bg-rose-50",  border: "border-rose-200", icon: "✂️" },
+  Stitching:           { color: "text-indigo-700",bg: "bg-indigo-50",border: "border-indigo-200",icon: "🧵" },
+  Embroidery:          { color: "text-violet-700",bg: "bg-violet-50",border: "border-violet-200",icon: "🌸" },
+  Printing:            { color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", icon: "🖨️" },
+  Washing:             { color: "text-cyan-700",  bg: "bg-cyan-50",  border: "border-cyan-200", icon: "🫧" },
+  "Hand Work":         { color: "text-pink-700",  bg: "bg-pink-50",  border: "border-pink-200", icon: "✋" },
+  Finishing:           { color: "text-emerald-700",bg: "bg-emerald-50",border: "border-emerald-200",icon: "✨" },
+  "QC Check":          { color: "text-green-700", bg: "bg-green-50", border: "border-green-200", icon: "✅" },
+  Packing:             { color: "text-sky-700",   bg: "bg-sky-50",   border: "border-sky-200",  icon: "📦" },
 };
 
-export default function JobCardSummary({ production }: Props) {
+export default function JobCardSummary({ production, designs = [] }: Props) {
   const [search, setSearch] = useState("");
   const [filterTask, setFilterTask] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [period, setPeriod] = useState("ALL");
 
+  // Match each work order to its design (by style code / SKU first, falling back to product name)
+  // so fabric-stage job cards (printing, dyeing, inspection) can show real fabric meterage from the BOM.
+  const designByKey = useMemo(() => {
+    const map = new Map<string, Design>();
+    (designs || []).forEach((d) => {
+      if (d.sku) map.set(d.sku.toLowerCase(), d);
+      if (d.name) map.set(d.name.toLowerCase(), d);
+    });
+    return map;
+  }, [designs]);
+
+  const fabricMetersPerPiece = (wo: WorkOrder) => {
+    const design =
+      (wo.styleCode && designByKey.get(wo.styleCode.toLowerCase())) ||
+      (wo.productName && designByKey.get(wo.productName.toLowerCase()));
+    if (!design?.recipe) return 0;
+    return design.recipe.reduce((sum, item) => {
+      const u = (item.unit || "").toString().toUpperCase();
+      if (u.includes("METER") || u === "MTR" || u === "M") return sum + (Number(item.quantity) || 0);
+      return sum;
+    }, 0);
+  };
+
   // Flatten all job cards from all work orders
   const allJobCards = useMemo(() => {
-    return production.flatMap((wo) =>
-      (wo.operations || []).map((op: any, idx: number) => ({
-        ...op,
-        woId: wo.id,
-        woProduct: wo.productName,
-        woQty: wo.quantity,
-        woStatus: wo.status,
-        opIndex: idx,
-        taskCategory: TASK_NAMES.find((t) =>
-          op.name?.toLowerCase().includes(t.toLowerCase())
-        ) || "Other",
-      }))
-    );
-  }, [production]);
+    return production.flatMap((wo) => {
+      let activeIdx = (wo.operations || []).findIndex(o => {
+        const s = (o.status || "").toUpperCase();
+        return s !== "COMPLETED" && s !== "SKIPPED";
+      });
+      if (activeIdx === -1) activeIdx = (wo.operations || []).length;
+
+      const perPieceMeters = fabricMetersPerPiece(wo);
+      const totalFabricMeters = perPieceMeters * (wo.quantity || 0);
+
+      return (wo.operations || []).map((op, idx) => {
+        const isFabricStage = FABRIC_STAGES.has((op.stage || "").toUpperCase()) || op.rateUnit === "PER_METER";
+        const useFabricQty = isFabricStage && totalFabricMeters > 0;
+        return {
+          ...op,
+          woId: wo.id,
+          woProduct: wo.productName,
+          woQty: wo.quantity,
+          qtyValue: useFabricQty ? totalFabricMeters : wo.quantity,
+          qtyUnit: useFabricQty ? "Mtr" : "pcs",
+          woStatus: wo.status,
+          opIndex: idx,
+          isReady: idx <= activeIdx,
+          taskCategory: TASK_NAMES.find((t) =>
+            op.name?.toLowerCase().includes(t.toLowerCase())
+          ) || "Other",
+        };
+      }).filter(op => op.isReady);
+    });
+  }, [production, designByKey]);
 
   // Summary stats per task
   const taskStats = useMemo(() =>
@@ -256,9 +308,9 @@ export default function JobCardSummary({ production }: Props) {
                           {cfg.icon} {j.taskCategory}
                         </span>
                       </td>
-                      <td className="py-3 px-4 border-l border-slate-100 text-xs text-slate-500 font-semibold">{j.workstation || "—"}</td>
+                      <td className="py-3 px-4 border-l border-slate-100 text-xs text-slate-500 font-semibold">{j.workstationType || "—"}</td>
                       <td className="py-3 px-4 border-l border-slate-100 text-xs font-bold text-slate-700 tabular-nums">
-                        <div>{j.woQty} pcs</div>
+                        <div>{j.qtyUnit === "Mtr" ? j.qtyValue.toFixed(1) : j.qtyValue} {j.qtyUnit}</div>
                         {j.completedQuantity ? <div className="text-emerald-600">{j.completedQuantity} done</div> : null}
                       </td>
                       <td className="py-3 px-4 border-l border-slate-100 text-xs text-slate-500">{j.assignedTo || <span className="italic text-slate-300">Unassigned</span>}</td>

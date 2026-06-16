@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { PurchaseOrder, Supplier, InventoryItem, PurchaseOrderItem } from '../types';
 import { 
   Search, Plus, Receipt, Filter, 
@@ -9,18 +10,20 @@ import ProductImageThumb from './ProductImageThumb';
 
 interface PurchaseInvoiceProps {
   purchaseInvoices: PurchaseOrder[];
+  purchaseOrders?: PurchaseOrder[];
   suppliers: Supplier[];
   inventory: InventoryItem[];
   onAddPI: (po: PurchaseOrder) => void;
   onUpdatePI: (po: PurchaseOrder) => void;
+  pendingPOId?: string;
   currency?: string;
 }
 
 const PurchaseInvoiceComp: React.FC<PurchaseInvoiceProps> = ({ 
-  purchaseInvoices, suppliers, inventory,
-  onAddPI, onUpdatePI, currency = '₹' 
+  purchaseInvoices, purchaseOrders = [], suppliers, inventory,
+  onAddPI, onUpdatePI, pendingPOId, currency = '₹' 
 }) => {
-  const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>('LIST');
+  const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>(pendingPOId ? 'FORM' : 'LIST');
   const [filter, setFilter] = useState('');
   
   const [formData, setFormData] = useState<Partial<PurchaseOrder>>({
@@ -30,6 +33,23 @@ const PurchaseInvoiceComp: React.FC<PurchaseInvoiceProps> = ({
   });
 
   const [newItem, setNewItem] = useState<PurchaseOrderItem>({ productName: '', quantity: 1, unitPrice: 0, unit: 'PIECE' });
+
+  // Pre-populate form from source PO when navigated via CONVERT_TO_PURCHASE_INVOICE
+  React.useEffect(() => {
+    if (pendingPOId && purchaseOrders.length > 0) {
+      const sourcePO = purchaseOrders.find(p => p.id === pendingPOId);
+      if (sourcePO) {
+        setFormData({
+          ...(sourcePO as any),
+          id: undefined, // new invoice record
+          status: 'DRAFT',
+          date: new Date().toISOString().split('T')[0],
+          sourcePOId: sourcePO.id,
+        });
+        setViewMode('FORM');
+      }
+    }
+  }, [pendingPOId, purchaseOrders]);
 
   const filteredPI = useMemo(() => {
     const searchLower = (filter || '').toLowerCase();
@@ -50,7 +70,7 @@ const PurchaseInvoiceComp: React.FC<PurchaseInvoiceProps> = ({
 
     const oData = {
       ...formData,
-      id: formData.id || `PINV-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `PINV-${uuidShort(12)}`,
       supplierId: formData.supplierId || supplier?.id || 'SUP-XXX',
       totalAmount: subTotal + taxAmount
     } as PurchaseOrder;

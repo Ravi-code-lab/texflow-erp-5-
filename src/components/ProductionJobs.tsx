@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { uuidShort } from "../utils/uuid";
 import { ProductionJob, Design, Machine, Karigar } from "../types";
 import {
   Users,
@@ -83,30 +84,40 @@ const mockRoutingTemplates = [
       {
         name: "Fabric Panel Cutting",
         workstation: "Cutting Table A",
+        workstationType: "CUTTING",
+        stage: "CUTTING",
         time: "10 Mins",
         rate: 120,
       },
       {
         name: "Embroidery Panel Stencil",
         workstation: "Zari Computer Deck",
+        workstationType: "EMBROIDERY_FABRIC",
+        stage: "EMBROIDERY_FABRIC",
         time: "15 Mins",
         rate: 150,
       },
       {
         name: "Collar & Sleeve Stitching",
         workstation: "High-Speed Stitch Line",
+        workstationType: "STITCHING",
+        stage: "STITCHING",
         time: "20 Mins",
         rate: 180,
       },
       {
         name: "Button Hooking & Pressing",
         workstation: "Finishing Steam Table",
+        workstationType: "FINISHING",
+        stage: "FINISHING",
         time: "8 Mins",
         rate: 100,
       },
       {
         name: "Final QC & Barcode Pack",
         workstation: "QC Inspection Table",
+        workstationType: "QC_CHECK",
+        stage: "QC_CHECK",
         time: "5 Mins",
         rate: 90,
       },
@@ -120,30 +131,40 @@ const mockRoutingTemplates = [
       {
         name: "Silk Board Warp Sizing",
         workstation: "Warp Loom Floor A",
+        workstationType: "FABRIC_INSPECTION",
+        stage: "FABRIC_INSPECTION",
         time: "15 Mins",
         rate: 140,
       },
       {
         name: "Gold Border Lace Attachment",
         workstation: "Zari Computer Deck",
+        workstationType: "EMBROIDERY_FABRIC",
+        stage: "EMBROIDERY_FABRIC",
         time: "25 Mins",
         rate: 180,
       },
       {
         name: "Hand Block Printing & Dying",
         workstation: "Indigo Block Printing Vat",
+        workstationType: "FABRIC_PRINTING",
+        stage: "FABRIC_PRINTING",
         time: "35 Mins",
         rate: 200,
       },
       {
         name: "Zari Fringe Stitch Tassels",
         workstation: "High-Speed Stitch Line",
+        workstationType: "STITCHING",
+        stage: "STITCHING",
         time: "12 Mins",
         rate: 150,
       },
       {
         name: "Final Inspection & Ironing",
         workstation: "Finishing Steam Table",
+        workstationType: "FINISHING",
+        stage: "FINISHING",
         time: "10 Mins",
         rate: 100,
       },
@@ -157,30 +178,40 @@ const mockRoutingTemplates = [
       {
         name: "Laser Pattern Cutting",
         workstation: "Cutting Table A",
+        workstationType: "CUTTING",
+        stage: "CUTTING",
         time: "8 Mins",
         rate: 130,
       },
       {
         name: "Front Placket & Pocket Join",
         workstation: "High-Speed Stitch Line",
+        workstationType: "STITCHING",
+        stage: "STITCHING",
         time: "18 Mins",
         rate: 180,
       },
       {
         name: "Yoke & Collar Attachment",
         workstation: "High-Speed Stitch Line",
+        workstationType: "STITCHING",
+        stage: "STITCHING",
         time: "12 Mins",
         rate: 180,
       },
       {
         name: "Denim Bleach Wash Cycle",
         workstation: "Wash & Dye Vat C",
+        workstationType: "WASHING",
+        stage: "WASHING",
         time: "30 Mins",
         rate: 220,
       },
       {
         name: "Tack Buttoning & Pack",
         workstation: "QC Inspection Table",
+        workstationType: "PACKING",
+        stage: "PACKING",
         time: "7 Mins",
         rate: 95,
       },
@@ -562,7 +593,7 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
     const jobData: ProductionJob = {
       id:
         formData.id ||
-        `JOB-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
+        `JOB-${uuidShort(12)}`,
       productName: formData.productName!,
       quantity: formData.quantity!,
       status: formData.status || "CUTTING",
@@ -2259,12 +2290,8 @@ const ProductionJobs: React.FC<ProductionJobsProps> = ({
                   Bundles
                 </h3>
                 <WorkOrderPrintDesk
-                  workOrderId={formData.id || '—'}
-                  productName={formData.productName}
-                  quantity={formData.quantity || 0}
-                  styleCode={formData.styleCode}
-                  deadline={formData.deadline}
-                  operations={formData.operations || []}
+                  job={formData}
+                  karigars={karigars}
                 />
               </div>
 

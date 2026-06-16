@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Design, InventoryItem, RecipeItem, GarmentRoutingTemplate, Unit } from '../types';
 import { 
   Plus, Search, Trash2, Edit2, Calculator, X, Info, Layers, 
@@ -151,7 +152,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
     const baseUnitItem: Design = { 
       ...formData, 
       processCostPerPiece: calculatedCosting.totalLanded,
-      id: editingId || `BOM-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`, 
+      id: editingId || `BOM-${uuidShort(12)}`, 
       updatedAt: new Date().toISOString() 
     } as any;
 
@@ -410,7 +411,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                  {design.recipe.slice(0, 3).map((item, idx) => {
                                     const sub = designs.find(d => d.name === item.materialName);
                                     return (
-                                       <div key={idx} className="flex justify-between items-center text-xs text-[#525c66] leading-tight">
+                                       <div key={item.materialName + idx} className="flex justify-between items-center text-xs text-[#525c66] leading-tight">
                                          <span className="truncate max-w-[160px] font-medium flex items-center gap-1">
                                            {sub && <GitBranch className="w-3 h-3 text-indigo-500" />}
                                            {item.materialName}
@@ -485,6 +486,8 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                       <option value="SAREE">Saree</option>
                       <option value="KURTI">Kurti</option>
                       <option value="SUIT">Suit</option>
+                      <option value="Co-ord Set">Co-ord Set (Kurti + Pant)</option>
+                      <option value="3 PC Set">3 PC Set (Kurti + Pant + Dupatta)</option>
                       <option value="FABRIC">Fabric Roll</option>
                     </select>
                 </div>
@@ -639,7 +642,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                        const mult = 1 + (rm.wastagePercent || 0)/100;
                                        const valTotal = rm.quantity * (rm.estimatedCost || 0) * mult;
                                        return (
-                                          <tr key={idx} className="hover:bg-slate-50/50 text-xs">
+                                          <tr key={rm.materialName + idx} className="hover:bg-slate-50/50 text-xs">
                                              <td className="py-2.5 pl-3 font-semibold text-slate-800 flex items-center gap-1.5 mt-0.5">
                                                 {isSub ? <GitBranch className="w-3.5 h-3.5 text-indigo-500 shrink-0" /> : <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                                                 {rm.materialName}
@@ -770,7 +773,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                     {formData.operations.map((op, idx) => {
                                        const unitOpCost = op.taskBaseRate !== undefined ? op.taskBaseRate : (op.hourlyRate !== undefined ? op.hourlyRate : 0);
                                        return (
-                                          <tr key={idx} className="hover:bg-slate-50/50 text-xs">
+                                          <tr key={op.operationName + idx} className="hover:bg-slate-50/50 text-xs">
                                              <td className="py-2.5 pl-3 font-semibold text-slate-800">{op.operationName}</td>
                                              <td className="py-2 px-3 text-slate-600 font-medium">{op.workstation}</td>
                                              <td className="py-2 px-3 text-center tabular-nums font-semibold text-indigo-600 bg-indigo-50/20">{op.cycleTimeMinutes} Mins</td>
@@ -895,7 +898,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                                     {formData.scrapItems.map((s, idx) => {
                                        const reduction = s.quantity * s.salvageValue;
                                        return (
-                                          <tr key={idx} className="hover:bg-slate-50/50 text-xs">
+                                          <tr key={s.itemName + idx} className="hover:bg-slate-50/50 text-xs">
                                              <td className="py-2.5 pl-3 font-semibold text-emerald-700">{s.itemName}</td>
                                              <td className="py-2 px-3 text-center font-medium text-slate-500 tabular-nums">{s.quantity} {s.unit}</td>
                                              <td className="py-2 px-3 text-right text-slate-500 font-medium tabular-nums">{currency}{s.salvageValue}/{s.unit}</td>
@@ -1009,7 +1012,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                              </div>
                              <div className="grid grid-cols-2 gap-2 mt-2">
                                  {chartData.map((p, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 text-[10px] text-slate-500">
+                                    <div key={p.name + idx} className="flex items-center gap-2 text-[10px] text-slate-500">
                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></span>
                                        <span className="truncate">{p.name} ({currency}{Math.round(p.value)})</span>
                                     </div>

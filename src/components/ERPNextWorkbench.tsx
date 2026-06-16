@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   BarChart4,
@@ -24,6 +24,7 @@ import { ERP_MODULE_GROUPS, ERPModuleGroupId } from '../modules/registry';
 import { canAccessView } from '../modules/permissions';
 import { WORKFLOW_DEFINITIONS } from '../modules/workflows';
 import { DocTypeStat } from './DocTypeCenter';
+import { getItem } from '../utils/networkClient';
 
 interface ERPNextWorkbenchProps {
   stats: Partial<Record<ViewState, DocTypeStat>>;
@@ -45,15 +46,7 @@ const moduleTone: Record<ERPModuleGroupId, string> = {
   analytics: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900',
 };
 
-const readCustomFieldCount = () => {
-  if (typeof window === 'undefined') return 0;
-  try {
-    const raw = window.localStorage.getItem('erpnext_custom_fields');
-    return raw ? JSON.parse(raw).length || 0 : 0;
-  } catch {
-    return 0;
-  }
-};
+// readCustomFieldCount is now async via getItem; callers use the hook below
 
 const ERPNextWorkbench: React.FC<ERPNextWorkbenchProps> = ({
   stats,
@@ -64,7 +57,12 @@ const ERPNextWorkbench: React.FC<ERPNextWorkbenchProps> = ({
   const [activeModuleId, setActiveModuleId] = useState<ERPModuleGroupId>('workspace');
   const [query, setQuery] = useState('');
 
-  const customFieldCount = readCustomFieldCount();
+  const [customFieldCount, setCustomFieldCount] = useState(0);
+  useEffect(() => {
+    getItem<any[]>('erpnext_custom_fields').then(parsed => {
+      setCustomFieldCount(Array.isArray(parsed) ? parsed.length : 0);
+    }).catch(() => {});
+  }, []);
   const activeModule = ERP_MODULE_GROUPS.find((group) => group.id === activeModuleId) || ERP_MODULE_GROUPS[0];
   const enabledItems = activeModule.items.filter((item) => features[item.id] !== false);
   const activeModuleSchemas = DOCTYPE_SCHEMAS.filter((schema) => enabledItems.some((item) => item.id === schema.view));

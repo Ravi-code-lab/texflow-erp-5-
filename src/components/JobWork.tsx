@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { 
   Plus, Search, Settings, ShieldCheck, AlertTriangle, 
   Wrench, Activity, Sparkles, User, Calendar, Trash2, 
@@ -9,6 +10,7 @@ import {
 } from 'lucide-react';
 import { JobWork, JobWorkItem, JobWorkSuppliedItem, Design, InventoryItem, Unit } from '../types';
 import BaseModal from './BaseModal';
+import { toast, confirm } from '../utils/toast';
 import ProductImageThumb, { resolveProductImage } from './ProductImageThumb';
 
 interface JobWorkProps {
@@ -296,7 +298,7 @@ export default function JobWorkComp({
 
     const doc: JobWork = {
       id: editingId || `JW-${Date.now()}`,
-      challanNumber: formData.challanNumber || `SUB-ORD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      challanNumber: formData.challanNumber || `SUB-ORD-${new Date().getFullYear()}-${parseInt(uuidShort(4), 16)}`,
       vendorName: formData.vendorName,
       process: formData.process || 'STITCHING',
       issueDate: formData.issueDate || new Date().toISOString().split('T')[0],
@@ -339,7 +341,7 @@ export default function JobWorkComp({
 
     const doc: JobWork = {
       id: editingId || `JW-${Date.now()}`,
-      challanNumber: formData.challanNumber || `SUB-DRAFT-${Math.floor(1000 + Math.random() * 9000)}`,
+      challanNumber: formData.challanNumber || `SUB-DRAFT-${parseInt(uuidShort(4), 16)}`,
       vendorName: formData.vendorName,
       process: formData.process || 'STITCHING',
       issueDate: formData.issueDate || new Date().toISOString().split('T')[0],
@@ -1625,8 +1627,8 @@ export default function JobWorkComp({
                 {onDelete && editingId && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (confirm("Are you sure you want to completely erase this subcontracting order?")) {
+                    onClick={async () => {
+                      const _jw_ok = await confirm({ title: "Erase this subcontracting order?", message: "This cannot be undone.", confirmLabel: "Erase" }); if (_jw_ok) {
                         onDelete(editingId);
                         setIsModalOpen(false);
                       }

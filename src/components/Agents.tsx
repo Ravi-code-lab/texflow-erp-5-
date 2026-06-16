@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Agent } from '../types';
 import { 
   Users, Search, Plus, Phone, MapPin, 
@@ -36,7 +37,7 @@ const Agents: React.FC<AgentsProps> = ({ agents, onAdd, onUpdate, onDelete }) =>
     if (formData.id && onUpdate) {
       onUpdate(formData as Agent);
     } else {
-      onAdd({ ...formData, id: `AG-${Date.now().toString().slice(-4)}` } as Agent);
+      onAdd({ ...formData, id: `AG-${uuidShort(12)}` } as Agent);
     }
     setViewMode('LIST');
     setFormData({ name: '', phone: '', area: '' });

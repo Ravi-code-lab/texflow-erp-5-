@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { InventoryItem, MaterialType, Unit } from '../types';
 import {
   Search, Plus, Filter, ChevronDown, ChevronRight,
@@ -14,6 +15,8 @@ import SmartPurchase from './SmartPurchase';
 import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './ListPage';
 import { Order, ProductionJob, Design } from '../types';
 import { commitImage } from '../utils/imageUtils';
+import { getItem } from '../utils/networkClient';
+import { toast, useConfirm } from "../utils/toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -430,6 +433,7 @@ const EMPTY_FORM = (): Partial<InventoryItem> => ({
 const Inventory: React.FC<InventoryProps> = ({
   items, orders = [], production = [], designs = [], onAdd, onUpdate, onDelete, currency = '₹'
 }) => {
+  const { confirm, ConfirmModal } = useConfirm();
   const [viewMode, setViewMode] = useState<ViewMode>('LIST');
   const [formData, setFormData] = useState<Partial<InventoryItem>>(EMPTY_FORM());
   const [formTab, setFormTab] = useState<FormTab>('DETAILS');
@@ -439,13 +443,11 @@ const Inventory: React.FC<InventoryProps> = ({
   const [tagInput, setTagInput] = useState('');
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('erpnext_custom_fields');
-      if (raw) {
-        const parsed = JSON.parse(raw);
+    getItem<any[]>('erpnext_custom_fields').then(parsed => {
+      if (Array.isArray(parsed)) {
         setCustomFields(parsed.filter((f: any) => f.docType === 'InventoryItem'));
       }
-    } catch {}
+    }).catch(() => {});
   }, [viewMode]);
 
   const setField = useCallback((patch: Partial<InventoryItem>) => {
@@ -575,7 +577,7 @@ const Inventory: React.FC<InventoryProps> = ({
     if (!formData.name?.trim()) return;
     const item = {
       ...formData,
-      id: formData.id || `ITM-${Date.now().toString().slice(-6)}`,
+      id: formData.id || `ITM-${uuidShort(12)}`,
       updatedAt: new Date().toISOString(),
     } as InventoryItem;
     if (formData.id) onUpdate(item);
@@ -584,8 +586,10 @@ const Inventory: React.FC<InventoryProps> = ({
     setIsDirty(false);
   };
 
-  const handleStockEntrySave = (updated: InventoryItem) => {
+  const handleStockEntrySave = (updated: InventoryItem, _note?: string, _type?: string) => {
     onUpdate(updated);
+    // Keep formData in sync so the detail view reflects the new qty/rate immediately
+    setFormData(prev => ({ ...prev, quantity: updated.quantity, pricePerUnit: updated.pricePerUnit }));
     setStockEntryItem(null);
   };
 
@@ -673,8 +677,11 @@ const Inventory: React.FC<InventoryProps> = ({
         <div className="flex-none bg-white dark:bg-slate-900 border-b border-[#e5e7eb] dark:border-slate-700 px-5 py-3 sticky top-0 z-20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <button onClick={() => {
-                if (isDirty && !window.confirm('Discard unsaved changes?')) return;
+              <button onClick={async () => {
+                if (isDirty) {
+                  const ok = await confirm({ title: 'Discard unsaved changes?', message: 'Your edits will be lost.', confirmLabel: 'Discard', confirmClass: 'px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-bold transition-colors' });
+                  if (!ok) return;
+                }
                 setViewMode('LIST');
               }} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-[#f3f4f6] dark:hover:bg-slate-800 shrink-0 transition-colors">
                 <ArrowLeft className="w-4 h-4 text-[#6b7280]" />
@@ -717,12 +724,12 @@ const Inventory: React.FC<InventoryProps> = ({
                     <History className="w-3.5 h-3.5" />Stock Ledger
                   </button>
                   <button type="button"
-                    onClick={() => setStockEntryItem(items.find(i => i.id === formData.id) || null)}
+                    onClick={() => setStockEntryItem(formData as InventoryItem)}
                     className="h-7 px-3 flex items-center gap-1.5 bg-white dark:bg-slate-800 hover:bg-[#f3f4f6] dark:hover:bg-slate-700 border border-[#d1d8dd] dark:border-slate-600 rounded-md text-[12px] font-medium text-[#374151] dark:text-slate-300 transition-colors">
                     <ArrowRightLeft className="w-3.5 h-3.5" />Stock Entry
                   </button>
                   <button type="button"
-                    onClick={() => { if (window.confirm('Delete this item?')) { onDelete(formData.id!); setViewMode('LIST'); } }}
+                    onClick={async () => { const ok = await confirm({ title: 'Delete this item?', message: 'This action cannot be undone.', confirmLabel: 'Delete' }); if (ok) { onDelete(formData.id!); setViewMode('LIST'); } }}
                     className="h-7 px-3 flex items-center gap-1.5 bg-white dark:bg-slate-800 hover:bg-red-50 hover:border-red-400 hover:text-red-600 border border-[#d1d8dd] dark:border-slate-600 rounded-md text-[12px] font-medium text-[#374151] dark:text-slate-300 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -904,7 +911,10 @@ const Inventory: React.FC<InventoryProps> = ({
                     </FieldRow>
                     <FieldRow label="Valuation Method">
                       <div className="relative">
-                        <select className={selectCls} defaultValue="Moving Average">
+                        <select
+                          value={formData.valuationMethod || 'Moving Average'}
+                          onChange={e => setField({ valuationMethod: e.target.value })}
+                          className={selectCls}>
                           {VALUATION_METHODS.map(v => <option key={v}>{v}</option>)}
                         </select>
                         <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9ca3af] pointer-events-none" />
@@ -913,7 +923,11 @@ const Inventory: React.FC<InventoryProps> = ({
                     <FieldRow label="Opening Stock (Qty)">
                       <input type="number" min="0" step="0.01"
                         value={formData.openingStock ?? formData.quantity ?? 0}
-                        onChange={e => setField({ openingStock: Number(e.target.value), quantity: Number(e.target.value) })}
+                        onChange={e => {
+                          const val = Number(e.target.value);
+                          // For new items, opening stock IS the quantity; for existing items, only update openingStock
+                          setField(isEdit ? { openingStock: val } : { openingStock: val, quantity: val });
+                        }}
                         className={inputCls} />
                     </FieldRow>
                     <FieldRow label="Valuation Rate (per unit)">
@@ -983,7 +997,9 @@ const Inventory: React.FC<InventoryProps> = ({
               <SectionCard title="Purchase Details" icon={ShoppingCart}>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-5">
                   <FieldRow label="Lead Time (days)">
-                    <input type="number" min="0" className={inputCls} defaultValue={7} />
+                    <input type="number" min="0" className={inputCls}
+                      value={formData.reorderQty ?? 7}
+                      onChange={e => setField({ reorderQty: Number(e.target.value) })} />
                   </FieldRow>
                   <FieldRow label="Min Order Qty">
                     <input type="number" min="0" step="0.01" value={formData.minStockLevel || 0}
@@ -994,7 +1010,9 @@ const Inventory: React.FC<InventoryProps> = ({
                       onChange={e => setField({ pricePerUnit: Number(e.target.value) })} className={inputCls} />
                   </FieldRow>
                   <FieldRow label="Safety Stock">
-                    <input type="number" min="0" step="0.01" className={inputCls} defaultValue={0} />
+                    <input type="number" min="0" step="0.01" className={inputCls}
+                      value={formData.safetyStock ?? 0}
+                      onChange={e => setField({ safetyStock: Number(e.target.value) })} />
                   </FieldRow>
                   <FieldRow label="Preferred Supplier">
                     <input className={inputCls} placeholder="Supplier name..." />
@@ -1023,16 +1041,24 @@ const Inventory: React.FC<InventoryProps> = ({
                       className={inputCls} placeholder="e.g. 5208" />
                   </FieldRow>
                   <FieldRow label="Stock Adjustment Account">
-                    <input className={inputCls} defaultValue="Stock Adjustment - Raw Material" />
+                    <input className={inputCls}
+                      value={formData.stockAdjustmentAccount || 'Stock Adjustment - Raw Material'}
+                      onChange={e => setField({ stockAdjustmentAccount: e.target.value })} />
                   </FieldRow>
                   <FieldRow label="Purchase Account">
-                    <input className={inputCls} defaultValue="Purchases - Raw Material" />
+                    <input className={inputCls}
+                      value={formData.purchaseAccount || 'Purchases - Raw Material'}
+                      onChange={e => setField({ purchaseAccount: e.target.value })} />
                   </FieldRow>
                   <FieldRow label="Expense Account">
-                    <input className={inputCls} defaultValue="Cost of Goods Sold" />
+                    <input className={inputCls}
+                      value={formData.expenseAccount || 'Cost of Goods Sold'}
+                      onChange={e => setField({ expenseAccount: e.target.value })} />
                   </FieldRow>
                   <FieldRow label="Stock Valuation Account">
-                    <input className={inputCls} defaultValue="Stock In Hand" />
+                    <input className={inputCls}
+                      value={formData.stockValuationAccount || 'Stock In Hand'}
+                      onChange={e => setField({ stockValuationAccount: e.target.value })} />
                   </FieldRow>
                 </div>
                 <div className="mt-5 p-4 bg-[#f9fafb] dark:bg-slate-800/60 border border-[#e5e7eb] dark:border-slate-700 rounded-lg">
@@ -1076,6 +1102,7 @@ const Inventory: React.FC<InventoryProps> = ({
 
   return (
     <>
+      <ConfirmModal />
       {/* Summary Strip */}
       <div className="grid grid-cols-4 gap-3 mb-4">
         {[

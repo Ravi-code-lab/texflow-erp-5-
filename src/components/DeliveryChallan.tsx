@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Order, Customer, CompanyInfo, Design, InventoryItem } from '../types';
 import { 
   Search, Plus, Filter, MoreHorizontal, ArrowLeft, Save, 
@@ -82,7 +83,7 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
     } else {
        onAddChallan({
          ...formData,
-         id: `DC-${Date.now().toString().slice(-4)}`,
+         id: `DC-${uuidShort(12)}`,
          totalAmount: 0,
          updatedAt: new Date().toISOString()
        } as Order);
@@ -414,7 +415,7 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
                             </thead>
                             <tbody>
                                {formData.items?.map((it, idx) => (
-                                  <tr key={idx} className="border-b border-[#d1d8dd]/50">
+                                  <tr key={(it as any).id || `item-${idx}`} className="border-b border-[#d1d8dd]/50">
                                      <td className="py-2 pl-3 text-[#1c2126] font-medium">
                                         <div className="flex items-center gap-3">
                                           <ProductImageThumb productName={it.productName} designs={designs} inventory={inventory} size="sm" />

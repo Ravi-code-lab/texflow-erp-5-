@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Bell, CheckCircle2, AlertCircle, Info, 
   XCircle, Trash2, Check, Clock, ExternalLink,

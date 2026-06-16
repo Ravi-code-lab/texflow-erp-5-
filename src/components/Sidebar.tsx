@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard,
   Palette,
@@ -58,6 +58,11 @@ import {
   GitBranch,
   Shield,
   Workflow,
+  History,
+  Layout,
+  FolderOpen,
+  Bot,
+  AlarmClock,
 } from "lucide-react";
 import { ViewState, TeamMember, UIPreferences, CompanyInfo } from "../types";
 
@@ -85,7 +90,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   user,
   companyInfo,
   onProfileClick,
-  features = {},
+  features = {} as Record<string, boolean>,
   isOpen,
   onClose,
 }) => {
@@ -133,6 +138,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: "CREDIT_NOTE", label: "Credit Notes", icon: Banknote },
         { id: "SUPPORT_TICKET", label: "Support", icon: PhoneCall },
         { id: "EMAIL_HUB", label: "Email Hub", icon: Mail },
+        { id: "ORDER_REMINDER", label: "Order Reminders", icon: AlarmClock },
       ].filter((item) => isEnabled(item.id)),
     },
     {
@@ -179,6 +185,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         },
         { id: "JOB_WORK", label: "Subcontracting", icon: ArrowRightLeft },
         { id: "QUALITY", label: "Quality Inspection", icon: ShieldCheck },
+        { id: "FABRIC_CONSUMPTION", label: "Fabric Consumption", icon: Layers },
         { id: "WASTE_MANAGEMENT", label: "Waste Management", icon: Recycle },
       ].filter((item) => isEnabled(item.id)),
     },
@@ -209,6 +216,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: "BROKERAGE", label: "Brokerage Tracker", icon: Banknote },
         { id: "CASH_BOOK", label: "Payment Entry", icon: Landmark },
         { id: "TALLY_INTEGRATION", label: "Tally Sync", icon: ArrowRightLeft },
+        { id: "GST_SUITE", label: "GST Suite", icon: FileText },
         { id: "EXPENSE_CLAIM", label: "Expense Claim", icon: Receipt },
         { id: "ATTENDANCE", label: "Attendance", icon: Fingerprint },
         { id: "LEAVE_APP", label: "Leave Application", icon: BookOpen },
@@ -220,7 +228,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       icon: Briefcase,
       items: [
         { id: "CUSTOMERS", label: "Customer", icon: UserCircle },
-        { id: "SUPPLIERS", label: "Supplier", icon: Truck },
+        { id: "SUPPLIERS", label: "Supplier / Vendor", icon: Truck },
+        { id: "JOB_WORK", label: "Job Work / Outsource", icon: Factory },
         { id: "TEAM", label: "Employee", icon: UserCircle },
         { id: "KARIGARS", label: "Karigars", icon: Scissors },
         { id: "AGENTS", label: "Agents", icon: Briefcase },
@@ -234,6 +243,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: "DATA_IMPORT", label: "Data Import Tool", icon: Archive },
         { id: "WORKFLOW_INBOX", label: "Workflow Inbox", icon: CheckSquare },
         { id: "REPORT_BUILDER", label: "Report Builder", icon: FileText },
+        { id: "AUDIT_TRAIL", label: "Audit Trail", icon: History },
+        { id: "ERP_DESK", label: "ERPNext Workbench", icon: Layout },
+        { id: "DOCUMENT_DESK", label: "Document Desk", icon: FolderOpen },
+        { id: "DOCTYPE_CENTER", label: "DocType Center", icon: GitBranch },
+        { id: "SMART_DELIVERY", label: "Smart Delivery", icon: Truck },
         { id: "ROLE_ACCESS", label: "Role Access Control", icon: Shield },
         { id: "SETTINGS", label: "Settings", icon: ShieldCheck },
       ],

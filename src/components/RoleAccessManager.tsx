@@ -21,6 +21,7 @@ import {
   Settings2, Workflow, AlertTriangle,
 } from "lucide-react";
 import type { RolePermission, UserRole } from "../types";
+import { toast } from "../utils/toast";
 
 // ─── Module catalogue (all navigable views) ────────────────────────────────
 
@@ -422,13 +423,13 @@ export default function RoleAccessManager({
     Object.entries(unsavedChanges).forEach(([modId, crud]) => {
       const existing = rolePermissions.find(p => p.role === selectedRole && p.module === modId);
       if (existing) {
-        onUpdateRolePermission({ ...existing, ...crud });
+        onUpdateRolePermission({ ...(existing as any), ...(crud as any) });
       } else {
         onAddRolePermission({
           id: `rp_${selectedRole}_${modId}_${Date.now()}`,
           role: selectedRole as UserRole,
           module: modId,
-          ...crud,
+          ...(crud as any),
         });
       }
     });
@@ -442,7 +443,7 @@ export default function RoleAccessManager({
   const handleApplyPreset = (preset: PresetTemplate) => {
     const rolePerms = preset.permissions[selectedRole];
     if (!rolePerms) {
-      alert(`This preset doesn't have config for role: ${selectedRole}`);
+      toast.warn(`This preset doesn't have config for role: ${selectedRole}`);
       return;
     }
     const changes: Record<string, CRUDPreset> = {};
@@ -670,7 +671,7 @@ export default function RoleAccessManager({
 
             {/* Module list */}
             <div className="flex-1 overflow-auto p-5 space-y-4">
-              {Object.entries(groupedModules).map(([group, mods]) => {
+              {Object.entries(groupedModules).map(([group, mods]: [string, ModuleDef[]]) => {
                 const isOpen = expandedGroups[group] !== false; // default open
                 const noAccessInGroup = mods.filter(m => !effectivePerms[m.id]?.canRead).length;
                 return (

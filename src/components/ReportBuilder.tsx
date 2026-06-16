@@ -1,4 +1,4 @@
-import { getItem, setItem } from '../utils/indexedDB';
+import { getItem, setItem } from '../utils/networkClient';
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart4, Check, Download, FileSpreadsheet, Filter, Save, Search, Table2 } from 'lucide-react';
 import { BaseEntity, ViewState } from '../types';

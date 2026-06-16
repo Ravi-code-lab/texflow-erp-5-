@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Order, Customer, InventoryItem, OrderItem, Design, Agent } from '../types';
 import { 
   Search, Plus, FileText, Filter, 
@@ -64,7 +65,7 @@ const Quotation: React.FC<QuotationProps> = ({
 
     const oData = {
       ...formData,
-      id: formData.id || `QTN-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `QTN-${uuidShort(12)}`,
       agentCommissionAmount: commissionAmount,
       totalAmount: subTotal + taxAmount
     } as Order;
@@ -259,7 +260,7 @@ const Quotation: React.FC<QuotationProps> = ({
                                 </thead>
                                 <tbody>
                                    {(formData.items || []).map((item, idx) => (
-                                      <tr key={idx} className="border-b border-[#d1d8dd]/50">
+                                      <tr key={(item as any).id || `item-${idx}`} className="border-b border-[#d1d8dd]/50">
                                          <td className="py-2 pl-2">
                                            <ProductImageThumb productName={item.productName} designs={designs} inventory={inventory} size="sm" />
                                          </td>

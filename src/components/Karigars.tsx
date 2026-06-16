@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Karigar } from '../types';
 import { 
   Users, Search, Plus, Filter, 
@@ -47,7 +48,7 @@ const Karigars: React.FC<KarigarsProps> = ({ karigars, onAdd, onUpdate, onDelete
     
     const kData = { 
       ...formData, 
-      id: formData.id || `KAR-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `KAR-${uuidShort(12)}`,
       updatedAt: new Date().toISOString()
     } as Karigar;
     

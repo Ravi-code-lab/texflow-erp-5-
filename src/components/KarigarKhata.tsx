@@ -198,7 +198,7 @@ const KarigarKhata: React.FC<KarigarKhataProps> = ({ karigars, onUpdateKarigar, 
                           </thead>
                           <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                               {selectedKarigar.ledger?.map((entry, idx) => (
-                                  <tr key={idx} className="hover:bg-slate-50/30">
+                                  <tr key={entry.id || `${entry.date}-${entry.type}-${String(entry.amount)}-${idx}`} className="hover:bg-slate-50/30">
                                       <td className="px-6 py-3 text-xs text-slate-500 font-mono">{entry.date}</td>
                                       <td className="px-6 py-3">
                                           <p className="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase">{entry.description}</p>

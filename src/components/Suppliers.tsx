@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Supplier, PurchaseOrder, InventoryItem, PurchaseOrderItem, Unit } from '../types';
-import { 
-  Users, Search, Plus, Phone, MapPin, 
-  Trash2, UserCircle, 
-  List, Download, Filter, 
+import {
+  Users, Search, Plus, Phone, MapPin,
+  Trash2, UserCircle,
+  List, Download, Filter,
   MoreHorizontal, ArrowLeft, Save, ChevronLeft, ChevronRight,
   Settings, Check, X
 } from 'lucide-react';
+import { getItem } from '../utils/networkClient';
 
 interface SuppliersProps {
   suppliers: Supplier[];
@@ -30,14 +32,13 @@ const Suppliers: React.FC<SuppliersProps> = ({
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   
   // Check for custom fields optionally saved by the user
-  const customFields = useMemo(() => {
-    const raw = localStorage.getItem('erpnext_custom_fields');
-    if (raw) {
-      try {
-        return JSON.parse(raw).filter((f: any) => f.docType === 'Supplier');
-      } catch (e) {}
-    }
-    return [];
+  const [customFields, setCustomFields] = React.useState<any[]>([]);
+  React.useEffect(() => {
+    getItem<any[]>('erpnext_custom_fields').then(parsed => {
+      if (Array.isArray(parsed)) {
+        setCustomFields(parsed.filter((f: any) => f.docType === 'Supplier'));
+      }
+    }).catch(() => {});
   }, [viewMode]);
   
   const [formData, setFormData] = useState<Partial<Supplier>>({
@@ -60,7 +61,7 @@ const Suppliers: React.FC<SuppliersProps> = ({
     
     const supplier = {
       ...formData,
-      id: formData.id || `SUP-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `SUP-${uuidShort(12)}`,
       updatedAt: new Date().toISOString()
     } as Supplier;
 

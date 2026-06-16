@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { uuid, uuidShort } from "../utils/uuid";
 import { Design, InventoryItem, RecipeItem, DesignLaborCost } from '../types';
 import {
   Palette, Search, Plus, Filter,
@@ -7,7 +8,7 @@ import {
   Tag, Copy, Eye, DollarSign, Package,
   AlertTriangle, CheckCircle2, SlidersHorizontal,
   Grid, List, MoreVertical, Info, History,
-  ChevronDown, Truck, RefreshCcw, FileText
+  ChevronDown, Truck, RefreshCcw, FileText, Printer
 } from 'lucide-react';
 import { commitImage } from '../utils/imageUtils';
 import { jsPDF } from 'jspdf';
@@ -33,7 +34,7 @@ const STATUS_CFG: Record<string, { bg: string; text: string; border: string; dot
   DISCONTINUED: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca', dot: '#ef4444' },
 };
 
-const CATEGORIES = ['KURTI', 'PANT', 'DUPATTA', 'SET', 'FABRIC', 'ACCESSORY', 'SAREE', 'SUIT', 'LEHENGA', 'COORD SET'];
+const CATEGORIES = ['KURTI', 'PANT', 'DUPATTA', '3 PC Set', 'FABRIC', 'ACCESSORY', 'SAREE', 'SUIT', 'LEHENGA', 'Co-ord Set'];
 const UOMS = ['Nos', 'Kg', 'Meters', 'Sets', 'Dozens', 'Pieces', 'Boxes', 'Pairs'];
 const TAX_CATS = ['Standard (12%)', 'Standard (5%)', 'Exempt', 'Zero Rated', 'Luxury (28%)', 'Reduced (3%)'];
 
@@ -104,7 +105,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
     recipe: [], processCostPerPiece: 0, targetMargin: 20,
     hasVariants: false, options: [], variants: [],
     description: '', sku: '', finishedGsm: '180', composition: '',
-    laborCosts: { cutting: 0, stitching: 0, embroidery: 0, washing: 0, finishing: 0, packing: 0, folding: 0, other: 0 },
+    laborCosts: { cutting: 0, stitching: 0, stitchingRows: [], embroidery: 0, washing: 0, finishing: 0, packing: 0, folding: 0, other: 0 },
     processLossPercent: 2, hsnCode: '', shrinkage: '2-4%', finishedWidth: '44',
     tags: [], uom: 'Nos', brand: '', maintainStock: true,
     allowPurchase: false, allowSales: true, returnable: true, serialized: false,
@@ -141,43 +142,49 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
       const r = m?.pricePerUnit || item.estimatedCost || 0;
       return acc + item.quantity * r * (1 + (item.wastagePercent || 0) / 100);
     }, 0);
-    const lab = Object.values(form.laborCosts || {}).reduce((a: number, b: any) => a + (Number(b) || 0), 0) - (form.laborCosts?.printingRate || 0);
+    // Per-row printing cost: each fabric meter row has its own printingRate
+    const printingCost = (form.recipe || []).reduce((acc: number, item: any) => {
+      const isMeter = item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR';
+      return acc + (isMeter ? (item.printingRate || 0) * (Number(item.quantity) || 0) : 0);
+    }, 0);
+    // Labor: sum all laborCosts numeric fields (excluding legacy/array keys)
+    const lab = Object.entries(form.laborCosts || {})
+      .filter(([k]) => !['printingRate', 'printing', 'stitchingRows'].includes(k))
+      .reduce((a: number, [, b]: any) => a + (Number(b) || 0), 0) + printingCost;
     const sub = mat + lab;
     const loss = sub * ((form.processLossPercent || 0) / 100);
     const landed = sub + loss;
     return { mat, lab, loss, landed, wsp: landed * (1 + (form.targetMargin || 0) / 100) };
   }, [form.recipe, form.laborCosts, form.processLossPercent, form.targetMargin, inventory]);
 
-  useEffect(() => {
-    if (form.laborCosts?.printingRate !== undefined && form.laborCosts.printingRate > 0) {
-      const pRate = form.laborCosts.printingRate;
-      const mtrQty = (form.recipe || []).reduce((acc: number, item: any) => {
-        return acc + ((item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR') ? (Number(item.quantity) || 0) : 0);
-      }, 0);
-      const calculatedPrinting = pRate * mtrQty;
-      
-      if (form.laborCosts.printing !== calculatedPrinting) {
-        // use a distinct update so we don't cause render loops
-        setForm((prev: any) => ({
-          ...prev,
-          laborCosts: {
-            ...prev.laborCosts,
-            printing: calculatedPrinting
-          }
-        }));
-      }
-    }
-  }, [form.recipe, form.laborCosts?.printingRate]);
+  // Per-row printing rates are stored directly on each recipe item (item.printingRate).
+  // No global printing sync needed.
 
   const handleSave = () => {
     if (!form.name) return;
-    const d = { ...form, processCostPerPiece: cost.landed, id: form.id || `ITM-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`, updatedAt: new Date().toISOString() } as Design;
+    const d = { ...form, processCostPerPiece: cost.landed, id: form.id || `ITM-${uuidShort(12)}`, updatedAt: new Date().toISOString() } as Design;
     if (form.id && onUpdate) onUpdate(d); else onAdd(d);
     setViewMode('LIST');
   };
 
   const openForm = (d?: any) => {
-    setForm(d ? { ...defForm, ...d } : { ...defForm });
+    if (d) {
+      setForm({
+        ...defForm,
+        ...d,
+        laborCosts: {
+          ...defForm.laborCosts,
+          ...(d.laborCosts || {}),
+          stitchingRows: d.laborCosts?.stitchingRows ?? [],
+        },
+        recipe: (d.recipe || []).map((item: any, i: number) => ({
+          ...item,
+          id: item.id || `bom-legacy-${i}-${Date.now()}`,
+        })),
+      });
+    } else {
+      setForm({ ...defForm });
+    }
     setActiveTab('DETAILS');
     setViewMode('FORM');
   };
@@ -199,9 +206,20 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
   const addBomRow = () => {
     if (!newRecipeItem.materialName || !newRecipeItem.quantity) return;
     const m = inventory.find(i => i.name === newRecipeItem.materialName);
-    const item: RecipeItem = { materialName: newRecipeItem.materialName, quantity: newRecipeItem.quantity, unit: newRecipeItem.unit || 'PCS', estimatedCost: m?.pricePerUnit || newRecipeItem.unitCost || 0, wastagePercent: newRecipeItem.wastagePercent || 0 };
+    // User-entered rate takes priority; fall back to inventory master price
+    const resolvedRate = (newRecipeItem.unitCost && newRecipeItem.unitCost > 0) ? newRecipeItem.unitCost : (m?.pricePerUnit || 0);
+    const item: RecipeItem = {
+      id: `bom-${Date.now()}`,
+      materialName: newRecipeItem.materialName,
+      quantity: newRecipeItem.quantity,
+      unit: newRecipeItem.unit || 'PCS',
+      estimatedCost: resolvedRate,
+      wastagePercent: newRecipeItem.wastagePercent || 0,
+      printingRate: newRecipeItem.printingRate || 0,
+      usedFor: newRecipeItem.usedFor || '',
+    } as any;
     set({ recipe: [...(form.recipe || []), item] });
-    setNewRecipeItem({ materialName: '', quantity: 0, wastagePercent: 0 });
+    setNewRecipeItem({ materialName: '', quantity: 0, wastagePercent: 0, unitCost: 0, printingRate: 0, usedFor: '' });
   };
 
   const doSort = (f: SortField) => { if (sortField === f) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField(f); setSortDir('asc'); } };
@@ -223,6 +241,119 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
       styles: { fontSize: 9, cellPadding: 3 }, headStyles: { fillColor: [36, 144, 239] },
     });
     doc.save(`Catalog_${Date.now()}.pdf`);
+  };
+
+  const downloadCostingPDF = () => {
+    const doc = new jsPDF();
+    let y = 18;
+
+    doc.setFontSize(16); doc.text('COSTING SHEET', 15, y);
+    doc.setFontSize(10);
+    doc.text(`${form.name || 'Untitled Item'}${form.sku ? '  ·  ' + form.sku : ''}`, 15, y + 7);
+    doc.text(`Category: ${form.category || '-'}     Generated: ${new Date().toLocaleDateString('en-IN')}`, 15, y + 13);
+    y += 22;
+
+    // Bill of Materials
+    const bomRows = (form.recipe || []).map((item: any) => {
+      const m = inventory.find((i: any) => i.name === item.materialName);
+      const r = m?.pricePerUnit || item.estimatedCost || 0;
+      const t = (Number(item.quantity) || 0) * r * (1 + (item.wastagePercent || 0) / 100);
+      return [
+        item.materialName || '-', item.usedFor || '-', `${item.quantity} ${item.unit || ''}`,
+        `${item.wastagePercent || 0}%`, `${currency}${r}`, `${currency}${item.printingRate || 0}`,
+        `${currency}${t.toFixed(2)}`,
+      ];
+    });
+    autoTable(doc, {
+      startY: y,
+      head: [['Material', 'Used For', 'Qty/Unit', 'Wastage%', 'Unit Rate', 'Print/Mtr', 'Total']],
+      body: bomRows.length ? bomRows : [['No BOM items added', '-', '-', '-', '-', '-', '-']],
+      styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [36, 144, 239] },
+      margin: { left: 15, right: 15 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 8;
+
+    // Stitching rates (per piece)
+    const stitchRows = ((form.laborCosts?.stitchingRows || []) as any[]).map(r => [
+      r.piece || '-', r.desc || '-', `${currency}${(Number(r.rate) || 0).toFixed(2)}`,
+    ]);
+    if (stitchRows.length) {
+      if (y > 250) { doc.addPage(); y = 18; }
+      doc.setFontSize(11); doc.text('Stitching Rates (per piece)', 15, y); y += 4;
+      autoTable(doc, {
+        startY: y,
+        head: [['Piece/Component', 'Description', 'Stitching Rate']],
+        body: stitchRows,
+        styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [99, 102, 241] },
+        margin: { left: 15, right: 15 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 8;
+    }
+
+    // Flat labor/process costs
+    const flatLabor = [
+      ['Cutting', form.laborCosts?.cutting], ['Embroidery', form.laborCosts?.embroidery],
+      ['Washing', form.laborCosts?.washing], ['Finishing', form.laborCosts?.finishing],
+      ['Packing', form.laborCosts?.packing], ['Folding', form.laborCosts?.folding],
+      ['Other', form.laborCosts?.other],
+    ].filter(([, v]) => Number(v) > 0).map(([l, v]) => [l as string, `${currency}${Number(v).toFixed(2)}`]);
+    if (flatLabor.length) {
+      if (y > 250) { doc.addPage(); y = 18; }
+      doc.setFontSize(11); doc.text('Other Process Costs', 15, y); y += 4;
+      autoTable(doc, {
+        startY: y,
+        head: [['Process', 'Cost']],
+        body: flatLabor,
+        styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [99, 102, 241] },
+        margin: { left: 15, right: 15 }, tableWidth: 90,
+      });
+      y = (doc as any).lastAutoTable.finalY + 8;
+    }
+
+    // Printing calculation (auto, per fabric)
+    const fabricRows = (form.recipe || []).filter((item: any) =>
+      item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR'
+    );
+    if (fabricRows.length) {
+      if (y > 240) { doc.addPage(); y = 18; }
+      doc.setFontSize(11); doc.text('Printing Calculation (Auto — per fabric)', 15, y); y += 4;
+      const printRows = fabricRows.map((item: any) => [
+        `${item.materialName}${item.usedFor ? ' (' + item.usedFor + ')' : ''}`,
+        `${item.quantity} Mtr`, `${currency}${item.printingRate || 0}`,
+        `${currency}${((item.printingRate || 0) * (Number(item.quantity) || 0)).toFixed(2)}`,
+      ]);
+      autoTable(doc, {
+        startY: y,
+        head: [['Fabric (Used For)', 'Qty', 'Print Rate/Mtr', 'Print Cost']],
+        body: printRows,
+        styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [36, 144, 239] },
+        margin: { left: 15, right: 15 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 8;
+    }
+
+    // Cost summary
+    if (y > 235) { doc.addPage(); y = 18; }
+    doc.setFontSize(11); doc.text('Cost Summary', 15, y); y += 4;
+    autoTable(doc, {
+      startY: y,
+      body: [
+        ['Material Cost', `${currency}${cost.mat.toFixed(2)}`],
+        ['Labor & Process', `${currency}${cost.lab.toFixed(2)}`],
+        [`Process Loss (${form.processLossPercent || 0}%)`, `${currency}${cost.loss.toFixed(2)}`],
+        ['Total Landed Cost', `${currency}${cost.landed.toFixed(2)}`],
+        [`Target Margin (${form.targetMargin || 0}%)`, '-'],
+        ['Suggested WSP', `${currency}${cost.wsp.toFixed(2)}`],
+      ],
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: { 0: { fontStyle: 'bold' }, 1: { halign: 'right' } },
+      margin: { left: 15, right: 15 }, tableWidth: 120,
+      didParseCell: (data: any) => {
+        if (data.row.index === 3) { data.cell.styles.fillColor = [219, 234, 254]; data.cell.styles.fontStyle = 'bold'; }
+      },
+    });
+
+    doc.save(`Costing_${(form.sku || form.name || 'item').toString().replace(/\s+/g, '_')}_${Date.now()}.pdf`);
   };
 
   const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
@@ -407,6 +538,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {form.id && activeTab === 'BOM' && <button onClick={downloadCostingPDF} className="h-7 px-3 flex items-center gap-1.5 bg-white border border-[#d1d8dd] hover:bg-[#f4f5f7] rounded-md text-[12px] font-medium text-[#525c66]"><Printer className="w-3.5 h-3.5" /> Print Costing</button>}
             {form.id && <button onClick={() => dup(form)} className="h-7 px-3 flex items-center gap-1.5 bg-white border border-[#d1d8dd] hover:bg-[#f4f5f7] rounded-md text-[12px] font-medium text-[#525c66]"><Copy className="w-3.5 h-3.5" /> Duplicate</button>}
             {form.id && onDelete && <button onClick={() => { onDelete(form.id); setViewMode('LIST'); }} className="h-7 px-3 flex items-center gap-1.5 bg-white hover:bg-[#fef2f2] hover:text-[#dc2626] border border-[#d1d8dd] hover:border-[#fca5a5] rounded-md text-[12px] font-medium text-[#525c66]"><Trash2 className="w-3.5 h-3.5" /> Delete</button>}
             <button onClick={() => setViewMode('LIST')} className="h-7 px-3 flex items-center gap-1.5 bg-white border border-[#d1d8dd] hover:bg-[#f4f5f7] rounded-md text-[12px] font-medium text-[#525c66]">Discard</button>
@@ -541,10 +673,12 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
               <div className="overflow-x-auto -mx-5 px-5">
                 <table className="w-full text-left min-w-[600px]">
                   <thead><tr className="bg-[#f7f9fb] text-[11px] text-[#6b7a8d] uppercase tracking-wide border-y border-[#e8edf2]">
-                    <th className="py-2 pl-3 font-semibold w-48">Material</th>
+                    <th className="py-2 pl-3 font-semibold w-40">Material</th>
+                    <th className="py-2 px-3 font-semibold w-36" title="What part of the garment this fabric is used for (e.g. Pant Body, Lining)">Used For</th>
                     <th className="py-2 px-3 font-semibold">Qty / Unit</th>
                     <th className="py-2 px-3 font-semibold">Wastage %</th>
                     <th className="py-2 px-3 font-semibold">Unit Rate</th>
+                    <th className="py-2 px-3 font-semibold" title="Printing rate per meter for this fabric (leave 0 if no printing)">Print ₹/Mtr</th>
                     <th className="py-2 px-3 font-semibold text-right">Total</th>
                     <th className="py-2 pr-3 w-10" />
                   </tr></thead>
@@ -554,11 +688,42 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
                       const r = m?.pricePerUnit || item.estimatedCost || 0;
                       const t = item.quantity * r * (1 + (item.wastagePercent || 0) / 100);
                       return (
-                        <tr key={(item as any).id || (item as any).name + idx} className="border-b border-[#f0f2f5] hover:bg-[#f7f9fb]">
+                        <tr key={(item as any).id || `bom-row-${item.materialName || ''}-${idx}`} className="border-b border-[#f0f2f5] hover:bg-[#f7f9fb]">
                           <td className="py-2.5 pl-3 text-[13px] font-medium">{item.materialName}</td>
+                          <td className="py-2.5 px-3">
+                            <input
+                              type="text"
+                              className="w-full text-[12px] border border-[#e1e8ed] rounded px-2 py-0.5 focus:outline-none focus:border-[#2490ef] bg-white text-[#1c2126] placeholder-[#c0c8d2]"
+                              value={(item as any).usedFor || ''}
+                              placeholder="e.g. Pant Body"
+                              onChange={e => {
+                                const updated = (form.recipe || []).map((ri: any, i: number) =>
+                                  i === idx ? { ...ri, usedFor: e.target.value } : ri
+                                );
+                                set({ recipe: updated });
+                              }}
+                            />
+                          </td>
                           <td className="py-2.5 px-3 text-[12px] text-[#525c66]">{item.quantity} {item.unit}</td>
                           <td className="py-2.5 px-3 text-[12px] text-[#525c66]">{item.wastagePercent || 0}%</td>
                           <td className="py-2.5 px-3 text-[12px] text-[#525c66]">{currency}{r}</td>
+                          <td className="py-2.5 px-3">
+                            <div className="relative w-20">
+                              <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[#8d99a6]">{currency}</span>
+                              <input
+                                type="number" min={0}
+                                className="w-full text-[12px] border border-[#e1e8ed] rounded px-1 pl-4 py-0.5 focus:outline-none focus:border-[#2490ef] bg-white font-mono"
+                                value={(item as any).printingRate || ''}
+                                placeholder="0"
+                                onChange={e => {
+                                  const updated = (form.recipe || []).map((ri: any, i: number) =>
+                                    i === idx ? { ...ri, printingRate: Number(e.target.value) } : ri
+                                  );
+                                  set({ recipe: updated });
+                                }}
+                              />
+                            </div>
+                          </td>
                           <td className="py-2.5 px-3 text-right text-[13px] font-semibold">{currency}{t.toFixed(2)}</td>
                           <td className="py-2.5 pr-3 text-right"><button onClick={() => set({ recipe: form.recipe?.filter((_: any, i: number) => i !== idx) })} className="text-[#dc2626] hover:bg-[#fef2f2] p-1 rounded"><Trash2 className="w-3.5 h-3.5" /></button></td>
                         </tr>
@@ -571,9 +736,23 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
                           {inventory.map(i => <option key={i.id} value={i.name}>{i.name}</option>)}
                         </select>
                       </td>
+                      <td className="py-2 px-3">
+                        <input type="text" className="w-full text-[12px] bg-white border border-[#e1e8ed] rounded px-2 py-0.5 focus:outline-none focus:border-[#2490ef] placeholder-[#c0c8d2]" placeholder="Used for…" value={newRecipeItem.usedFor || ''} onChange={e => setNewRecipeItem({ ...newRecipeItem, usedFor: e.target.value })} />
+                      </td>
                       <td className="py-2 px-3"><input type="number" min={0} className="w-full text-[12px] bg-transparent border-0 focus:outline-none" placeholder="Qty" value={newRecipeItem.quantity || ''} onChange={e => setNewRecipeItem({ ...newRecipeItem, quantity: Number(e.target.value) })} /></td>
                       <td className="py-2 px-3"><input type="number" min={0} className="w-full text-[12px] bg-transparent border-0 focus:outline-none" placeholder="Wastage %" value={newRecipeItem.wastagePercent || ''} onChange={e => setNewRecipeItem({ ...newRecipeItem, wastagePercent: Number(e.target.value) })} /></td>
-                      <td className="py-2 px-3 text-[12px] text-[#8d99a6]">{currency}{newRecipeItem.unitCost || 0}</td>
+                      <td className="py-2 px-3">
+                        <div className="relative">
+                          <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[11px] text-[#8d99a6]">{currency}</span>
+                          <input type="number" min={0} className="w-full text-[12px] bg-transparent border-0 focus:outline-none pl-4 font-mono" placeholder="Rate" value={newRecipeItem.unitCost || ''} onChange={e => setNewRecipeItem({ ...newRecipeItem, unitCost: Number(e.target.value) })} />
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="relative w-20">
+                          <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[11px] text-[#8d99a6]">{currency}</span>
+                          <input type="number" min={0} className="w-full text-[12px] bg-transparent border-0 focus:outline-none pl-4 font-mono" placeholder="0" value={newRecipeItem.printingRate || ''} onChange={e => setNewRecipeItem({ ...newRecipeItem, printingRate: Number(e.target.value) })} />
+                        </div>
+                      </td>
                       <td colSpan={2} className="py-2 px-3"><button onClick={addBomRow} className="text-[12px] font-semibold text-[#2490ef] hover:underline">+ Add Row</button></td>
                     </tr>
                   </tbody>
@@ -583,8 +762,105 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
 
             <Card title="Labor & Process Costs">
               <div className="grid grid-cols-4 gap-x-6 gap-y-4">
+
+                {/* ── Per-piece Stitching Rates ── */}
+                <div className="col-span-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest">Stitching Rates (per piece)</h4>
+                    <span className="text-[11px] font-bold text-indigo-600">
+                      Total: {currency}{((form.laborCosts?.stitchingRows || []) as any[]).reduce((a: number, r: any) => a + (Number(r.rate) || 0), 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="bg-[#f7f9fb] border border-[#e1e8ed] rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-[12px]">
+                      <thead>
+                        <tr className="bg-[#f0f2f5] text-[10px] text-[#6b7a8d] uppercase tracking-wide border-b border-[#e1e8ed]">
+                          <th className="py-2 pl-3 font-semibold">Piece / Component</th>
+                          <th className="py-2 px-3 font-semibold w-48">Description (optional)</th>
+                          <th className="py-2 px-3 font-semibold text-right w-32">Stitching Rate ({currency})</th>
+                          <th className="py-2 pr-3 w-10" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {((form.laborCosts?.stitchingRows || []) as any[]).map((row: any, idx: number) => (
+                          <tr key={row.id || `stitch-${idx}`} className="border-b border-[#f0f2f5] hover:bg-white">
+                            <td className="py-2 pl-3">
+                              <input
+                                type="text"
+                                className="w-full bg-transparent border-0 focus:outline-none text-[#1c2126] font-medium"
+                                value={row.piece || ''}
+                                placeholder="e.g. Kurti"
+                                onChange={e => {
+                                  const rows = [...(form.laborCosts?.stitchingRows || [])];
+                                  rows[idx] = { ...rows[idx], piece: e.target.value };
+                                  set({ laborCosts: { ...form.laborCosts, stitchingRows: rows } });
+                                }}
+                              />
+                            </td>
+                            <td className="py-2 px-3">
+                              <input
+                                type="text"
+                                className="w-full bg-transparent border-0 focus:outline-none text-[#525c66]"
+                                value={row.desc || ''}
+                                placeholder="e.g. Side zip + lining"
+                                onChange={e => {
+                                  const rows = [...(form.laborCosts?.stitchingRows || [])];
+                                  rows[idx] = { ...rows[idx], desc: e.target.value };
+                                  set({ laborCosts: { ...form.laborCosts, stitchingRows: rows } });
+                                }}
+                              />
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="relative">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-[#8d99a6]">{currency}</span>
+                                <input
+                                  type="number" min={0}
+                                  className="w-full border border-[#e1e8ed] rounded pl-5 pr-2 py-0.5 text-right font-mono font-semibold focus:outline-none focus:border-[#2490ef] bg-white"
+                                  value={row.rate || ''}
+                                  placeholder="0"
+                                  onChange={e => {
+                                    const rows = [...(form.laborCosts?.stitchingRows || [])];
+                                    rows[idx] = { ...rows[idx], rate: Number(e.target.value) };
+                                    set({ laborCosts: { ...form.laborCosts, stitchingRows: rows, stitching: rows.reduce((a: number, r: any) => a + (Number(r.rate) || 0), 0) } });
+                                  }}
+                                />
+                              </div>
+                            </td>
+                            <td className="py-2 pr-3 text-right">
+                              <button
+                                onClick={() => {
+                                  const rows = (form.laborCosts?.stitchingRows || []).filter((_: any, i: number) => i !== idx);
+                                  set({ laborCosts: { ...form.laborCosts, stitchingRows: rows, stitching: rows.reduce((a: number, r: any) => a + (Number(r.rate) || 0), 0) } });
+                                }}
+                                className="text-[#dc2626] hover:bg-[#fef2f2] p-1 rounded"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {/* Add row */}
+                        <tr className="bg-[#fafbfc]">
+                          <td colSpan={4} className="py-2 pl-3">
+                            <button
+                              onClick={() => {
+                                const rows = [...(form.laborCosts?.stitchingRows || []), { id: `sr-${Date.now()}`, piece: '', desc: '', rate: 0 }];
+                                set({ laborCosts: { ...form.laborCosts, stitchingRows: rows } });
+                              }}
+                              className="text-[12px] font-semibold text-[#2490ef] hover:underline flex items-center gap-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Add Piece
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* ── Other flat labor fields (cutting, embroidery, etc.) ── */}
                 {[
-                  { k: 'cutting', l: 'Cutting' }, { k: 'stitching', l: 'Stitching' }, { k: 'embroidery', l: 'Embroidery' },
+                  { k: 'cutting', l: 'Cutting' }, { k: 'embroidery', l: 'Embroidery' },
                   { k: 'washing', l: 'Washing' }, { k: 'finishing', l: 'Finishing' }, { k: 'packing', l: 'Packing' },
                   { k: 'folding', l: 'Folding' }, { k: 'other', l: 'Other' },
                 ].map(p => (
@@ -596,31 +872,44 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
                 ))}
                 
                 <div className="col-span-4 border-t pt-4 mt-2">
-                  <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest mb-3">Printing Calculation (Auto)</h4>
-                  <div className="grid grid-cols-4 gap-x-6 gap-y-4">
-                    <FF label="Printing Rate (per Meter)">
-                      <div className="relative"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[#8d99a6]">{currency}</span>
-                        <input type="number" min={0} className={inp + ' pl-6'} value={form.laborCosts?.printingRate || ''} 
-                          onChange={e => {
-                            const pRate = Number(e.target.value);
-                            const mtrQty = (form.recipe || []).reduce((acc: number, item: any) => {
-                              return acc + ((item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR') ? (Number(item.quantity) || 0) : 0);
-                            }, 0);
-                            set({ laborCosts: { ...form.laborCosts, printingRate: pRate, printing: pRate * mtrQty } });
-                          }} 
-                        />
-                      </div>
-                    </FF>
-                    <FF label="Total Fabric (Meters)">
-                      <div className="relative">
-                        <input type="text" readOnly className={inp + ' bg-slate-50 font-mono'} value={(form.recipe || []).reduce((acc: number, item: any) => acc + ((item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR') ? (Number(item.quantity) || 0) : 0), 0) + ' MTR'} />
-                      </div>
-                    </FF>
-                    <FF label="Printing Cost (Auto)">
-                      <div className="relative"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[#8d99a6]">{currency}</span>
-                        <input type="number" readOnly className={inp + ' pl-6 bg-slate-50 font-bold text-[#1b6bf9]'} value={form.laborCosts?.printing || ''} />
-                      </div>
-                    </FF>
+                  <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest mb-3">Printing Calculation (Auto — per fabric)</h4>
+                  <div className="bg-[#f7f9fb] border border-[#e1e8ed] rounded-lg p-4 space-y-2 text-[12px]">
+                    {(form.recipe || []).filter((item: any) =>
+                      item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR'
+                    ).length === 0 ? (
+                      <p className="text-[#8d99a6] italic">No fabric (meter) rows in BOM. Add fabric rows above to set per-fabric printing rates.</p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-4 gap-2 text-[10px] font-bold uppercase tracking-wide text-[#6b7a8d] border-b pb-1.5 mb-1">
+                          <span>Fabric (Used For)</span><span className="text-right">Qty (Mtr)</span><span className="text-right">Print Rate/Mtr</span><span className="text-right">Print Cost</span>
+                        </div>
+                        {(form.recipe || []).filter((item: any) =>
+                          item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR'
+                        ).map((item: any, idx: number) => {
+                          const pCost = (item.printingRate || 0) * (Number(item.quantity) || 0);
+                          return (
+                            <div key={item.id || `print-${item.materialName || ''}-${idx}`} className="grid grid-cols-4 gap-2 py-1 border-b border-dashed border-[#e8edf2]">
+                              <span className="font-medium text-[#1c2126] truncate">
+                                {item.materialName}
+                                {item.usedFor && <span className="ml-1 text-[#2490ef] font-normal">({item.usedFor})</span>}
+                              </span>
+                              <span className="text-right font-mono text-[#525c66]">{item.quantity} Mtr</span>
+                              <span className="text-right font-mono text-[#525c66]">{currency}{item.printingRate || 0}</span>
+                              <span className="text-right font-semibold text-[#1c2126]">{currency}{pCost.toFixed(2)}</span>
+                            </div>
+                          );
+                        })}
+                        <div className="grid grid-cols-4 gap-2 pt-2">
+                          <span className="col-span-3 font-bold text-[#1c2126] text-right">Total Printing Cost (Auto)</span>
+                          <span className="text-right font-black text-[#1b6bf9] text-[13px]">
+                            {currency}{(form.recipe || [])
+                              .filter((item: any) => item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR')
+                              .reduce((acc: number, item: any) => acc + (item.printingRate || 0) * (Number(item.quantity) || 0), 0)
+                              .toFixed(2)}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -710,12 +999,12 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
                 <div className="space-y-4">
                   {(form.options || []).map((opt: any, idx: number) => (
                     <div key={opt.id} className="flex gap-3 items-center">
-                      <input className={inp + ' w-36'} value={opt.name} onChange={e => { const o = [...(form.options || [])]; o[idx].name = e.target.value; set({ options: o }); }} placeholder="Attribute" />
-                      <input className={inp + ' flex-1'} value={opt.values.join(', ')} onChange={e => { const o = [...(form.options || [])]; o[idx].values = e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean); set({ options: o }); }} placeholder="Values (comma-separated)" />
+                      <input className={inp + ' w-36'} value={opt.name} onChange={e => { set({ options: (form.options || []).map((x: any, i: number) => i === idx ? { ...x, name: e.target.value } : x) }); }} placeholder="Attribute" />
+                      <input className={inp + ' flex-1'} value={opt.values.join(', ')} onChange={e => { set({ options: (form.options || []).map((x: any, i: number) => i === idx ? { ...x, values: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) } : x) }); }} placeholder="Values (comma-separated)" />
                       <button onClick={() => set({ options: form.options?.filter((_: any, i: number) => i !== idx) })} className="p-2 text-[#dc2626] hover:bg-[#fef2f2] rounded-md"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   ))}
-                  <button onClick={() => set({ options: [...(form.options || []), { id: crypto.randomUUID(), name: '', values: [] }] })} className="text-[12px] font-semibold text-[#2490ef] hover:underline flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Add Attribute</button>
+                  <button onClick={() => set({ options: [...(form.options || []), { id: uuid(), name: '', values: [] }] })} className="text-[12px] font-semibold text-[#2490ef] hover:underline flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Add Attribute</button>
                 </div>
               ) : (
                 <div className="py-10 text-center text-[#a0a9b3] bg-[#f7f9fb] rounded-lg border border-dashed border-[#d1d8dd]">

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { ArrowLeftRight, Plus, Eye, Trash2, ShieldAlert, Package } from 'lucide-react';
 
 interface StockTransferProps {
@@ -24,7 +25,7 @@ export default function StockTransfer({ inventory, transfers, warehouses = [], o
     if (!material || qty <= 0) return;
 
     onAdd({
-      id: `TRF-${Date.now().toString().slice(-4)}`,
+      id: `TRF-${uuidShort(12)}`,
       materialName: material,
       quantity: Number(qty),
       sourceWarehouse: source,

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Order, Customer, InventoryItem, OrderItem, Design, Agent } from '../types';
 import {
   ArrowLeft, Save, Trash2, X, ShoppingCart, Copy,
@@ -78,7 +79,7 @@ const Orders: React.FC<OrdersProps> = ({
     if (!formData.customerName || !formData.items?.length) return;
     const orderData = {
       ...formData,
-      id: formData.id || `ORD-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `ORD-${uuidShort(12)}`,
       totalAmount: grandTotal,
     } as Order;
     if (formData.id) onUpdateOrder(orderData);
@@ -100,7 +101,7 @@ const Orders: React.FC<OrdersProps> = ({
 
   const duplicateOrder = (o: Order) => {
     const dup = { ...o, id: '', status: 'PENDING' as any, paymentStatus: 'UNPAID' as any, orderDate: new Date().toISOString().split('T')[0] };
-    onAddOrder({ ...dup, id: `ORD-${Date.now().toString().slice(-4)}` } as Order);
+    onAddOrder({ ...dup, id: `ORD-${uuidShort(12)}` } as Order);
   };
 
   const shareWhatsApp = () => {
@@ -416,7 +417,7 @@ const Orders: React.FC<OrdersProps> = ({
                         {(formData.items || []).map((item, idx) => {
                           const discountedAmt = item.quantity * item.unitPrice * (1 - ((item as any).discount || 0) / 100);
                           return (
-                            <tr key={idx} className="border-b border-[#d1d8dd]/50 hover:bg-[#f4f5f6]/50">
+                            <tr key={(item as any).id || `item-${idx}`} className="border-b border-[#d1d8dd]/50 hover:bg-[#f4f5f6]/50">
                               <td className="py-2 pl-3 font-semibold text-[#1c2126]">{item.productName}</td>
                               <td className="py-2 px-3">
                                 <input className="w-full text-[11px] text-[#8d99a6] bg-transparent border-0 outline-none focus:bg-white focus:border focus:border-[#d1d8dd] focus:rounded px-1 transition-all"
@@ -675,7 +676,7 @@ const Orders: React.FC<OrdersProps> = ({
                     onChange={e => {
                       const val = Number(e.target.value);
                       const newSizeWise = {...(newItem.sizeWise||{}), [size]: val};
-                      const total = Object.values(newSizeWise).reduce((s,v) => s+(v||0), 0);
+                      const total = Object.values(newSizeWise).reduce((s: number, v: any) => s + (Number(v) || 0), 0);
                       setNewItem({...newItem, sizeWise: newSizeWise, quantity: total});
                     }} />
                 </div>

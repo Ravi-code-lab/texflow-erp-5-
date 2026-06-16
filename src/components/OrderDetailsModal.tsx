@@ -6,6 +6,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import BaseModal from './BaseModal';
 import ProductImageThumb from './ProductImageThumb';
+import { getItem } from '../utils/networkClient';
 
 interface OrderDetailsModalProps {
   order: Order;
@@ -20,16 +21,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, customer, 
   const [customFields, setCustomFields] = useState<any[]>([]);
 
   useEffect(() => {
-    let raw: string | null = null;
-    try { raw = localStorage.getItem('erpnext_custom_fields'); } catch {}
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
+    getItem<any[]>('erpnext_custom_fields').then(parsed => {
+      if (Array.isArray(parsed)) {
         setCustomFields(parsed.filter((f: any) => f.docType === 'Order'));
-      } catch (e) {
-        console.error(e);
       }
-    }
+    }).catch(() => {});
   }, []);
   
   const generateInvoice = () => {
@@ -252,7 +248,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, customer, 
                    </thead>
                    <tbody className="text-xs sm:text-sm">
                       {(order.items || []).map((item, idx) => (
-                         <tr key={idx} className="border-b border-slate-50 last:border-0">
+                         <tr key={(item as any).id || `item-${idx}`} className="border-b border-slate-50 last:border-0">
                             <td className="py-4 px-4 font-medium text-slate-700">
                               <div className="flex items-center gap-3">
                                 <ProductImageThumb productName={item.productName} designs={designs} inventory={inventory} size="sm" />

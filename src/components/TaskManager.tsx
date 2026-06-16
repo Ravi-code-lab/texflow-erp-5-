@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { CheckSquare, Plus, Trash2, ShieldAlert } from 'lucide-react';
 
 interface TaskManagerProps {
@@ -20,7 +21,7 @@ export default function TaskManager({ tasks, team, onAddTask, onUpdateTask, onDe
     if (!title.trim()) return;
 
     onAddTask({
-      id: `TSK-${Date.now().toString().slice(-4)}`,
+      id: `TSK-${uuidShort(12)}`,
       title,
       assignedTo: assignee || 'Shared Pool',
       priority,

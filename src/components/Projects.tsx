@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Project, ProjectTask, TeamMember, Customer } from '../types';
 import { 
   Folder, Calendar, CheckSquare, Plus, Clock, Users, 
@@ -11,6 +12,7 @@ import {
 import BaseModal from './BaseModal';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { analyzeProjectHealth } from '../services/geminiService';
+import { toast, useConfirm } from "../utils/toast";
 
 interface ProjectsProps {
   projects: Project[];
@@ -31,6 +33,7 @@ const Projects: React.FC<ProjectsProps> = ({
   currency = '₹',
   geminiApiKey
 }) => {
+  const { confirm, ConfirmModal } = useConfirm();
   const [viewMode, setViewMode] = useState<'KANBAN' | 'TIMELINE'>('KANBAN');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -75,9 +78,9 @@ const Projects: React.FC<ProjectsProps> = ({
     setAnalyzing(false);
   };
 
-  const handleCreateTemplate = (project: Project, e: React.MouseEvent) => {
+  const handleCreateTemplate = async (project: Project, e: React.MouseEvent) => {
     e.stopPropagation();
-    if(window.confirm(`Save "${project.name}" as a template?`)) {
+    if(await confirm({ title: `Save "${project.name}" as a template?`, confirmLabel: 'Save Template', confirmClass: 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold transition-colors' })) {
       const template: Project = {
         ...project,
         id: `TMPL-${Date.now()}`,
@@ -87,7 +90,7 @@ const Projects: React.FC<ProjectsProps> = ({
         endDate: '',
         spent: 0,
         isTemplate: true,
-        tasks: (project.tasks || []).map((t, i) => ({...t, status: 'TODO', id: `TSK-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`}))
+        tasks: (project.tasks || []).map((t, i) => ({...t, status: 'TODO', id: `TSK-${i}-${uuidShort(8)}`}))
       };
       onAddProject(template);
     }
@@ -100,7 +103,7 @@ const Projects: React.FC<ProjectsProps> = ({
         ...projectForm,
         name: template.name.replace(' (Template)', ''),
         description: template.description,
-        tasks: template.tasks.map((t, i) => ({...t, id: `TSK-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`, status: 'TODO'})),
+        tasks: template.tasks.map((t, i) => ({...t, id: `TSK-${i}-${uuidShort(8)}`, status: 'TODO'})),
         clientName: template.clientName,
         budget: template.budget
       });
@@ -461,6 +464,7 @@ const Projects: React.FC<ProjectsProps> = ({
 
   return (
     <div className="space-y-4 h-full flex flex-col relative">
+      <ConfirmModal />
        {activeProjectsList.length > 0 && renderStats()}
 
        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-slate-800 p-1.5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 shrink-0 z-10">

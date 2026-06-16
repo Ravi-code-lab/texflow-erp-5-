@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Order, Customer, OrderItem } from '../types';
 import { 
   Plus, Undo2, Calendar, Printer, Box, Check, X, AlertTriangle,
@@ -6,11 +7,13 @@ import {
 } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
 import ProductImageThumb from './ProductImageThumb';
+import { toast } from "../utils/toast";
 
 interface SalesReturnProps {
   orders: Order[];
   customers: Customer[];
   onAddReturn: (order: Order) => void;
+  onUpdateOrder?: (order: Order) => void;
   currency?: string;
   designs?: any[];
   inventory?: any[];
@@ -27,7 +30,7 @@ const REASONS = {
 };
 
 const SalesReturn: React.FC<SalesReturnProps> = ({ 
-  orders, customers, onAddReturn, currency = '₹', designs = [], inventory = [], onUpdateInventory, onAddNote 
+  orders, customers, onAddReturn, onUpdateOrder, currency = '₹', designs = [], inventory = [], onUpdateInventory, onAddNote 
 }) => {
   const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>('LIST');
   const [filter, setFilter] = useState('');
@@ -94,7 +97,7 @@ const SalesReturn: React.FC<SalesReturnProps> = ({
     const reasonsText = REASONS[returnReason as keyof typeof REASONS] || returnReason;
     const returnData = {
       ...formData,
-      id: formData.id || `RET-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `RET-${uuidShort(12)}`,
       status: 'RETURNED',
       totalAmount: calculatedTotal,
       agentName: linkedInvoiceId ? `Linked to Invoice #${linkedInvoiceId}` : undefined,
@@ -103,15 +106,24 @@ const SalesReturn: React.FC<SalesReturnProps> = ({
 
     // Call standard list additions
     onAddReturn(returnData);
+    // Mark the linked source invoice/order as RETURNED to remove from receivables
+    if (linkedInvoiceId && onUpdateOrder) {
+      const sourceOrder = orders.find(o => o.id === linkedInvoiceId);
+      if (sourceOrder && sourceOrder.status !== 'RETURNED') {
+        onUpdateOrder({ ...sourceOrder, status: 'RETURNED' });
+      }
+    }
 
     // 1. ERPNext Inventory Restock update trigger
-    if (autoRestock && onUpdateInventory && inventory && inventory.length > 0) {
+    // Only run for NEW returns (formData.id is absent). Editing an existing return
+    // must NOT re-add stock, which would cause double-credit.
+    if (!formData.id && autoRestock && onUpdateInventory && inventory && inventory.length > 0) {
       (formData.items || []).forEach(item => {
         const itemLower = item.productName.toLowerCase();
         const matchedInv = inventory.find(i => i.name.toLowerCase() === itemLower);
         if (matchedInv) {
           onUpdateInventory({
-            ...matchedInv,
+            ...(matchedInv as any),
             quantity: Number(matchedInv.quantity || 0) + Number(item.quantity)
           });
         }
@@ -121,7 +133,7 @@ const SalesReturn: React.FC<SalesReturnProps> = ({
     // 2. ERPNext auto Credit Note ledger injection trigger
     if (autoCreditNote && onAddNote) {
       onAddNote({
-        id: `CN-${Date.now().toString().slice(-6)}`,
+        id: `CN-${uuidShort(12)}`,
         date: formData.orderDate || new Date().toISOString().split('T')[0],
         description: `Ref Return ${returnData.id} for ${formData.customerName}: ${reasonsText}`,
         amount: calculatedTotal,
@@ -492,7 +504,7 @@ const SalesReturn: React.FC<SalesReturnProps> = ({
                                </thead>
                                <tbody>
                                   {(formData.items || []).map((item, idx) => (
-                                     <tr key={idx} className="border-b border-[#d1d8dd]/50 hover:bg-[#fcfdfd] text-xs">
+                                     <tr key={(item as any).id || `item-${idx}`} className="border-b border-[#d1d8dd]/50 hover:bg-[#fcfdfd] text-xs">
                                         <td className="py-2.5 pl-3 font-semibold text-slate-800">
                                            <div className="flex items-center gap-2">
                                               <ProductImageThumb productName={item.productName} designs={designs} inventory={inventory} size="sm" />

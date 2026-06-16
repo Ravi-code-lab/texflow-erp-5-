@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { uuidShort } from "../utils/uuid";
 import {
   TeamMember,
   UserRole,
@@ -116,7 +117,7 @@ const Employees: React.FC<EmployeesProps> = (props) => {
     const member = {
       ...restData,
       passwordHash: passHash,
-      id: formData.id || `EMP-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `EMP-${uuidShort(12)}`,
       updatedAt: new Date().toISOString(),
     } as any;
 

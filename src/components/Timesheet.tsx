@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Clock, Plus, Trash2, Check, Award } from 'lucide-react';
 
 interface TimesheetProps {
@@ -23,7 +24,7 @@ export default function Timesheet({ timesheets, team, projects, tasks, onAdd, on
     if (!employee || hours <= 0) return;
 
     onAdd({
-      id: `TS-${Date.now().toString().slice(-4)}`,
+      id: `TS-${uuidShort(12)}`,
       employeeName: employee,
       projectName: project,
       hours: Number(hours),

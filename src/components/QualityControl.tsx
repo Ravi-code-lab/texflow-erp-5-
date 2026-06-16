@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { QualityReport, FabricInspection, ProductionJob, Design, InventoryItem, GarmentMeasurementCheck } from '../types';
 import { 
   Camera, Upload, Image as ImageIcon,
@@ -85,7 +86,7 @@ const QualityControl: React.FC<QualityControlProps> = ({ reports, inspections = 
      if (!reportData.jobId) return;
      const newReport = {
         ...reportData,
-        id: reportData.id || `QC-${Date.now().toString().slice(-4)}`,
+        id: reportData.id || `QC-${uuidShort(12)}`,
         defectsFound: reportData.defects?.length || 0,
         defectTypes: reportData.defects?.map(d => d.type) || [],
         issueSeverity: reportData.defects?.some(d => d.severity === 'CRITICAL') ? 'CRITICAL' : (reportData.defects?.some(d => d.severity === 'HIGH') ? 'HIGH' : 'LOW'),
@@ -553,7 +554,7 @@ const QualityControl: React.FC<QualityControlProps> = ({ reports, inspections = 
              const defectsFound = Number(reportData.defectsFound || 0) + failedMeasurements;
              const newReport = {
                 ...reportData,
-                id: reportData.id || `QC-${Date.now().toString().slice(-4)}`,
+                id: reportData.id || `QC-${uuidShort(12)}`,
                 date: reportData.date || new Date().toISOString().split('T')[0],
                 productName: selectedJob?.productName || reportData.productName,
                 styleCode: selectedJob?.styleCode || selectedJobDesign?.sku || reportData.styleCode,

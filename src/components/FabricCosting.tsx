@@ -610,15 +610,15 @@ export const FabricCostingWorkspace: React.FC<FabricCostingProps> = ({
                 <span className="font-black text-[10px] uppercase tracking-wider text-slate-400">Value Stream Allocation Percent</span>
                 <div className="h-5 w-full bg-slate-100 rounded overflow-hidden flex select-none text-[9px] font-black tracking-tight text-white font-mono">
                   <div className="h-full bg-slate-800 flex items-center justify-center truncate" style={{ width: `${finalSellingPriceGross > 0 ? Math.round((rawMaterialCost / finalSellingPriceGross) * 100) : 30}%` }} title="Raw material">
-                    RAW ({(Math.round((rawMaterialCost / finalSellingPriceGross) * 100)) || 30}%)
+                    RAW ({finalSellingPriceGross > 0 ? Math.round((rawMaterialCost / finalSellingPriceGross) * 100) : 30}%)
                   </div>
-                  <div className="h-full bg-indigo-600 flex items-center justify-center truncate" style={{ width: `${Math.round((processingCost / finalSellingPriceGross) * 100) || 20}%` }} title="Wet & Dry treatment">
-                    PROC ({(Math.round((processingCost / finalSellingPriceGross) * 100)) || 20}%)
+                  <div className="h-full bg-indigo-600 flex items-center justify-center truncate" style={{ width: `${finalSellingPriceGross > 0 ? Math.round((processingCost / finalSellingPriceGross) * 100) : 20}%` }} title="Wet & Dry treatment">
+                    PROC ({finalSellingPriceGross > 0 ? Math.round((processingCost / finalSellingPriceGross) * 100) : 20}%)
                   </div>
-                  <div className="h-full bg-emerald-600 flex items-center justify-center truncate" style={{ width: `${Math.round((profitVal / finalSellingPriceGross) * 100) || 20}%` }} title="Net profit Margin">
-                    PROFIT ({(Math.round((profitVal / finalSellingPriceGross) * 100)) || 20}%)
+                  <div className="h-full bg-emerald-600 flex items-center justify-center truncate" style={{ width: `${finalSellingPriceGross > 0 ? Math.round((profitVal / finalSellingPriceGross) * 100) : 20}%` }} title="Net profit Margin">
+                    PROFIT ({finalSellingPriceGross > 0 ? Math.round((profitVal / finalSellingPriceGross) * 100) : 20}%)
                   </div>
-                  <div className="h-full bg-rose-500 flex items-center justify-center truncate" style={{ width: `${Math.round((taxVal / finalSellingPriceGross) * 100) || 5}%` }} title="Levies and taxes">
+                  <div className="h-full bg-rose-500 flex items-center justify-center truncate" style={{ width: `${finalSellingPriceGross > 0 ? Math.round((taxVal / finalSellingPriceGross) * 100) : 5}%` }} title="Levies and taxes">
                     TAX
                   </div>
                 </div>

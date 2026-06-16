@@ -1,10 +1,24 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Building, MapPin, Plus, Search, Filter, 
-  MoreHorizontal, ArrowLeft, Save, Trash2, List,
-  ChevronLeft, ChevronRight, Check, Folder, File, ChevronDown, ChevronRight as ChevronRightIcon
-} from 'lucide-react';
+import {
+  Building,
+  MapPin,
+  Plus,
+  Search,
+  Filter,
+  MoreHorizontal,
+  ArrowLeft,
+  Save,
+  Trash2,
+  List,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Folder,
+  File,
+  ChevronDown,
+} from "lucide-react";
 import { Warehouse } from '../types';
+import { toast } from "../utils/toast";
 
 interface OfficesProps {
   warehouses: Warehouse[];
@@ -55,7 +69,7 @@ const Offices: React.FC<OfficesProps> = ({ warehouses, onAdd, onUpdate, onDelete
       // Check if it has children
       const children = warehouses.filter(w => w.parentWarehouse === id);
       if (children.length > 0) {
-          alert('Cannot delete a warehouse group that contains child warehouses.');
+          toast.error('Cannot delete a warehouse group that contains child warehouses.');
           return;
       }
       onDelete(id);
@@ -78,9 +92,9 @@ const Offices: React.FC<OfficesProps> = ({ warehouses, onAdd, onUpdate, onDelete
                   >
                       <div className="w-6 flex justify-center mr-1" onClick={(e) => hasChildren && toggleExpand(node.id, e)}>
                           {hasChildren ? (
-                             isExpanded ? <ChevronDown className="w-4 h-4 text-slate-500 hover:text-indigo-600 transition-colors" /> : <ChevronRightIcon className="w-4 h-4 text-slate-500 hover:text-indigo-600 transition-colors" />
+                             isExpanded ? <ChevronDown className="w-4 h-4 text-slate-500 hover:text-indigo-600 transition-colors" /> : <ChevronRight className="w-4 h-4 text-slate-500 hover:text-indigo-600 transition-colors" />
                           ) : (
-                             node.isGroup ? <ChevronRightIcon className="w-4 h-4 text-slate-300 dark:text-slate-600" /> : <span className="w-4" />
+                             node.isGroup ? <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600" /> : <span className="w-4" />
                           )}
                       </div>
                       <div className="flex items-center gap-2 flex-1">

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { PurchaseOrder, Supplier, InventoryItem, PurchaseOrderItem, Unit } from '../types';
 import { 
   Search, Plus, ShoppingBag, Filter, 
@@ -42,7 +43,7 @@ const PurchaseOrderComp: React.FC<PurchaseOrderProps> = ({
     
     const poData = {
       ...formData,
-      id: formData.id || `PO-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `PO-${uuidShort(12)}`,
       supplierName: s?.name || 'Unknown',
       totalAmount: formData.items.reduce((sum, i) => sum + (i.quantity * i.unitPrice), 0)
     } as PurchaseOrder;
@@ -164,7 +165,7 @@ const PurchaseOrderComp: React.FC<PurchaseOrderProps> = ({
                            <div className="w-64 pr-4 truncate text-[#1c2126] font-medium">{po.supplierName}</div>
                            <div className="w-32">{getStatusBadge(po.status)}</div>
                            <div className="w-48 text-[#525c66]">{po.date}</div>
-                           <div className="flex-1 pl-10 text-right pr-4 text-[#1c2126] tabular-nums font-medium">{currency}{po.totalAmount.toLocaleString()}</div>
+                           <div className="flex-1 pl-10 text-right pr-4 text-[#1c2126] tabular-nums font-medium">{currency}{(po.totalAmount ?? 0).toLocaleString()}</div>
                         </div>
                      ))}
                   </div>
@@ -304,8 +305,8 @@ const PurchaseOrderComp: React.FC<PurchaseOrderProps> = ({
                                         </div>
                                      </td>
                                      <td className="py-2 px-3 text-[#525c66]">{it.quantity}</td>
-                                     <td className="py-2 px-3 text-[#525c66]">{it.unitPrice.toLocaleString()}</td>
-                                     <td className="py-2 px-3 text-right font-medium text-[#1c2126]">{(it.quantity * it.unitPrice).toLocaleString()}</td>
+                                     <td className="py-2 px-3 text-[#525c66]">{(it.unitPrice ?? 0).toLocaleString()}</td>
+                                     <td className="py-2 px-3 text-right font-medium text-[#1c2126]">{((it.quantity ?? 0) * (it.unitPrice ?? 0)).toLocaleString()}</td>
                                      <td className="py-2 pr-3 text-right">
                                         <button type="button" onClick={() => setFormData(prev => ({ ...prev, items: prev.items?.filter((_, i) => i !== idx) }))} className="text-[#ef4444] hover:bg-[#fef2f2] p-1 rounded">
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -341,7 +342,7 @@ const PurchaseOrderComp: React.FC<PurchaseOrderProps> = ({
                             <div className="flex flex-col gap-2 w-64">
                                 <div className="flex justify-between items-center text-[13px] font-medium text-[#1c2126]">
                                     <span>Total (INR)</span>
-                                    <span className="text-lg">{(formData.items || []).reduce((acc, it) => acc + (it.quantity * it.unitPrice), 0).toLocaleString()}</span>
+                                    <span className="text-lg">{(formData.items || []).reduce((acc, it) => acc + ((it.quantity ?? 0) * (it.unitPrice ?? 0)), 0).toLocaleString()}</span>
                                 </div>
                             </div>
                          </div>

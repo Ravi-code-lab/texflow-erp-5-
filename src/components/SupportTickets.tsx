@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { HelpCircle, Plus, Eye, Trash2, ShieldCheck, Mail } from 'lucide-react';
 
 interface SupportTicketsProps {
@@ -21,7 +22,7 @@ export default function SupportTickets({ tickets, customers, onAdd, onUpdate, on
     if (!subject.trim()) return;
 
     onAdd({
-      id: `TKT-${Date.now().toString().slice(-4)}`,
+      id: `TKT-${uuidShort(12)}`,
       customerName: customer || 'Anonymous Client',
       subject,
       priority,

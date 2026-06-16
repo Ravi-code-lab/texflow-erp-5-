@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { 
   Printer, Play, CheckSquare, ChevronRight, 
   Clock, AlertCircle, Coins, Scissors, HelpCircle, Save, Check, Ban
@@ -120,7 +121,7 @@ const GenerateJobSlip: React.FC<JobCardProps> = ({
     // Build the apparel operations
     if (!selectedTemplate.operations?.length) return;
     const preparedOps: GarmentWorkOrderOperation[] = (selectedTemplate.operations || []).map(op => ({
-      id: `${op.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `${op.id}-${uuidShort(8)}`,
       name: op.name,
       stage: op.stage,
       processType: op.processType as any,
@@ -249,7 +250,7 @@ const GenerateJobSlip: React.FC<JobCardProps> = ({
     // 4. Calculate weighted total work order progress
     const totalOps = updatedOps.length;
     const completedOps = updatedOps.filter(o => o.status === 'COMPLETED').length;
-    let newProgress = Math.round((completedOps / totalOps) * 100);
+    let newProgress = totalOps > 0 ? Math.round((completedOps / totalOps) * 100) : 0;
 
     // Is the last operation or all operations complete?
     let finalStatus = selectedJob.status;

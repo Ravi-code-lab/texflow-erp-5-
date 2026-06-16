@@ -76,12 +76,8 @@ export type ViewState =
   | "TASK_WASHING"
   | "TASK_FINISHING"
   | "TASK_PACKING"
-  | "WORK_ORDER_TASKS"
-  | "MFG_DASHBOARD"
-  | "JOB_CARD_SUMMARY"
-  | "OPERATIONS_MASTER"
-  | "ROUTING_MASTER"
-  | "ROLE_ACCESS"
+  | "TASK_FABRIC_INSPECTION"
+  | "TASK_DYEING"
   | string;
 
 export enum Unit {
@@ -206,6 +202,13 @@ export interface InventoryItem extends BaseEntity {
   tags?: string[];
   widthInch?: number;
   lengthCm?: number;
+  valuationMethod?: string;
+  stockAdjustmentAccount?: string;
+  purchaseAccount?: string;
+  expenseAccount?: string;
+  stockValuationAccount?: string;
+  reorderQty?: number;
+  safetyStock?: number;
 }
 
 export interface DesignOption {
@@ -228,12 +231,15 @@ export interface DesignVariant {
 }
 
 export interface RecipeItem {
+  id?: string;
   materialId?: string;
   materialName: string;
   quantity: number;
   unit: Unit | string;
   estimatedCost?: number;
   wastagePercent?: number;
+  usedFor?: string;
+  printingRate?: number;
 }
 export type WorkType =
   | "DIGITAL_PRINT"
@@ -242,9 +248,16 @@ export type WorkType =
   | "ROTARY"
   | "PLAIN"
   | "DYED";
+export interface StitchingRow {
+  id?: string;
+  piece: string;
+  desc?: string;
+  rate: number;
+}
 export interface DesignLaborCost {
   cutting?: number;
   stitching?: number;
+  stitchingRows?: StitchingRow[];
   embroidery?: number;
   washing?: number;
   finishing?: number;
@@ -261,10 +274,11 @@ export interface GarmentOperationTemplate {
   processType: "IN_HOUSE" | "JOB_WORK";
   workstationType?: string;
   defaultRate?: number;
-  ratePerPiece?: number;      // style-specific rate per piece for this operation
-  rateUnit?: "PER_PIECE" | "PER_HOUR" | "PER_METER"; // how rate is measured
   plannedHours?: number;
   qualityCheckpoint?: boolean;
+  /** Per-piece / per-hour / per-meter operation rate (style-specific, set in RoutingMaster) */
+  ratePerPiece?: number;
+  rateUnit?: "PER_PIECE" | "PER_HOUR" | "PER_METER";
 }
 export interface GarmentRoutingTemplate {
   id: string;
@@ -274,11 +288,27 @@ export interface GarmentRoutingTemplate {
 }
 export interface GarmentWorkOrderOperation extends GarmentOperationTemplate {
   status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
+  // ERPNext workflow state (richer than legacy status)
+  workflowState?: "Draft" | "Open" | "Work In Progress" | "QC Review" | "Completed" | "On Hold" | "Rejected";
   completedQuantity?: number;
   rejectedQuantity?: number;
   assignedTo?: string;
   startedAt?: string;
   completedAt?: string;
+  // ERPNext-style task metadata
+  priority?: "Low" | "Medium" | "High" | "Urgent";
+  dueDate?: string;
+  notes?: string;
+  // Sub-tasks, checklists, comments, state history (ERPNext Job Card style)
+  subTasks?: {
+    id: string; name: string; workType: string; assignedTo?: string;
+    status: "Pending" | "In Progress" | "Done" | "Blocked";
+    qty: number; completedQty: number; dueDate?: string;
+    priority?: "Low" | "Medium" | "High" | "Urgent"; notes?: string;
+  }[];
+  checklist?: { id: string; label: string; done: boolean }[];
+  comments?: { id: string; text: string; user: string; time: string; type: "comment" | "system" }[];
+  stateHistory?: { time: string; from: string; to: string; user: string; reason?: string }[];
   customData?: Record<string, any>;
 }
 export interface GarmentBundleTicket {
@@ -295,7 +325,7 @@ export interface GarmentBundleTicket {
 export interface Design extends BaseEntity {
   name: string;
   sku: string;
-  category: "SAREE" | "KURTI" | "SUIT" | "FABRIC";
+  category: string;
   status: "ACTIVE" | "DRAFT" | "ARCHIVED" | "DISCONTINUED";
   imageUrl?: string;
   composition?: string;
@@ -577,6 +607,7 @@ export interface ProductionJob extends BaseEntity {
   cuttingLogs?: CuttingLog[];
   productionLogs?: ProductionLog[];
   sizeWise?: Record<string, number>;
+  customData?: Record<string, string>;
 }
 export interface KarigarLedgerEntry extends BaseEntity {
   date: string;
@@ -619,6 +650,7 @@ export interface PurchaseOrder extends BaseEntity {
   totalAmount: number;
   taxRate?: number;
   expectedDate?: string;
+  challanNo?: string;
 }
 export interface Machine extends BaseEntity {
   name: string;
@@ -830,11 +862,6 @@ export interface InvoiceConfig {
   footerText?: string;
   showLogo?: boolean;
 }
-export interface ShopifyConfig {
-  enabled: boolean;
-  shopUrl: string;
-  accessToken: string;
-}
 export interface RolePermission extends BaseEntity {
   role: string | UserRole;
   module: string; // the view name, e.g. 'ORDERS', 'INVENTORY'
@@ -953,7 +980,19 @@ export interface GatePass extends BaseEntity {
   driverName?: string;
   partyName?: string;
   status?: string;
-  items?: { itemName: string; qty: number; unit: string; purpose?: string }[];
+  items?: { id?: string; itemName: string; qty: number; unit: string; purpose?: string }[];
+  // GatePassSystem extended fields
+  purpose?: string;
+  department?: string;
+  authorizedBy?: string;
+  expectedReturnDate?: string;
+  remarks?: string;
+  securityName?: string;
+  inTime?: string;
+  outTime?: string;
+  weight?: number;
+  weightUnit?: "KG" | "MT" | "PCS";
+  amendmentCount?: number;
 }
 export interface SampleRequest {
   id: string;

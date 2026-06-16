@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { PackingSlip, Order, Customer } from '../types';
 import { 
   Search, Plus, Filter, MoreHorizontal, ArrowLeft, Save, 
@@ -49,7 +50,7 @@ const PackingList: React.FC<PackingSlipProps> = ({
     } else {
        onAddSlip({
          ...formData,
-         id: `PS-${Date.now().toString().slice(-4)}`,
+         id: `PS-${uuidShort(12)}`,
          updatedAt: new Date().toISOString()
        } as PackingSlip);
     }

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { getItem, setItem } from '../utils/indexedDB';
+import { getItem, setItem } from '../utils/networkClient';
 import {
   Plus, ChevronRight, ChevronDown, BookOpen, FolderOpen,
   Search, Trash2, Edit2, Save, Download, AlertCircle, CheckCircle,
@@ -12,6 +12,7 @@ import {
   Landmark, ShoppingCart, Package, Users, Briefcase, Shield,
   ArrowRight, Hash, Percent, Globe, Lock, Unlock, Star
 } from 'lucide-react';
+import { toast, useConfirm } from "../utils/toast";
 
 // ──────────────────────────────────────────────
 // Types & Interfaces
@@ -236,6 +237,7 @@ function getAccountIcon(acc: AccountItem): React.ReactNode {
 // Main Component
 // ──────────────────────────────────────────────
 const ChartOfAccounts: React.FC = () => {
+  const { confirm, ConfirmModal } = useConfirm();
   const [companyConfig, setCompanyConfig] = useState<CompanyConfig>(DEFAULT_COMPANY);
   const [accounts, setAccounts] = useState<AccountItem[]>(INDIAN_GST_COA);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
@@ -365,12 +367,13 @@ const ChartOfAccounts: React.FC = () => {
     setAccounts(prev => prev.map(a => a.id === updated.id ? updated : a));
   };
 
-  const handleDeleteAccount = (id: string) => {
+  const handleDeleteAccount = async (id: string) => {
     if (accounts.some(a => a.parentId === id)) {
-      alert('Cannot delete a group account that has child accounts. Move or delete children first.');
+      toast.error('Cannot delete a group account that has child accounts. Move or delete children first.');
       return;
     }
-    if (confirm('Delete this ledger account? This action cannot be undone.')) {
+    const ok = await confirm({ title: 'Delete ledger account?', message: 'This action cannot be undone.' });
+    if (ok) {
       setAccounts(prev => prev.filter(a => a.id !== id));
       setSelectedId('');
     }
@@ -378,8 +381,8 @@ const ChartOfAccounts: React.FC = () => {
 
   const handleAddAccount = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || !newCode.trim()) { alert('Name and Code are required.'); return; }
-    if (accounts.some(a => a.code === newCode.trim())) { alert('Account code already exists.'); return; }
+    if (!newName.trim() || !newCode.trim()) { toast.error('Name and Code are required.'); return; }
+    if (accounts.some(a => a.code === newCode.trim())) { toast.error('Account code already exists.'); return; }
     const id = 'acc_' + Date.now();
     const parent = accounts.find(a => a.id === newParentId);
     const item: AccountItem = {
@@ -402,13 +405,13 @@ const ChartOfAccounts: React.FC = () => {
 
   const handlePostJournal = () => {
     const validRows = jRows.filter(r => r.accountId && (r.debit > 0 || r.credit > 0));
-    if (validRows.length < 2) { alert('Journal Entry must have at least two valid rows.'); return; }
+    if (validRows.length < 2) { toast.error('Journal Entry must have at least two valid rows.'); return; }
     
     // Ensure total debit == total credit
     const totalDebit = validRows.reduce((sum, r) => sum + r.debit, 0);
     const totalCredit = validRows.reduce((sum, r) => sum + r.credit, 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) { 
-      alert(`Debit and Credit amounts must balance! Difference: ${Math.abs(totalDebit - totalCredit)}`); 
+      toast.error(`Debit and Credit amounts must balance! Difference: ₹${Math.abs(totalDebit - totalCredit).toFixed(2)}`); 
       return; 
     }
 
@@ -574,6 +577,7 @@ const ChartOfAccounts: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-slate-950 font-sans antialiased absolute inset-0 overflow-hidden">
+      <ConfirmModal />
 
       {/* ── Top Header ── */}
       <div className="flex-none bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-5 py-3 z-10">
@@ -624,7 +628,12 @@ const ChartOfAccounts: React.FC = () => {
             </button>
             <button
               onClick={() => {
-                setNewCode(String(Math.floor(1000 + Math.random() * 8000)));
+                // Deterministic: find highest existing numeric code and add 10
+                const maxCode = accounts
+                  .map(a => parseInt(a.code, 10))
+                  .filter(n => !isNaN(n))
+                  .reduce((m, n) => Math.max(m, n), 1000);
+                setNewCode(String(Math.ceil((maxCode + 10) / 10) * 10));
                 setShowAddModal(true);
               }}
               className="px-3 py-1.5 text-[10px] font-bold uppercase bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center gap-1 shadow-sm"

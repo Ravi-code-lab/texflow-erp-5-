@@ -5,7 +5,8 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { uuidShort } from "./utils/uuid";
+import { motion, AnimatePresence } from "motion/react";
 import { hashPassword } from "./utils/crypto";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -87,9 +88,14 @@ import { FabricCostingWorkspace } from "./components/FabricCosting";
 import { DispatchPlanner } from "./components/DispatchPlanner";
 import WorkOrderTaskHub from "./components/work-orders/WorkOrderTaskHub";
 import MfgDashboard from "./components/work-orders/MfgDashboard";
+import SmartDelivery from "./components/SmartDelivery";
+import TexBot from "./components/TexBot";
 import JobCardSummary from "./components/work-orders/JobCardSummary";
 import OperationsMaster from "./components/work-orders/OperationsMaster";
 import RoleAccessManager from "./components/RoleAccessManager";
+import GSTSuite from "./components/GSTSuite";
+import { RolePermissionManager } from "./components/RolePermissionManager";
+import FabricConsumption from "./components/FabricConsumption";
 import RoutingMaster from "./components/work-orders/RoutingMaster";
 import ProductionPlan from "./components/ProductionPlan";
 import WorkstationsComp from "./components/Workstations";
@@ -162,6 +168,7 @@ import {
   setItem,
   hydrateFromNative,
   getVaultSnapshot,
+  onDataPush,
 } from "./utils/networkClient";
 import {
   Loader2,
@@ -188,6 +195,9 @@ import {
   prepareDocumentDelete,
   prepareDocumentUpdate,
 } from "./modules/documentLifecycle";
+import { ToastContainer, ConfirmRoot } from "./utils/toast";
+import OrderReminderSettings from "./components/OrderReminderSettings";
+import { startReminderScheduler } from "./services/orderReminderService";
 
 // ── ForcePasswordChangeModal ────────────────────────────────────────────────
 // Shown on first boot after seed-admin login. Cannot be dismissed.
@@ -412,6 +422,10 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const hasInitialized = useRef(false);
+  const productionRef = useRef<ProductionJob[]>([]);
+  const designsRef = useRef<Design[]>([]);
+  const inventoryRef = useRef<InventoryItem[]>([]);
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>("DASHBOARD");
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -422,6 +436,9 @@ const App: React.FC = () => {
   const [lastSync, setLastSync] = useState<string>("");
   // Tracks source order id when navigating to Delivery Challan via CONVERT_TO_DELIVERY_NOTE
   const [pendingDeliveryOrderId, setPendingDeliveryOrderId] = useState<string | undefined>(undefined);
+  const [pendingInvoiceOrderId, setPendingInvoiceOrderId] = useState<string | undefined>(undefined);
+  const [pendingPurchaseInwardId, setPendingPurchaseInwardId] = useState<string | undefined>(undefined);
+  const [pendingPurchaseInvoiceId, setPendingPurchaseInvoiceId] = useState<string | undefined>(undefined);
 
   const [uiPrefs, setUiPrefs] = useState<UIPreferences>({
     theme: "light",
@@ -548,7 +565,7 @@ const App: React.FC = () => {
   >({});
 
   const refreshData = useCallback(async () => {
-    setIsLoading(true);
+    if (!hasInitialized.current) setIsLoading(true);
     try {
       // Hydrate from physical vault if on Electron
       await hydrateFromNative();
@@ -958,13 +975,61 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Critical Error loading local data:", error);
     } finally {
-      setIsLoading(false);
+      if (!hasInitialized.current) {
+        hasInitialized.current = true;
+        setIsLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     refreshData();
   }, []);
+
+
+  // ── Order Delay Reminder Scheduler ─────────────────────────────────────────
+  // Uses refs so the scheduler reads latest state without restarting.
+  const ordersRef = React.useRef(orders);
+  const customersRef = React.useRef(customers);
+  const commConfigRef = React.useRef(communicationConfig);
+  const companyInfoReminderRef = React.useRef(companyInfo);
+  // addNotificationRef so the scheduler always calls the latest version
+  const addNotificationRef = React.useRef<(n: Partial<Notification>) => void>(() => {});
+  useEffect(() => { ordersRef.current = orders; }, [orders]);
+  useEffect(() => { customersRef.current = customers; }, [customers]);
+  useEffect(() => { commConfigRef.current = communicationConfig; }, [communicationConfig]);
+  useEffect(() => { companyInfoReminderRef.current = companyInfo; }, [companyInfo]);
+
+  useEffect(() => {
+    const stop = startReminderScheduler(
+      () => ordersRef.current,
+      () => customersRef.current,
+      () => commConfigRef.current,
+      () => companyInfoReminderRef.current,
+      (n) => addNotificationRef.current(n)
+    );
+    return stop;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
+
+  // Subscribe to real-time LAN data pushes from server
+  useEffect(() => {
+    const unsub = onDataPush((key: string, _data: unknown) => {
+      // Only do a full refresh on connection events (server restart / reconnect).
+      // Regular shard saves are already reflected in state via handleCollection's
+      // setter() calls — calling refreshData() on every save causes a full
+      // re-render that looks like a screen reload.
+      if (key === "__reconnect__" || key === "__connected__") {
+        refreshData();
+      }
+    });
+    return () => { if (unsub) unsub(); };
+  }, [refreshData]);
+
+  // Keep refs in sync with state so callbacks can read latest values without deps
+  useEffect(() => { productionRef.current = production; }, [production]);
+  useEffect(() => { designsRef.current = designs; }, [designs]);
+  useEffect(() => { inventoryRef.current = inventory; }, [inventory]);
 
   useEffect(() => {
     if (uiPrefs.theme === "dark")
@@ -1014,7 +1079,7 @@ const App: React.FC = () => {
 
   const handleCollection = <T extends BaseEntity & { id: string }>(
     key: string,
-    data: T[],
+    _data: T[],
     setter: React.Dispatch<React.SetStateAction<T[]>>,
   ) => ({
     add: (item: T) => {
@@ -1022,52 +1087,26 @@ const App: React.FC = () => {
         item as T & Record<string, any>,
         currentUser?.name || "Administrator",
       ) as T;
-      const newData = [nextItem, ...data];
-      setter(newData);
-      setItem(key, newData).catch(console.error);
-      setLastSync(new Date().toLocaleTimeString());
-      writeAuditLog(
-        nextItem.doctype || key,
-        nextItem.id,
-        "CREATE",
-        undefined,
-        nextItem,
-      );
+      setter(prev => {
+        const newData = [nextItem, ...prev];
+        setItem(key, newData).catch(console.error);
+        setLastSync(new Date().toLocaleTimeString());
+        writeAuditLog(nextItem.doctype || key, nextItem.id, "CREATE", undefined, nextItem);
+        return newData;
+      });
     },
     update: (item: T) => {
-      const previous = data.find((i) => (i as any).id === (item as any).id);
-      const nextItem = prepareDocumentUpdate(
-        item as T & Record<string, any>,
-        previous as (T & Record<string, any>) | undefined,
-        currentUser?.name || "Administrator",
-      ) as T;
-      const newData = data.map((i) =>
-        (i as any).id === (item as any).id ? nextItem : i,
-      );
-      setter(newData);
-      setItem(key, newData).catch(console.error);
-      setLastSync(new Date().toLocaleTimeString());
-      writeAuditLog(
-        nextItem.doctype || key,
-        nextItem.id,
-        "UPDATE",
-        previous,
-        nextItem,
-      );
-    },
-    upsert: (item: T) => {
-      const exists = data.some((i) => (i as any).id === (item as any).id);
-      if (exists) {
-        const previous = data.find((i) => (i as any).id === (item as any).id);
+      // Functional updater — reads latest state, never stale closure
+      setter(prev => {
+        const previous = prev.find((i) => (i as any).id === (item as any).id);
         const nextItem = prepareDocumentUpdate(
           item as T & Record<string, any>,
           previous as (T & Record<string, any>) | undefined,
           currentUser?.name || "Administrator",
         ) as T;
-        const newData = data.map((i) =>
+        const newData = prev.map((i) =>
           (i as any).id === (item as any).id ? nextItem : i,
         );
-        setter(newData);
         setItem(key, newData).catch(console.error);
         setLastSync(new Date().toLocaleTimeString());
         writeAuditLog(
@@ -1077,80 +1116,98 @@ const App: React.FC = () => {
           previous,
           nextItem,
         );
-      } else {
-        const nextItem = prepareDocumentCreate(
-          item as T & Record<string, any>,
-          currentUser?.name || "Administrator",
-        ) as T;
-        const newData = [nextItem, ...data];
-        setter(newData);
-        setItem(key, newData).catch(console.error);
-        setLastSync(new Date().toLocaleTimeString());
-        writeAuditLog(
-          nextItem.doctype || key,
-          nextItem.id,
-          "CREATE",
-          undefined,
-          nextItem,
-        );
-      }
+        return newData;
+      });
     },
-    upsertMany: (items: T[]) => {
-      const newData = [...data];
-      items.forEach((item) => {
-        const idx = newData.findIndex(
-          (i) => (i as any).id === (item as any).id,
-        );
-        if (idx > -1) {
-          newData[idx] = prepareDocumentUpdate(
+    upsert: (item: T) => {
+      setter(prev => {
+        const exists = prev.some((i) => (i as any).id === (item as any).id);
+        let newData: T[];
+        if (exists) {
+          const previous = prev.find((i) => (i as any).id === (item as any).id);
+          const nextItem = prepareDocumentUpdate(
             item as T & Record<string, any>,
-            newData[idx] as T & Record<string, any>,
+            previous as (T & Record<string, any>) | undefined,
             currentUser?.name || "Administrator",
           ) as T;
-        } else {
-          newData.unshift(
-            prepareDocumentCreate(
-              item as T & Record<string, any>,
-              currentUser?.name || "Administrator",
-            ) as T,
+          newData = prev.map((i) =>
+            (i as any).id === (item as any).id ? nextItem : i,
           );
+          setItem(key, newData).catch(console.error);
+          setLastSync(new Date().toLocaleTimeString());
+          writeAuditLog(nextItem.doctype || key, nextItem.id, "UPDATE", previous, nextItem);
+        } else {
+          const nextItem = prepareDocumentCreate(
+            item as T & Record<string, any>,
+            currentUser?.name || "Administrator",
+          ) as T;
+          newData = [nextItem, ...prev];
+          setItem(key, newData).catch(console.error);
+          setLastSync(new Date().toLocaleTimeString());
+          writeAuditLog(nextItem.doctype || key, nextItem.id, "CREATE", undefined, nextItem);
         }
+        return newData;
       });
-      setter(newData);
-      setItem(key, newData).catch(console.error);
-      setLastSync(new Date().toLocaleTimeString());
-      writeAuditLog(key, `${items.length} records`, "UPDATE", undefined, {
-        count: items.length,
-        collection: key,
+    },
+    upsertMany: (items: T[]) => {
+      setter(prev => {
+        const newData = [...prev];
+        items.forEach((item) => {
+          const idx = newData.findIndex((i) => (i as any).id === (item as any).id);
+          if (idx > -1) {
+            newData[idx] = prepareDocumentUpdate(
+              item as T & Record<string, any>,
+              newData[idx] as T & Record<string, any>,
+              currentUser?.name || "Administrator",
+            ) as T;
+          } else {
+            newData.unshift(
+              prepareDocumentCreate(
+                item as T & Record<string, any>,
+                currentUser?.name || "Administrator",
+              ) as T,
+            );
+          }
+        });
+        setItem(key, newData).catch(console.error);
+        setLastSync(new Date().toLocaleTimeString());
+        writeAuditLog(key, `${items.length} records`, "UPDATE", undefined, {
+          count: items.length,
+          collection: key,
+        });
+        return newData;
       });
     },
     remove: (id: string) => {
-      const previous = data.find((i) => (i as any).id === id);
-      const deletedItem = previous
-        ? (prepareDocumentDelete(
-            previous as T & Record<string, any>,
-            currentUser?.name || "Administrator",
-          ) as T)
-        : undefined;
-      const newData = data.map((i) =>
-        (i as any).id === id && deletedItem ? deletedItem : i,
-      );
-      setter(newData);
-      setItem(key, newData).catch(console.error);
-      setLastSync(new Date().toLocaleTimeString());
-      if (deletedItem)
-        writeAuditLog(
-          deletedItem.doctype || key,
-          deletedItem.id,
-          "DELETE",
-          previous,
-          deletedItem,
+      setter(prev => {
+        const previous = prev.find((i) => (i as any).id === id);
+        const deletedItem = previous
+          ? (prepareDocumentDelete(
+              previous as T & Record<string, any>,
+              currentUser?.name || "Administrator",
+            ) as T)
+          : undefined;
+        const newData = prev.map((i) =>
+          (i as any).id === id && deletedItem ? deletedItem : i,
         );
+        setItem(key, newData).catch(console.error);
+        setLastSync(new Date().toLocaleTimeString());
+        if (deletedItem)
+          writeAuditLog(
+            deletedItem.doctype || key,
+            deletedItem.id,
+            "DELETE",
+            previous,
+            deletedItem,
+          );
+        return newData;
+      });
     },
   });
 
   const ordMgr = handleCollection("orders", orders, setOrders);
-  const prodMgr = handleCollection("production", production, setProduction);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const prodMgr = useMemo(() => handleCollection("production", production, setProduction), [setProduction]);
   const designMgr = handleCollection("designs", designs, setDesigns);
   const karigarMgr = handleCollection("karigars", karigars, setKarigars);
   const agentMgr = handleCollection("agents", agents, setAgents);
@@ -1203,7 +1260,8 @@ const App: React.FC = () => {
     setWarehouses,
   );
   const teamMgr = handleCollection("team", team, setTeam);
-  const invMgr = handleCollection("inventory", inventory, setInventory);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const invMgr = useMemo(() => handleCollection("inventory", inventory, setInventory), [setInventory]);
   const txnMgr = handleCollection(
     "transactions",
     transactions,
@@ -1310,7 +1368,7 @@ const App: React.FC = () => {
         };
         yarnMgr.update(updatedRawLot);
 
-        const dyedLotId = `LOT-DYED-${Date.now().toString().slice(-4)}`;
+        const dyedLotId = `LOT-DYED-${uuidShort(12)}`;
         const dyedLotNum = `${rawLot.lotNumber}-${job.shade || "DYED"}-LOT`;
 
         const newDyedLot: YarnLot = {
@@ -1413,6 +1471,8 @@ const App: React.FC = () => {
     setNotifications(updated);
     setItem("notifications", updated);
   };
+  // Keep the ref in sync so the reminder scheduler always has the latest version
+  addNotificationRef.current = handleAddNotification;
 
   const handleMarkAsRead = (id: string) => {
     const updated = notifications.map((n) =>
@@ -1477,19 +1537,18 @@ const App: React.FC = () => {
     setCurrentUser(null);
   };
 
-  const handleJobUpdate = (updatedJob: ProductionJob) => {
-    const oldJob = production.find((p) => p.id === updatedJob.id);
+  const handleJobUpdate = useCallback((updatedJob: ProductionJob) => {
+    const oldJob = productionRef.current.find((p) => p.id === updatedJob.id);
     prodMgr.update(updatedJob);
 
     if (oldJob?.status !== "COMPLETED" && updatedJob.status === "COMPLETED") {
-      // Match design by designId first (stable), then fall back to name (legacy)
-      const design = designs.find(
+      const design = designsRef.current.find(
         (d) => (updatedJob as any).designId
           ? d.id === (updatedJob as any).designId
           : d.name.trim().toLowerCase() === updatedJob.productName?.trim().toLowerCase()
       );
       if (design && design.recipe) {
-        const newInv = [...inventory];
+        const newInv = [...inventoryRef.current];
         design.recipe.forEach((rm) => {
           const idx = newInv.findIndex(
             (i) => i.name.trim().toLowerCase() === rm.materialName.trim().toLowerCase()
@@ -1497,10 +1556,7 @@ const App: React.FC = () => {
           if (idx >= 0) {
             newInv[idx] = {
               ...newInv[idx],
-              quantity: Math.max(
-                0,
-                newInv[idx].quantity - rm.quantity * updatedJob.quantity,
-              ),
+              quantity: Math.max(0, newInv[idx].quantity - rm.quantity * updatedJob.quantity),
             };
           }
         });
@@ -1508,10 +1564,7 @@ const App: React.FC = () => {
           (i) => i.name.trim().toLowerCase() === updatedJob.productName?.trim().toLowerCase(),
         );
         if (fgIdx >= 0) {
-          newInv[fgIdx] = {
-            ...newInv[fgIdx],
-            quantity: newInv[fgIdx].quantity + updatedJob.quantity,
-          };
+          newInv[fgIdx] = { ...newInv[fgIdx], quantity: newInv[fgIdx].quantity + updatedJob.quantity };
         } else {
           newInv.push({
             id: `INV-${Date.now()}`,
@@ -1528,25 +1581,43 @@ const App: React.FC = () => {
         setItem("inventory", newInv);
       }
     }
-  };
+  // prodMgr is stable (useMemo on setter); refs always current without deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prodMgr]);
+
+  const handleInventoryUpdate = useCallback((item: InventoryItem) => {
+    invMgr.upsert(item);
+  }, [invMgr]);
+
+  const handleCreateGatePass = useCallback((gp: any) => {
+    gatePassMgr.add(gp);
+  }, [gatePassMgr]);
 
   const handleAction = (action: string, data: any) => {
     switch (action) {
-      case "CONVERT_TO_SALES_ORDER":
+      case "CONVERT_TO_SALES_ORDER": {
         const newSalesOrder = createERPDocument("ORDERS", {
           ...data,
           status: "PENDING",
           orderDate: new Date().toISOString().split("T")[0],
+          sourceQuotationId: data.id,
         });
         ordMgr.add(newSalesOrder);
+        // Mark source quotation as CONVERTED to prevent duplicate conversion
+        const sourceQuotation = orders.find((o: any) => o.id === data.id);
+        if (sourceQuotation) {
+          ordMgr.update({ ...sourceQuotation, status: "CONVERTED" });
+        }
         setCurrentView("ORDERS");
         break;
+      }
       case "CONVERT_TO_DELIVERY_NOTE":
         // Store the source order id so DeliveryChallan can pre-populate the form
         setPendingDeliveryOrderId(data?.id || undefined);
         setCurrentView("DELIVERY_CHALLAN");
         break;
       case "CONVERT_TO_INVOICE":
+        setPendingInvoiceOrderId(data?.id || undefined);
         setCurrentView("TAX_INVOICE");
         break;
       case "CONVERT_TO_WORK_ORDER_FROM_SAMPLE":
@@ -1562,7 +1633,7 @@ const App: React.FC = () => {
           progress: 0,
           styleCode:
             data.styleCode ||
-            `STL-${Math.floor(1000 + Math.random() * 9000).toString()}`,
+            `STL-${parseInt(uuidShort(4), 16).toString()}`,
           sourceDoc: `Sample Request #${data.id}`,
           sizeWise: data.sizeWise || { M: data.quantity || 1 },
         });
@@ -1711,7 +1782,7 @@ const App: React.FC = () => {
         materialReqMgr.add(mrBase as any);
         setCurrentView("MATERIAL_REQUEST");
         break;
-      case "CONVERT_TO_WORK_ORDER_FROM_RECIPE":
+      case "CONVERT_TO_WORK_ORDER_FROM_RECIPE": {
         const productionBaseRec = createERPDocument("PRODUCTION", {
           productName: data.name || "Custom Product",
           quantity: data.quantity || 1,
@@ -1722,12 +1793,16 @@ const App: React.FC = () => {
           qualityStatus: "PENDING",
           priority: data.priority || "NORMAL",
           progress: 0,
+          // Bug fix: preserve BOM materials, operations, and routing template from recipe
+          materials: data.materials || [],
+          operations: data.operations || [],
+          routingTemplate: data.routingTemplate || null,
+          sourceRecipeId: data.id,
         });
-        prodMgr.add(
-          productionBaseRec,
-        );
+        prodMgr.add(productionBaseRec);
         setCurrentView("PRODUCTION");
         break;
+      }
       case "CONVERT_TO_PO":
         const poBase = createERPDocument("PURCHASE_ORDER", {
           ...data,
@@ -1743,9 +1818,11 @@ const App: React.FC = () => {
         setCurrentView("PURCHASE_ORDER");
         break;
       case "CONVERT_TO_PURCHASE_RECEIPT":
+        setPendingPurchaseInwardId(data?.id || undefined);
         setCurrentView("PURCHASE_INWARD");
         break;
       case "CONVERT_TO_PURCHASE_INVOICE":
+        setPendingPurchaseInvoiceId(data?.id || undefined);
         setCurrentView("PURCHASE_INVOICE");
         break;
       case "CONVERT_TO_PURCHASE_RETURN":
@@ -1761,7 +1838,7 @@ const App: React.FC = () => {
             date: new Date().toISOString().split("T")[0],
             description: `Purchase Return: ${retPO.supplierName} - PO ${retPO.id}`,
             amount: retPO.totalAmount,
-            type: "INCOME",
+            type: "EXPENSE",
             category: "PURCHASE_RETURN",
             paymentMethod: "ADJUSTMENT",
             subType: "DEBIT_NOTE",
@@ -1775,16 +1852,22 @@ const App: React.FC = () => {
         }
         setCurrentView("PURCHASE_RETURN");
         break;
-      case "CONVERT_TO_SALES_RETURN":
+      case "CONVERT_TO_SALES_RETURN": {
         // Pre-populate a return order from the sales order and navigate to Sales Return
         const retOrder = createERPDocument("ORDERS", {
           ...data,
-          id: `RET-${Date.now().toString().slice(-4)}`,
+          id: `RET-${uuidShort(8)}`,
           status: "RETURNED",
           paymentStatus: "REFUND_PENDING",
           shippingAddress: `Reason: Customer Return. Original Order: ${data.id}`,
+          sourceOrderId: data.id,
         });
         ordMgr.add(retOrder);
+        // Mark source order as RETURNED to remove it from receivables
+        const sourceOrder = orders.find((o: any) => o.id === data.id);
+        if (sourceOrder) {
+          ordMgr.update({ ...sourceOrder, status: "RETURNED" });
+        }
         handleAddNotification({
           title: "Sales Return Created",
           message: `Return ${retOrder.id} created from Order ${data.id}.`,
@@ -1792,6 +1875,7 @@ const App: React.FC = () => {
         });
         setCurrentView("SALES_RETURN");
         break;
+      }
     }
   };
 
@@ -1935,7 +2019,7 @@ const App: React.FC = () => {
     SUPPLIER_QUOTATION: buildDocTypeStat(supplierQuotations),
     PURCHASE_ORDER: buildDocTypeStat(purchaseOrders),
     PURCHASE_INVOICE: buildDocTypeStat(purchaseInvoices),
-    INVENTORY: buildDocTypeStat(inventory),
+    INVENTORY: buildDocTypeStat(inventory.filter(i => i.doctype !== "READY_STOCK")),
     STOCK_TRANSFER: buildDocTypeStat(transfers),
     STOCK_AUDIT: buildDocTypeStat(stockAudits),
     QUALITY: buildDocTypeStat(qualityReports),
@@ -1996,12 +2080,7 @@ const App: React.FC = () => {
       label: "Material Request",
       documents: active(materialRequests),
     },
-    { view: "INVENTORY", label: "Item", documents: active(inventory) },
-    {
-      view: "QUALITY",
-      label: "Quality Inspection",
-      documents: active(qualityReports),
-    },
+    { view: "INVENTORY", label: "Item", documents: active(inventory).filter(i => i.doctype !== "READY_STOCK") },
   ];
   const documentDeskCollections: DocumentDeskCollection[] = [
     {
@@ -2076,7 +2155,7 @@ const App: React.FC = () => {
     {
       view: "INVENTORY",
       label: "Item",
-      documents: active(inventory),
+      documents: active(inventory).filter(i => i.doctype !== "READY_STOCK"),
       onAdd: (document) => invMgr.add(document as InventoryItem),
       onUpdate: (document) => invMgr.update(document as InventoryItem),
       onDelete: invMgr.remove,
@@ -2185,7 +2264,7 @@ const App: React.FC = () => {
     {
       view: "INVENTORY",
       label: "Item",
-      documents: active(inventory),
+      documents: active(inventory).filter(i => i.doctype !== "READY_STOCK"),
       onImport: (documents) => invMgr.upsertMany(documents as InventoryItem[]),
     },
     {
@@ -2317,6 +2396,7 @@ const App: React.FC = () => {
     "TASK_WASHING",
     "TASK_FINISHING",
     "TASK_PACKING",
+    "TASK_FABRIC_INSPECTION",
     "MFG_DASHBOARD",
     "JOB_CARD_SUMMARY",
     "OPERATIONS_MASTER",
@@ -2329,6 +2409,7 @@ const App: React.FC = () => {
     "OPENING_STOCK",
     "SETTINGS",
     "NOTIFICATIONS",
+    "ORDER_REMINDER",
     "INVENTORY",
     "PRODUCTION",
     "KARIGARS",
@@ -2379,6 +2460,8 @@ const App: React.FC = () => {
     "PRINT_FORMATS",
     "CUSTOMERS",
     "TALLY_INTEGRATION",
+    "GST_SUITE",
+    "FABRIC_CONSUMPTION",
     "GALLERY",
     "EMAIL_HUB",
     "MARGIN_COSTING",
@@ -2458,6 +2541,7 @@ const App: React.FC = () => {
         "CUSTOMERS",
         "TALLY_INTEGRATION",
         "EMAIL_HUB",
+        "ORDER_REMINDER",
         "MARGIN_COSTING",
         "WASTE_MANAGEMENT",
         "BROKERAGE",
@@ -2733,7 +2817,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* Master Hubs */}
-                {currentView === "KARIGARS" && (
+                {currentView === "KARIGARS" && effectiveFeatures["KARIGARS"] !== false && (
                   <Karigars
                     karigars={active(karigars)}
                     onAdd={karigarMgr.add}
@@ -2742,14 +2826,14 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "KARIGAR_KHATA" && (
+                {currentView === "KARIGAR_KHATA" && effectiveFeatures["KARIGAR_KHATA"] !== false && (
                   <KarigarKhata
                     karigars={active(karigars)}
                     onUpdateKarigar={karigarMgr.update}
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "AGENTS" && (
+                {currentView === "AGENTS" && effectiveFeatures["AGENTS"] !== false && (
                   <GenericListPage
                     collectionKey="agents"
                     schema={getDocTypeSchema("AGENTS")}
@@ -2760,7 +2844,7 @@ const App: React.FC = () => {
                     collections={{}}
                   />
                 )}
-                {currentView === "OFFICES" && (
+                {currentView === "OFFICES" && effectiveFeatures["OFFICES"] !== false && (
                   <GenericListPage
                     collectionKey="warehouses"
                     schema={getDocTypeSchema("OFFICES")}
@@ -2771,7 +2855,7 @@ const App: React.FC = () => {
                     collections={{ warehouses: active(warehouses) }}
                   />
                 )}
-                {currentView === "TEAM" && (
+                {currentView === "TEAM" && effectiveFeatures["TEAM"] !== false && (
                   <Employees
                     team={active(team)}
                     onAdd={teamMgr.add}
@@ -2793,7 +2877,7 @@ const App: React.FC = () => {
                     companyInfo={companyInfo}
                   />
                 )}
-                {currentView === "CUSTOMERS" && (
+                {currentView === "CUSTOMERS" && effectiveFeatures["CUSTOMERS"] !== false && (
                   <Customers
                     customers={active(customers)}
                     onAdd={custMgr.add}
@@ -2802,7 +2886,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "SUPPLIERS" && (
+                {currentView === "SUPPLIERS" && effectiveFeatures["SUPPLIERS"] !== false && (
                   <Suppliers
                     suppliers={active(suppliers)}
                     purchaseOrders={active(purchaseOrders)}
@@ -2817,7 +2901,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* Sales & Orders */}
-                {currentView === "ORDERS" && (
+                {currentView === "ORDERS" && effectiveFeatures["ORDERS"] !== false && (
                   <SalesOrder
                     orders={active(orders)}
                     customers={active(customers)}
@@ -2831,7 +2915,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "POS" && (
+                {currentView === "POS" && effectiveFeatures["POS"] !== false && (
                   <POS
                     posInvoices={active(posInvoices)}
                     inventory={active(inventory)}
@@ -2842,7 +2926,7 @@ const App: React.FC = () => {
                     companyInfo={companyInfo}
                   />
                 )}
-                {currentView === "DELIVERY_CHALLAN" && (
+                {currentView === "DELIVERY_CHALLAN" && effectiveFeatures["DELIVERY_CHALLAN"] !== false && (
                   <DeliveryChallan
                     orders={active(orders)}
                     customers={active(customers)}
@@ -2856,7 +2940,7 @@ const App: React.FC = () => {
                     companyInfo={companyInfo}
                   />
                 )}
-                {currentView === "PACKING_SLIPS" && (
+                {currentView === "PACKING_SLIPS" && effectiveFeatures["PACKING_SLIPS"] !== false && (
                   <PackingList
                     slips={active(packingSlips)}
                     orders={active(orders)}
@@ -2867,7 +2951,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* Production & Inventory */}
-                {currentView === "PRODUCTION" && (
+                {currentView === "PRODUCTION" && effectiveFeatures["PRODUCTION"] !== false && (
                   <WorkOrderPage
                     jobs={active(production)}
                     karigars={active(karigars)}
@@ -2879,6 +2963,7 @@ const App: React.FC = () => {
                     onAddJob={prodMgr.add}
                     onUpdateJob={handleJobUpdate}
                     onDeleteJob={(id) => prodMgr.remove(id)}
+                    onAction={handleAction}
                     currency={currencySymbol}
                   />
                 )}
@@ -2889,11 +2974,16 @@ const App: React.FC = () => {
                   currentView === "TASK_PRINTING" ||
                   currentView === "TASK_WASHING" ||
                   currentView === "TASK_FINISHING" ||
-                  currentView === "TASK_PACKING") && (
+                  currentView === "TASK_PACKING" ||
+                  currentView === "TASK_FABRIC_INSPECTION" ||
+                  currentView === "TASK_DYEING") && effectiveFeatures["WORK_ORDER_TASKS"] !== false && (
                   <WorkOrderTaskHub
                     production={active(production)}
                     onUpdateWorkOrder={handleJobUpdate}
                     karigars={active(karigars)}
+                    inventory={active(inventory)}
+                    onUpdateInventory={handleInventoryUpdate}
+                    onCreateGatePass={handleCreateGatePass}
                     initialTab={
                       currentView === "TASK_CUTTING" ? "Cutting"
                       : currentView === "TASK_STITCHING" ? "Stitching"
@@ -2902,6 +2992,8 @@ const App: React.FC = () => {
                       : currentView === "TASK_WASHING" ? "Washing"
                       : currentView === "TASK_FINISHING" ? "Finishing"
                       : currentView === "TASK_PACKING" ? "Packing"
+                      : currentView === "TASK_FABRIC_INSPECTION" ? "Fabric Inspection"
+                      : currentView === "TASK_DYEING" ? "Dyeing"
                       : "Fabric Inspection"
                     }
                   />
@@ -2916,16 +3008,17 @@ const App: React.FC = () => {
                 {currentView === "JOB_CARD_SUMMARY" && (
                   <JobCardSummary
                     production={active(production)}
+                    designs={active(designs)}
                   />
                 )}
-                {currentView === "OPERATIONS_MASTER" && (
+                {currentView === "OPERATIONS_MASTER" && effectiveFeatures["OPERATIONS_MASTER"] !== false && (
                   <OperationsMaster />
                 )}
-                {currentView === "ROUTING_MASTER" && (
+                {currentView === "ROUTING_MASTER" && effectiveFeatures["ROUTING_MASTER"] !== false && (
                   <RoutingMaster />
                 )}
-                {currentView === "ROLE_ACCESS" && (
-                  <RoleAccessManager
+                {currentView === "ROLE_ACCESS" && (!currentUser || currentUser.role === "ADMIN") && (
+                  <RolePermissionManager
                     rolePermissions={rolePermissions}
                     onAddRolePermission={rolePermMgr.add}
                     onUpdateRolePermission={rolePermMgr.update}
@@ -2949,7 +3042,7 @@ const App: React.FC = () => {
                     onDelete={(id) => machineMgr.remove(id)}
                   />
                 )}
-                {currentView === "SAMPLING" && (
+                {currentView === "SAMPLING" && effectiveFeatures["SAMPLING"] !== false && (
                   <Sampling
                     samples={active(samples)}
                     designs={active(designs)}
@@ -2962,13 +3055,13 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "TRACK_LOTS" && (
+                {currentView === "TRACK_LOTS" && effectiveFeatures["TRACK_LOTS"] !== false && (
                   <TrackLots
                     jobs={active(production)}
                     onUpdateJob={handleJobUpdate}
                   />
                 )}
-                {currentView === "QUALITY" && (
+                {currentView === "QUALITY" && effectiveFeatures["QUALITY"] !== false && (
                   <QualityControl
                     reports={active(qualityReports)}
                     inspections={active(inspections)}
@@ -2982,9 +3075,9 @@ const App: React.FC = () => {
                     geminiApiKey={securityConfig.geminiApiKey}
                   />
                 )}
-                {currentView === "INVENTORY" && (
+                {currentView === "INVENTORY" && effectiveFeatures["INVENTORY"] !== false && (
                   <Inventory
-                    items={active(inventory)}
+                    items={active(inventory).filter(i => i.doctype !== "READY_STOCK")}
                     production={active(production)}
                     designs={active(designs)}
                     onAdd={invMgr.add}
@@ -3015,7 +3108,7 @@ const App: React.FC = () => {
                     }}
                   />
                 )}
-                {currentView === "DESIGN_RECIPE" && (
+                {currentView === "DESIGN_RECIPE" && effectiveFeatures["DESIGN_RECIPE"] !== false && (
                   <DesignRecipe
                     designs={active(designs)}
                     inventory={active(inventory)}
@@ -3026,7 +3119,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "JOB_WORK" && (
+                {currentView === "JOB_WORK" && effectiveFeatures["JOB_WORK"] !== false && (
                   <JobWorkComp
                     jobs={active(jobWorks)}
                     designs={active(designs)}
@@ -3034,10 +3127,12 @@ const App: React.FC = () => {
                     onAdd={jobWorkMgr.add}
                     onUpdate={jobWorkMgr.update}
                     onDelete={jobWorkMgr.remove}
+                    onAction={handleAction}
+                    companyInfo={companyInfo}
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "STOCK_TRANSFER" && (
+                {currentView === "STOCK_TRANSFER" && effectiveFeatures["STOCK_TRANSFER"] !== false && (
                   <StockTransferComp
                     inventory={active(inventory)}
                     transfers={active(transfers)}
@@ -3054,7 +3149,7 @@ const App: React.FC = () => {
                     onUpdate={gatePassMgr.update}
                   />
                 )}
-                {currentView === "STOCK_AUDIT" && (
+                {currentView === "STOCK_AUDIT" && effectiveFeatures["STOCK_AUDIT"] !== false && (
                   <PhysicalAudit
                     items={active(inventory)}
                     audits={active(stockAudits)}
@@ -3062,7 +3157,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "ASSETS" && (
+                {currentView === "ASSETS" && effectiveFeatures["ASSETS"] !== false && (
                   <Assets
                     machines={active(machines)}
                     maintenance={active(maintenance)}
@@ -3073,7 +3168,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "VEHICLES" && (
+                {currentView === "VEHICLES" && effectiveFeatures["VEHICLES"] !== false && (
                   <Vehicles
                     vehicles={active(vehicles)}
                     onAdd={vehicleMgr.add}
@@ -3084,7 +3179,7 @@ const App: React.FC = () => {
                 )}
                 {currentView === "UPGRADE" && <UpgradeModule />}
                 {currentView === "PRINT_FORMATS" && <PrintFormatBuilder />}
-                {currentView === "FABRIC_COSTING" && (
+                {currentView === "FABRIC_COSTING" && effectiveFeatures["FABRIC_COSTING"] !== false && (
                   <FabricCostingWorkspace
                     costings={active(fabricCostings)}
                     designs={active(designs)}
@@ -3106,7 +3201,7 @@ const App: React.FC = () => {
                     onUpdate={marginCostingMgr.update}
                   />
                 )}
-                {currentView === "DISPATCH_PLANNER" && (
+                {currentView === "DISPATCH_PLANNER" && effectiveFeatures["DISPATCH_PLANNER"] !== false && (
                   <DispatchPlanner
                     entries={active(dispatchEntries)}
                     orders={active(orders)}
@@ -3117,8 +3212,10 @@ const App: React.FC = () => {
                   />
                 )}
 
+                {currentView === "SMART_DELIVERY" && <SmartDelivery />}
+
                 {/* Utilities & Settings */}
-                {currentView === "QUOTATION" && (
+                {currentView === "QUOTATION" && effectiveFeatures["QUOTATION"] !== false && (
                   <Quotation
                     quotations={active(quotations)}
                     customers={active(customers)}
@@ -3132,7 +3229,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "TAX_INVOICE" && (
+                {currentView === "TAX_INVOICE" && effectiveFeatures["TAX_INVOICE"] !== false && (
                   <TaxInvoice
                     orders={active(orders)}
                     customers={active(customers)}
@@ -3140,9 +3237,12 @@ const App: React.FC = () => {
                     designs={active(designs)}
                     onAddInvoice={ordMgr.add}
                     currency={currencySymbol}
+                    companyInfo={companyInfo}
+                    pendingOrderId={pendingInvoiceOrderId}
+                    onClearPending={() => setPendingInvoiceOrderId(undefined)}
                   />
                 )}
-                {currentView === "SALES_RETURN" && (
+                {currentView === "SALES_RETURN" && effectiveFeatures["SALES_RETURN"] !== false && (
                   <SalesReturn
                     orders={active(orders)}
                     customers={active(customers)}
@@ -3156,12 +3256,13 @@ const App: React.FC = () => {
                         type: "SUCCESS",
                       });
                     }}
-                    onUpdateInventory={(item) => invMgr.update(item)}
+                    onUpdateOrder={(order) => ordMgr.update(order)}
+                    onUpdateInventory={handleInventoryUpdate}
                     onAddNote={(note) => txnMgr.add(note)}
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "MATERIAL_REQUEST" && (
+                {currentView === "MATERIAL_REQUEST" && effectiveFeatures["MATERIAL_REQUEST"] !== false && (
                   <MaterialRequestComp
                     requests={active(materialRequests)}
                     inventory={active(inventory)}
@@ -3171,7 +3272,7 @@ const App: React.FC = () => {
                     onAction={handleAction}
                   />
                 )}
-                {currentView === "SUPPLIER_QUOTATION" && (
+                {currentView === "SUPPLIER_QUOTATION" && effectiveFeatures["SUPPLIER_QUOTATION"] !== false && (
                   <SupplierQuotationComp
                     quotations={active(supplierQuotations)}
                     suppliers={active(suppliers)}
@@ -3183,7 +3284,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "PURCHASE_ORDER" && (
+                {currentView === "PURCHASE_ORDER" && effectiveFeatures["PURCHASE_ORDER"] !== false && (
                   <PurchaseOrderComp
                     purchaseOrders={active(purchaseOrders)}
                     suppliers={active(suppliers)}
@@ -3194,26 +3295,31 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "PURCHASE_INWARD" && (
+                {currentView === "PURCHASE_INWARD" && effectiveFeatures["PURCHASE_INWARD"] !== false && (
                   <PurchaseInward
                     purchaseOrders={active(purchaseOrders)}
                     inventory={active(inventory)}
                     onUpdateInventory={invMgr.update}
+                    onAddPO={poMgr.add}
                     onUpdatePO={poMgr.update}
+                    pendingPOId={pendingPurchaseInwardId}
+                    onClearPending={() => setPendingPurchaseInwardId(undefined)}
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "PURCHASE_INVOICE" && (
+                {currentView === "PURCHASE_INVOICE" && effectiveFeatures["PURCHASE_INVOICE"] !== false && (
                   <PurchaseInvoiceComp
                     purchaseInvoices={active(purchaseInvoices)}
+                    purchaseOrders={active(purchaseOrders)}
                     suppliers={active(suppliers)}
                     inventory={active(inventory)}
                     onAddPI={purchaseInvoiceMgr.add}
                     onUpdatePI={purchaseInvoiceMgr.update}
+                    pendingPOId={pendingPurchaseInvoiceId}
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "PURCHASE_RETURN" && (
+                {currentView === "PURCHASE_RETURN" && effectiveFeatures["PURCHASE_RETURN"] !== false && (
                   <PurchaseReturn
                     purchaseOrders={active(purchaseOrders)}
                     suppliers={active(suppliers)}
@@ -3223,11 +3329,11 @@ const App: React.FC = () => {
                         poMgr.update({ ...po, status: "CANCELLED" });
                         const resolvedSupplierName = suppliers.find(s => s.id === po.supplierId)?.name || po.supplierName;
                         txnMgr.add({
-                          id: `DN-${Date.now()}`,
+                          id: `DN-${uuidShort(10)}`,
                           date: new Date().toISOString().split("T")[0],
                           description: `Purchase Return: ${resolvedSupplierName} - ${reason}`,
                           amount: po.totalAmount,
-                          type: "INCOME",
+                          type: "EXPENSE",
                           category: "PURCHASE_RETURN",
                           paymentMethod: "ADJUSTMENT",
                           subType: "DEBIT_NOTE",
@@ -3238,7 +3344,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "CREDIT_NOTE" && (
+                {currentView === "CREDIT_NOTE" && effectiveFeatures["CREDIT_NOTE"] !== false && (
                   <CreditDebitNotes
                     type="CREDIT"
                     transactions={active(transactions)}
@@ -3248,7 +3354,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "DEBIT_NOTE" && (
+                {currentView === "DEBIT_NOTE" && effectiveFeatures["DEBIT_NOTE"] !== false && (
                   <CreditDebitNotes
                     type="DEBIT"
                     transactions={active(transactions)}
@@ -3258,7 +3364,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "CRM" && (
+                {currentView === "CRM" && effectiveFeatures["CRM"] !== false && (
                   <CRM
                     leads={active(leads)}
                     designs={active(designs)}
@@ -3267,7 +3373,7 @@ const App: React.FC = () => {
                     onDeleteLead={leadMgr.remove}
                     onConvertToCustomer={(lead) => {
                       const customer: Customer = {
-                        id: `CUST-${Date.now().toString().slice(-4)}`,
+                        id: `CUST-${uuidShort(12)}`,
                         name: lead.companyName,
                         contactPerson: lead.contactPerson,
                         phone: lead.phone || "",
@@ -3308,6 +3414,25 @@ const App: React.FC = () => {
                   />
                 )}
                 {currentView === "CHART_OF_ACCOUNTS" && <ChartOfAccounts />}
+                {currentView === "GST_SUITE" && (
+                  <GSTSuite
+                    orders={active(orders)}
+                    customers={active(customers)}
+                    suppliers={active(suppliers)}
+                    transactions={active(transactions)}
+                    currency={currencySymbol}
+                    companyGSTIN={companyInfo?.gstin}
+                  />
+                )}
+                {currentView === "FABRIC_CONSUMPTION" && (
+                  <FabricConsumption
+                    inventory={active(inventory)}
+                    production={active(production)}
+                    currency={currencySymbol}
+                    onUpdateInventory={invMgr.update}
+                    onUpdateJob={handleJobUpdate}
+                  />
+                )}
                 {currentView === "WASTE_MANAGEMENT" && (
                   <WasteManagement
                     wasteLogs={active(wasteLogs)}
@@ -3322,7 +3447,7 @@ const App: React.FC = () => {
                     onUpdate={brokerMgr.update}
                   />
                 )}
-                {currentView === "TALLY_INTEGRATION" && (
+                {currentView === "TALLY_INTEGRATION" && effectiveFeatures["TALLY_INTEGRATION"] !== false && (
                   <TallyIntegration
                     transactions={active(transactions)}
                     onAddTransaction={txnMgr.add}
@@ -3333,7 +3458,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "ACCOUNTING" && (
+                {currentView === "ACCOUNTING" && effectiveFeatures["ACCOUNTING"] !== false && (
                   <Accounting
                     transactions={active(transactions)}
                     onAddTransaction={txnMgr.add}
@@ -3348,7 +3473,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "CASH_BOOK" && (
+                {currentView === "CASH_BOOK" && effectiveFeatures["CASH_BOOK"] !== false && (
                   <CashBook
                     transactions={active(transactions)}
                     customers={active(customers)}
@@ -3358,7 +3483,7 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "EXPENSE_CLAIM" && (
+                {currentView === "EXPENSE_CLAIM" && effectiveFeatures["EXPENSE_CLAIM"] !== false && (
                   <ExpenseClaimComp
                     claims={active(expenseClaims)}
                     team={active(team)}
@@ -3368,14 +3493,14 @@ const App: React.FC = () => {
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "AGENT_KHATA" && (
+                {currentView === "AGENT_KHATA" && effectiveFeatures["AGENT_KHATA"] !== false && (
                   <AgentKhata
                     agents={active(agents)}
                     onUpdateAgent={agentMgr.update}
                     currency={currencySymbol}
                   />
                 )}
-                {currentView === "ATTENDANCE" && (
+                {currentView === "ATTENDANCE" && effectiveFeatures["ATTENDANCE"] !== false && (
                   <Attendance
                     team={active(team)}
                     records={active(attendance)}
@@ -3403,7 +3528,7 @@ const App: React.FC = () => {
                     onDeleteLeave={leaveMgr.remove}
                   />
                 )}
-                {currentView === "PAYROLL" && (
+                {currentView === "PAYROLL" && effectiveFeatures["PAYROLL"] !== false && (
                   <Attendance
                     team={active(team)}
                     records={active(attendance)}
@@ -3430,7 +3555,16 @@ const App: React.FC = () => {
                     suppliers={active(suppliers)}
                   />
                 )}
-                {currentView === "SETTINGS" && (
+                {currentView === "ORDER_REMINDER" && (
+                  <OrderReminderSettings
+                    orders={active(orders)}
+                    customers={active(customers)}
+                    communicationConfig={communicationConfig}
+                    companyInfo={companyInfo}
+                    onAddNotification={handleAddNotification}
+                  />
+                )}
+                {currentView === "SETTINGS" && effectiveFeatures["SETTINGS"] !== false && (
                   <Settings
                     uiPrefs={uiPrefs}
                     onUpdateUiPrefs={handleUpdateUiPrefs}
@@ -3475,30 +3609,30 @@ const App: React.FC = () => {
                     onNavigate={setCurrentView}
                   />
                 )}
-                {currentView === "DOCUMENT_DESK" && (
+                {currentView === "DOCUMENT_DESK" && effectiveFeatures["DOCUMENT_DESK"] !== false && (
                   <DocumentDesk collections={allDocumentDeskCollections} />
                 )}
-                {currentView === "DATA_IMPORT" && (
+                {currentView === "DATA_IMPORT" && effectiveFeatures["DATA_IMPORT"] !== false && (
                   <DataImportTool collections={dataImportCollections} />
                 )}
-                {currentView === "DOCTYPE_CENTER" && (
+                {currentView === "DOCTYPE_CENTER" && effectiveFeatures["DOCTYPE_CENTER"] !== false && (
                   <DocTypeCenter
                     stats={docTypeStats}
                     userRole={currentUser?.role}
                     onNavigate={setCurrentView}
                   />
                 )}
-                {currentView === "WORKFLOW_INBOX" && (
+                {currentView === "WORKFLOW_INBOX" && effectiveFeatures["WORKFLOW_INBOX"] !== false && (
                   <WorkflowInbox
                     collections={workflowCollections}
                     userRole={currentUser?.role}
                     onNavigate={setCurrentView}
                   />
                 )}
-                {currentView === "REPORT_BUILDER" && (
+                {currentView === "REPORT_BUILDER" && effectiveFeatures["REPORT_BUILDER"] !== false && (
                   <ReportBuilder collections={reportCollections} />
                 )}
-                {currentView === "AUDIT_TRAIL" && (
+                {currentView === "AUDIT_TRAIL" && effectiveFeatures["AUDIT_TRAIL"] !== false && (
                   <AuditTrail logs={auditLogs} />
                 )}
                 {currentView === "TASKS" && (
@@ -3510,7 +3644,7 @@ const App: React.FC = () => {
                     onDeleteTask={handleDeleteTask}
                   />
                 )}
-                {currentView === "TIMESHEET" && (
+                {currentView === "TIMESHEET" && effectiveFeatures["TIMESHEET"] !== false && (
                   <TimesheetComp
                     timesheets={active(timesheets)}
                     team={active(team)}
@@ -3521,7 +3655,7 @@ const App: React.FC = () => {
                     onDelete={timesheetMgr.remove}
                   />
                 )}
-                {currentView === "PROJECTS" && (
+                {currentView === "PROJECTS" && effectiveFeatures["PROJECTS"] !== false && (
                   <Projects
                     projects={active(projects)}
                     team={active(team)}
@@ -3533,7 +3667,7 @@ const App: React.FC = () => {
                     geminiApiKey={securityConfig.geminiApiKey}
                   />
                 )}
-                {currentView === "OPENING_STOCK" && (
+                {currentView === "OPENING_STOCK" && effectiveFeatures["OPENING_STOCK"] !== false && (
                   <OpeningStock
                     items={active(inventory)}
                     onAdd={invMgr.add}
@@ -3598,6 +3732,18 @@ const App: React.FC = () => {
           }}
         />
       )}
+      {/* TexBot AI Co-Pilot floating widget */}
+      {isAuthenticated && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <TexBot
+            contextData={{
+              inventory: active(inventory),
+              production: active(production),
+              orders: active(orders),
+            }}
+          />
+        </div>
+      )}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
@@ -3607,6 +3753,8 @@ const App: React.FC = () => {
         jobs={active(production)}
         userRole={currentUser?.role}
       />
+      <ToastContainer />
+      <ConfirmRoot />
     </div>
   );
 };

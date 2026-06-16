@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { SampleRequest, Design, Karigar, Customer } from '../types';
 import { 
   FlaskRound, Plus, Search, Scissors, Truck, 
@@ -60,7 +61,7 @@ const Sampling: React.FC<SamplingProps> = ({
     e.preventDefault();
     const sample = {
       ...formData,
-      id: editingId || `SMP-${Date.now().toString().slice(-4)}`,
+      id: editingId || `SMP-${uuidShort(12)}`,
       updatedAt: new Date().toISOString()
     } as SampleRequest;
 

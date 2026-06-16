@@ -321,7 +321,7 @@ const Reports: React.FC<ReportsProps> = ({ inventory, orders, production, suppli
              </div>
           )}
           {activeTab === 'BI' && <SalesAnalytics orders={orders} currency={currency} />}
-          {activeTab === 'DELIVERY' && <DeliveryAnalytics />}
+          {activeTab === 'DELIVERY' && <DeliveryAnalytics orders={orders} currency={currency} />}
        </div>
     </div>
   );

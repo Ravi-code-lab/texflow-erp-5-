@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { FileText, Plus, Eye, Trash2, Coins } from 'lucide-react';
 
 interface SupplierQuotationProps {
@@ -24,7 +25,7 @@ export default function SupplierQuotation({ quotations, suppliers, inventory, on
     if (!supplier || !material || rate <= 0) return;
 
     onAdd({
-      id: `QTN-${Date.now().toString().slice(-4)}`,
+      id: `SQ-${uuidShort(12)}`,
       supplierName: supplier,
       materialName: material,
       ratePerUnit: Number(rate),

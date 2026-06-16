@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Customer, TeamMember } from '../types';
 import { 
   Search, Plus, Filter, ChevronLeft, ChevronRight,
@@ -68,7 +69,7 @@ const Customers: React.FC<CustomersProps> = ({
     if (!formData.name?.trim()) return;
     const customer = {
       ...formData,
-      id: formData.id || `CUST-${Date.now().toString().slice(-6)}`,
+      id: formData.id || `CUST-${uuidShort(12)}`,
       updatedAt: new Date().toISOString(),
     } as Customer;
     if (formData.id && onUpdate) onUpdate(customer);

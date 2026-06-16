@@ -17,6 +17,7 @@ import {
 import BaseModal from './BaseModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { toast, useConfirm } from "../utils/toast";
 
 interface AttendanceProps {
   team: TeamMember[];
@@ -50,6 +51,7 @@ const Attendance: React.FC<AttendanceProps> = ({
   currency = '₹', companyInfo = { name: 'RAVI-TEXTILE', address: 'Surat, GJ', gstin: '', email: '', website: '', logoUrl: '' },
   initialTab = 'DAILY'
 }) => {
+  const { confirm, ConfirmModal } = useConfirm();
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [activeTab, setActiveTab] = useState<'DAILY' | 'MONTHLY' | 'LEAVES' | 'PAYROLL' | 'LOANS'>(initialTab);
   const [activeMonth, setActiveMonth] = useState<string>(new Date().toISOString().slice(0, 7));
@@ -199,8 +201,8 @@ const Attendance: React.FC<AttendanceProps> = ({
     }));
     
     const adjustmentEntries = Object.entries(payrollAdjustments || {})
-        .filter(([key, adj]) => key.endsWith(`_${viewingLoanEmpId}`) && (adj.loanRepayment || 0) > 0 && adj.status !== 'DISBURSED')
-        .map(([key, adj]) => ({
+        .filter(([key, adj]: [string, any]) => key.endsWith(`_${viewingLoanEmpId}`) && ((adj as any).loanRepayment || 0) > 0 && (adj as any).status !== 'DISBURSED')
+        .map(([key, adj]: [string, any]) => ({
             id: `ADJ-${key}`,
             date: `${key.split('_')[0]}-28`, // Assume end of month
             type: 'REPAID' as const,
@@ -314,8 +316,9 @@ const Attendance: React.FC<AttendanceProps> = ({
     setLoanFormAmount('0');
   };
 
-  const handleBulkHoliday = () => {
-    if (window.confirm(`Mark all ${filteredTeam.length} staff nodes as 'PAID HOLIDAY' for ${selectedDate}?`)) {
+  const handleBulkHoliday = async () => {
+    const ok = await confirm({ title: `Mark ${filteredTeam.length} staff as PAID HOLIDAY?`, message: `Date: ${selectedDate}`, confirmLabel: 'Mark Holiday', confirmClass: 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold transition-colors' });
+    if (ok) {
         setIsCommitting(true);
         const bulkRecords: AttendanceRecord[] = filteredTeam.map(member => {
             const key = `${member.id}_${selectedDate}`;
@@ -431,7 +434,7 @@ const Attendance: React.FC<AttendanceProps> = ({
     };
   };
 
-  const handleDisburseIndividual = (empId: string) => {
+  const handleDisburseIndividual = async (empId: string) => {
     const adjKey = `${activeMonth}_${empId}`;
     const adj = payrollAdjustments[adjKey] || { bonus: 0, deduction: 0, loanRepayment: 0 };
     
@@ -442,7 +445,8 @@ const Attendance: React.FC<AttendanceProps> = ({
     
     const s = calculatePayroll(emp);
     
-    if (!window.confirm(`Commit disbursement for ${emp.name}? This will record ₹${s.loanRepayment} as a repayment in the ledger.`)) return;
+    const ok = await confirm({ title: `Commit disbursement for ${emp.name}?`, message: `This will record ₹${s.loanRepayment} as a repayment in the ledger.`, confirmLabel: 'Commit', confirmClass: 'px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition-colors' });
+    if (!ok) return;
 
     if (s.loanRepayment > 0) {
         const balBefore = s.openingBalance;
@@ -470,8 +474,9 @@ const Attendance: React.FC<AttendanceProps> = ({
     });
   };
 
-  const handleAutoFillDeductions = () => {
-    if (!window.confirm("Auto-fill all pending deductions based on outstanding balances? This will not commit them yet.")) return;
+  const handleAutoFillDeductions = async () => {
+    const ok = await confirm({ title: 'Auto-fill all pending deductions?', message: 'Based on outstanding balances. This will not commit them yet.', confirmLabel: 'Auto-fill', confirmClass: 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold transition-colors' });
+    if (!ok) return;
     
     team.forEach(emp => {
         const adjKey = `${activeMonth}_${emp.id}`;
@@ -493,18 +498,19 @@ const Attendance: React.FC<AttendanceProps> = ({
     });
   };
 
-  const handleDisburseBatch = () => {
+  const handleDisburseBatch = async () => {
     const pendingTeam = team.filter(emp => {
         const adj = payrollAdjustments[`${activeMonth}_${emp.id}`];
         return !adj || adj.status !== 'DISBURSED';
     });
 
     if (pendingTeam.length === 0) {
-        alert("All personnel in this cycle are already disbursed.");
+        toast.info("All personnel in this cycle are already disbursed.");
         return;
     }
 
-    if (!window.confirm(`Authorize disbursement for ${pendingTeam.length} personnel? This will commit all deductions to the ledger.`)) return;
+    const ok = await confirm({ title: `Authorize disbursement for ${pendingTeam.length} personnel?`, message: 'This will commit all deductions to the ledger.', confirmLabel: 'Authorize', confirmClass: 'px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition-colors' });
+    if (!ok) return;
     
     let processedCount = 0;
     pendingTeam.forEach(emp => {
@@ -539,7 +545,7 @@ const Attendance: React.FC<AttendanceProps> = ({
         processedCount++;
     });
     
-    alert(`Successfully processed ${processedCount} disbursements.`);
+    toast.success(`Successfully processed ${processedCount} disbursements.`);
   };
 
   const generatePaySlipPDF = (emp: TeamMember) => {
@@ -725,6 +731,7 @@ const Attendance: React.FC<AttendanceProps> = ({
 
   return (
     <div className="space-y-3 h-full flex flex-col relative">
+      <ConfirmModal />
       {activeTab === 'DAILY' && renderStats()}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 bg-white dark:bg-slate-900 p-1.5 rounded-[1.5rem] shadow-sm border border-slate-200 dark:border-slate-800 shrink-0 z-10 no-print">
          <div className="flex items-center gap-3 w-full xl:w-auto">
@@ -1018,7 +1025,7 @@ const Attendance: React.FC<AttendanceProps> = ({
                                      amount: entry.amount,
                                      notes: entry.notes
                                    }); setIsLoanModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"><SlidersHorizontal className="w-3.5 h-3.5"/></button>
-                                   <button onClick={() => { if(window.confirm('Revoke this ledger entry?')) onDeleteLoan?.(entry.id); }} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="w-3.5 h-3.5"/></button>
+                                   <button onClick={async () => { const ok = await confirm({ title: 'Revoke this ledger entry?', message: 'The entry will be permanently removed from the ledger.', confirmLabel: 'Revoke' }); if (ok) onDeleteLoan?.(entry.id); }} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="w-3.5 h-3.5"/></button>
                                 </div>
                               ) : (
                                 <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Auto-Mutation</span>
@@ -1033,7 +1040,7 @@ const Attendance: React.FC<AttendanceProps> = ({
       </BaseModal>
 
       <BaseModal isOpen={isAdjustmentModalOpen} onClose={() => setIsAdjustmentModalOpen(false)} title={`Mutation: ${adjustmentMember?.name}`} size="sm">
-         <form onSubmit={(e) => { 
+         <form onSubmit={async (e) => { 
             e.preventDefault(); 
             if (adjustmentMember) { 
               const bonus = parseFloat(adjBonusStr) || 0;
@@ -1042,8 +1049,9 @@ const Attendance: React.FC<AttendanceProps> = ({
 
               const stats = calculatePayroll(adjustmentMember, { ...adjustmentForm, bonus, deduction, loanRepayment: repayment });
               
-              if (deduction > stats.grossEarnings && !window.confirm(`Penalties (${deduction}) exceed gross earnings (${stats.grossEarnings}). Only the earned amount ${stats.grossEarnings} will be deducted. Continue?`)) {
-                return;
+              if (deduction > stats.grossEarnings) {
+                const ok = await confirm({ title: 'Penalties exceed gross earnings', message: `Penalties (₹${deduction}) exceed gross earnings (₹${stats.grossEarnings}). Only the earned amount will be deducted. Continue?`, confirmLabel: 'Continue', confirmClass: 'px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-bold transition-colors' });
+                if (!ok) return;
               }
 
               const finalized: PayrollAdjustment = {

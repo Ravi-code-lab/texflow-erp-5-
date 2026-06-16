@@ -92,8 +92,8 @@ export const DispatchPlanner: React.FC<DispatchPlannerProps> = ({
       vehicleNumber: vehicleNo,
       driverName,
       driverPhone,
-      lrNumber: lrNumber || `LR-${Math.floor(Math.random() * 900000) + 100000}`,
-      ewayBillNumber: ewayBill || `EWAY-${Math.floor(Math.random() * 90000000000) + 10000000000}`,
+      lrNumber: lrNumber || '',
+      ewayBillNumber: ewayBill || '',
       freightCost: Number(freightCost),
       remarks,
       trackingEvents: [

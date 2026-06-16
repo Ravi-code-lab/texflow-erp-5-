@@ -1,11 +1,3 @@
-export async function commitImage(fileOrUrl: any, ...args: any[]): Promise<string> {
-  if (typeof fileOrUrl === 'string') {
-    return fileOrUrl;
-  }
-  return '';
-}
-
-export async function compressImage(file: any, ...args: any[]): Promise<any> {
-  return file;
-}
-
+// Re-exports from the canonical implementation in src/utils/imageUtils.ts
+// This file exists only for compatibility; prefer importing from src/utils/imageUtils directly.
+export { compressImage, commitImage } from '../src/utils/imageUtils';

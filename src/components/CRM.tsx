@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Lead, LeadActivity, SampleRequest, Design, Customer } from '../types';
 import { 
   Plus, Search, User, CheckCircle2, 
@@ -9,6 +10,7 @@ import {
   Filter, MoreVertical, Briefcase
 } from 'lucide-react';
 import BaseModal from './BaseModal';
+import { toast, confirm } from '../utils/toast';
 
 interface CRMProps {
   leads: Lead[];
@@ -54,7 +56,7 @@ const CRM: React.FC<CRMProps> = ({
     e.preventDefault();
     const leadData = {
       ...formData,
-      id: editingId || `LEAD-${Date.now().toString().slice(-4)}`,
+      id: editingId || `LEAD-${uuidShort(12)}`,
       updatedAt: new Date().toISOString()
     } as Lead;
 
@@ -164,7 +166,7 @@ const CRM: React.FC<CRMProps> = ({
                                                 {lead.status !== 'WON' && (
                                                     <button onClick={(e) => { e.stopPropagation(); onConvertToCustomer(lead); }} className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-lg shadow-sm" title="Convert to Master Customer"><CheckCircle2 className="w-3.5 h-3.5"/></button>
                                                 )}
-                                                <button onClick={(e) => { e.stopPropagation(); if(confirm('Terminate this node?')) onDeleteLead(lead.id); }} className="p-1.5 text-slate-400 hover:text-red-600 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm"><Trash2 className="w-3.5 h-3.5"/></button>
+                                                <button onClick={async (e) => { e.stopPropagation(); if(await confirm({ title: 'Terminate this node?', confirmLabel: 'Delete' })) onDeleteLead(lead.id); }} className="p-1.5 text-slate-400 hover:text-red-600 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm"><Trash2 className="w-3.5 h-3.5"/></button>
                                             </div>
                                         </div>
                                     </div>
@@ -269,7 +271,7 @@ const CRM: React.FC<CRMProps> = ({
           </div>
           
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 flex justify-between items-center z-[110] rounded-b-xl shadow-lg px-10">
-             <button type="button" onClick={() => { if(editingId && confirm('Terminate this prospect shard permanently?')) onDeleteLead(editingId); setIsModalOpen(false); }} className="text-[10px] font-black text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2 rounded-lg transition-all uppercase tracking-widest">Terminate Shard</button>
+             <button type="button" onClick={async () => { if(editingId && await confirm({ title: 'Terminate this prospect shard permanently?', confirmLabel: 'Delete' })) { onDeleteLead(editingId); setIsModalOpen(false); } }} className="text-[10px] font-black text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2 rounded-lg transition-all uppercase tracking-widest">Terminate Shard</button>
              <div className="flex gap-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 transition-colors">Abort</button>
                 <button onClick={handleSaveLead} className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center gap-2">

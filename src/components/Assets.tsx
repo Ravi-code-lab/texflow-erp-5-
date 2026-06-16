@@ -1,8 +1,10 @@
 
 import React, { useState } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Machine, MaintenanceRecord } from '../types';
 import { Wrench, Plus, AlertCircle, CheckCircle2, History, Calendar, Settings, Power, Trash2 } from 'lucide-react';
 import BaseModal from './BaseModal';
+import { toast, useConfirm } from "../utils/toast";
 
 interface AssetsProps {
   machines: Machine[];
@@ -15,6 +17,7 @@ interface AssetsProps {
 }
 
 const Assets: React.FC<AssetsProps> = ({ machines, maintenance, onAddMachine, onUpdateMachine, onDeleteMachine, onAddMaintenance, currency = '₹' }) => {
+  const { confirm, ConfirmModal } = useConfirm();
   const [activeTab, setActiveTab] = useState<'MACHINES' | 'LOGS'>('MACHINES');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -61,7 +64,7 @@ const Assets: React.FC<AssetsProps> = ({ machines, maintenance, onAddMachine, on
   const handleSaveMachine = (e: React.FormEvent) => {
     e.preventDefault();
     const machine: Machine = {
-      id: formData.id || `MAC-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `MAC-${uuidShort(12)}`,
       ...formData
     } as Machine;
 
@@ -102,16 +105,16 @@ const Assets: React.FC<AssetsProps> = ({ machines, maintenance, onAddMachine, on
     onUpdateMachine({ ...m, status: newStatus });
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (window.confirm('Are you sure you want to remove this machine permanently?')) {
-        onDeleteMachine(id);
-    }
+    const ok = await confirm({ title: 'Remove machine permanently?', message: 'All maintenance records for this machine will be unlinked.' });
+    if (ok) onDeleteMachine(id);
   };
 
   return (
     <div className="space-y-6">
+      <ConfirmModal />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div>
            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { InventoryItem, StockAudit } from '../types';
 import { 
   Search, Plus, Filter, MoreHorizontal, ArrowLeft, Save, 
@@ -81,7 +82,7 @@ const PhysicalAudit: React.FC<PhysicalAuditProps> = ({
     // Auto-complete it for this demo, usually Frappe has DRAFT until SUBMIT
     onCommitAudit({
        ...formData,
-       id: formData.id || `REC-${Date.now().toString().slice(-4)}`,
+       id: formData.id || `REC-${uuidShort(12)}`,
        status: 'COMPLETED',
        updatedAt: new Date().toISOString()
     } as StockAudit);

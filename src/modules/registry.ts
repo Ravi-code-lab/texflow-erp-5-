@@ -8,7 +8,7 @@ import {
   Users, Wallet, TrendingUp, PieChart, CalendarDays, FileBarChart2,
   Workflow, BarChart2, PackageSearch, Tag, Building2, BadgePercent,
   CreditCard, Inbox, Star, HelpCircle, Globe, Zap, LifeBuoy, ChevronRight,
-  MessageSquare, Clock, Award, BarChart3, Settings2, Shield,
+  MessageSquare, Clock, Award, BarChart3,
 } from 'lucide-react';
 import { ViewState } from '../types';
 
@@ -78,15 +78,6 @@ export const PRINT_FORMAT_MODULE: ERPModuleItem = {
   module: 'core',
   icon: FileText,
   keywords: ['print', 'pdf', 'layout', 'jinja', 'template', 'invoice'],
-};
-
-export const ROLE_ACCESS_MODULE: ERPModuleItem = {
-  id: 'ROLE_ACCESS',
-  label: 'Role Access Control',
-  doctype: 'Role Permission',
-  module: 'core',
-  icon: Shield,
-  keywords: ['rbac', 'role', 'permission', 'access control', 'user rights', 'restrict'],
 };
 
 export const ERP_MODULE_GROUPS: ERPModuleGroup[] = [
@@ -165,9 +156,6 @@ export const ERP_MODULE_GROUPS: ERPModuleGroup[] = [
       { id: 'FABRIC_COSTING', label: 'Garment Costing Worksheet', doctype: 'Garment Cost Card', module: 'manufacturing', icon: Coins, description: 'Calculate fabric consumption in meters, stitching rates, trims, and box packaging budgets', keywords: ['costing', 'garment', 'stitching', 'kurti', 'meter', 'trim', 'consumption'] },
       { id: 'JOB_WORK', label: 'Job Work (Subcontracting)', doctype: 'Job Work Order', module: 'manufacturing', icon: ArrowRightLeft, description: 'Outsource production processes to job workers' },
       { id: 'QUALITY', label: 'Quality Inspection', doctype: 'Quality Inspection', module: 'manufacturing', icon: ShieldCheck, description: 'QC checks for materials and finished goods' },
-      { id: 'OPERATIONS_MASTER', label: 'Operations Master', doctype: 'Operation', module: 'manufacturing', icon: Settings2, description: 'Define standard operation templates with rates and workstations', keywords: ['operations', 'standard ops', 'task category', 'rate', 'workstation'] },
-      { id: 'ROUTING_MASTER', label: 'Routing Master', doctype: 'Routing', module: 'manufacturing', icon: Workflow, description: 'Style-wise process routes (Cutting → Stitching → Finishing) used by Work Orders', keywords: ['routing', 'process route', 'style route', 'kurti route', 'workflow steps'] },
-      { id: 'WORK_ORDER_TASKS', label: 'Task Pages', doctype: 'Job Card', module: 'manufacturing', icon: Layers, description: 'Department-wise task boards for cutting, stitching, embroidery, finishing and more', keywords: ['task board', 'job card', 'dept tasks', 'cutting tasks', 'stitching tasks'] },
     ],
   },
   {
@@ -232,7 +220,6 @@ export const ERP_MODULE_ITEMS: ERPModuleItem[] = [
   SETTINGS_MODULE,
   UPGRADE_MODULE,
   PRINT_FORMAT_MODULE,
-  ROLE_ACCESS_MODULE,
 ];
 
 export const getERPModuleByView = (view: ViewState) =>

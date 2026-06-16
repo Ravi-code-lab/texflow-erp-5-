@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { POSInvoice, POSInvoiceItem, InventoryItem, CompanyInfo } from '../types';
 import { 
   Search, Plus, Monitor, 
@@ -62,7 +63,7 @@ const POS: React.FC<POSProps> = ({
       ...formData,
       cashier: formData.cashier || 'Admin',
       status: 'PAID', // In POS it's Paid immediately usually
-      id: formData.id || `POS-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `POS-${uuidShort(12)}`,
     } as POSInvoice;
 
     if (formData.id) onUpdate(oData);

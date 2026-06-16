@@ -12,11 +12,21 @@ interface TaxInvoiceProps {
   inventory?: any[];
   designs?: any[];
   onAddInvoice?: (item: any) => void;
+  pendingOrderId?: string;
+  onClearPending?: () => void;
 }
 
 
-export default function TaxInvoice({ orders, customers, currency = '₹', companyInfo, designs = [], inventory = [] }: TaxInvoiceProps) {
-  const [selectedOrderId, setSelectedOrderId] = useState(orders[0]?.id || '');
+export default function TaxInvoice({ orders, customers, currency = '₹', companyInfo, designs = [], inventory = [], pendingOrderId, onClearPending }: TaxInvoiceProps) {
+  const [selectedOrderId, setSelectedOrderId] = useState(pendingOrderId || orders[0]?.id || '');
+
+  // Sync selectedOrderId when a new pending order is pushed (e.g. Convert To Invoice action)
+  React.useEffect(() => {
+    if (pendingOrderId) {
+      setSelectedOrderId(pendingOrderId);
+      onClearPending?.();
+    }
+  }, [pendingOrderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const order = orders.find(o => o.id === selectedOrderId) || orders[0];
   const customer = customers.find(c => c.name === order?.customerName);

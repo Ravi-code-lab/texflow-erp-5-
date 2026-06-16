@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Search, MessageSquare, Send, Inbox, Star, Trash2, Edit3, Paperclip, CheckCircle, Clock, RefreshCcw, AlertCircle, X, Users, Briefcase } from 'lucide-react';
 import { CommunicationConfig, Customer, Supplier } from '../types';
+import { toast } from "../utils/toast";
 
 interface Email {
   id: string;
@@ -74,7 +75,7 @@ export default function EmailHub({
 
   const handleSend = async () => {
     if (!composeData.to || !composeData.subject) {
-       alert("Please fill to and subject.");
+       toast.error("Please fill to and subject.");
        return;
     }
     
@@ -100,12 +101,12 @@ export default function EmailHub({
        if (res.ok) {
           setIsComposing(false);
           setComposeData({ to: '', subject: '', body: '' });
-          alert("Email sent!");
+          toast.success("Email sent!");
        } else {
-          alert("Error sending: " + data.error);
+          toast.error("Error sending: " + data.error);
        }
     } catch(err: any) {
-       alert("Error: " + err.message);
+       toast.error("Error: " + err.message);
     } finally {
        setSending(false);
     }

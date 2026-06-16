@@ -60,7 +60,7 @@ const openDB = (): Promise<IDBDatabase> => {
 
 const getStoreForKey = (key: string): string => {
     // ── STAFF ──────────────────────────────────────────────────────────────
-    if (key === 'team' || key === 'rolePermissions') return STORES.STAFF;
+    if (key === 'team') return STORES.STAFF;
 
     // ── INVENTORY ──────────────────────────────────────────────────────────
     if (
@@ -72,7 +72,10 @@ const getStoreForKey = (key: string): string => {
         key === 'yarnLots' ||
         key === 'dyeingJobs' ||
         key === 'fabricCostings' ||
-        key === 'dispatchEntries'
+        key === 'dispatchEntries' ||
+        key === 'wasteLogs' ||
+        key === 'marginCostings' ||
+        key === 'fabricConsumptionEntries'
     ) return STORES.INVENTORY;
 
     // ── ORDERS ─────────────────────────────────────────────────────────────
@@ -111,9 +114,6 @@ const getStoreForKey = (key: string): string => {
         key === 'cheques' ||
         key === 'budgets' ||
         key === 'payrollAdjustments' ||
-        key === 'wasteLogs' ||
-        key === 'brokerLogs' ||
-        key === 'marginCostings' ||
         key === 'coa_accounts_v2' ||
         key === 'coa_company_v2' ||
         key === 'coa_journals_v2'
@@ -132,7 +132,8 @@ const getStoreForKey = (key: string): string => {
         key === 'leaves' ||
         key === 'maintenance' ||
         key === 'gallery' ||
-        key === 'warehouses'
+        key === 'warehouses' ||
+        key === 'brokerLogs'
     ) return STORES.MASTERS;
 
     // ── AUDIT ──────────────────────────────────────────────────────────────
@@ -152,8 +153,15 @@ const getStoreForKey = (key: string): string => {
         key === 'texflow_security_config' ||
         key === 'texflow_communication_config' ||
         key === 'texflow_advanced_config' ||
-        key === 'texflow_report_builder_saved_reports'
+        key === 'texflow_report_builder_saved_reports' ||
+        key === 'rolePermissions'
     ) return STORES.CONFIG;
+
+    // ── MASTERS (routing templates, operations masters) ─────────────────────
+    if (
+        key === 'texflow_routing_templates' ||
+        key === 'texflow_operations_master'
+    ) return STORES.MASTERS;
 
     // Default fallback
     return STORES.CONFIG;
@@ -307,5 +315,5 @@ export const clearAllDataFlag = async (): Promise<void> => {
       request.onerror = () => reject(request.error);
     });
   }
-  try { localStorage.clear(); } catch {}
+  localStorage.clear();
 };

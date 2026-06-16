@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Transaction, Customer, Supplier } from '../types';
 import { 
   FileText, Plus, Search, Printer, History, CheckCircle2, ShieldCheck, 
@@ -58,7 +59,7 @@ const CreditDebitNotes: React.FC<CreditDebitNotesProps> = ({
     e.preventDefault();
     if (!formData.amount || !formData.referenceId) return;
 
-    const noteId = formData.id || `${type === 'CREDIT' ? 'CN' : 'DN'}-${Date.now().toString().slice(-6)}`;
+    const noteId = formData.id || `${type === 'CREDIT' ? 'CN' : 'DN'}-${uuidShort(8)}`;
     
     const note: Transaction = {
       ...formData,

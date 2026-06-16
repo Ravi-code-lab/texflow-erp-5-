@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Order, Design, ProductionJob, OrderItem, RecipeItem } from '../types';
 import { 
   Layers, Plus, Factory, ShoppingCart, ArrowRight, Settings, 
@@ -52,7 +53,7 @@ export default function ProductionPlan({ orders, designs, jobs, inventory = [], 
      }));
 
      setActivePlan({
-       id: `PLAN-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`,
+       id: `PLAN-${uuidShort(12)}`,
        date: new Date().toISOString().split('T')[0],
        items: flatItems
      });
@@ -61,7 +62,7 @@ export default function ProductionPlan({ orders, designs, jobs, inventory = [], 
   // Creates a clean, empty micro-draft plan for manual item entry
   const handleCreateDraftPlan = () => {
     setActivePlan({
-      id: `PLAN-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`,
+      id: `PLAN-${uuidShort(12)}`,
       date: new Date().toISOString().split('T')[0],
       items: designs.slice(0, 2).map(d => ({
         orderId: 'MANUAL',
@@ -432,8 +433,9 @@ export default function ProductionPlan({ orders, designs, jobs, inventory = [], 
                           <select 
                             value={item.productName}
                             onChange={(e) => {
-                              const newItems = [...activePlan.items];
-                              newItems[idx].productName = e.target.value;
+                              const newItems = activePlan.items.map((it: any, i: number) =>
+                                i === idx ? { ...it, productName: e.target.value } : it
+                              );
                               setActivePlan({...activePlan, items: newItems});
                             }}
                             className="bg-transparent border-b border-dashed border-slate-300 focus:outline-none text-sm font-black text-slate-800 py-1"
@@ -459,8 +461,9 @@ export default function ProductionPlan({ orders, designs, jobs, inventory = [], 
                                 type="number" 
                                 value={item.plannedQuantity}
                                 onChange={(e) => {
-                                   const newItems = [...activePlan.items];
-                                   newItems[idx].plannedQuantity = Number(e.target.value);
+                                   const newItems = activePlan.items.map((it: any, i: number) =>
+                                     i === idx ? { ...it, plannedQuantity: Number(e.target.value) } : it
+                                   );
                                    setActivePlan({...activePlan, items: newItems});
                                 }}
                                 className="w-24 text-xs px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 border border-slate-200 rounded-lg text-slate-700 font-bold tabular-nums bg-white shadow-inner"
@@ -477,7 +480,7 @@ export default function ProductionPlan({ orders, designs, jobs, inventory = [], 
                        </div>
                     </div>
                   ))}
-                  {activePlan.items.length === 0 && (
+                  {(activePlan.items || []).length === 0 && (
                     <p className="text-center py-8 text-xs text-slate-400">Add garment items to the planning scope to run BOM calculations.</p>
                   )}
                 </div>

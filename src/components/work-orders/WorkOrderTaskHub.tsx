@@ -10,12 +10,16 @@ import DeptTaskPage from "./DeptTaskPage";
 import OperationsMaster from "./OperationsMaster";
 import RoutingMaster from "./RoutingMaster";
 import type { ProductionJob as WorkOrder, Karigar } from "../../types";
+import { opBelongsToDept as pipelineOpBelongsToDept } from "../pipelineWiring";
 
 interface Props {
   production: WorkOrder[];
   onUpdateWorkOrder: (w: WorkOrder) => void;
   karigars: Karigar[];
   initialTab?: string;
+  inventory?: any[];
+  onUpdateInventory?: (item: any) => void;
+  onCreateGatePass?: (gp: any) => void;
 }
 
 // Tab types: "dept" = DeptTaskPage, "operations" = OperationsMaster, "routing" = RoutingMaster
@@ -50,35 +54,9 @@ const SECTION_LABELS: Record<string, string> = {
   masters: "Masters",
 };
 
-// Stage → dept mapping for tab badge counts
-const STAGE_TO_DEPT_HUB: Record<string, string> = {
-  FABRIC_INSPECTION: "Fabric Inspection",
-  DYEING: "Dyeing",
-  FABRIC_PRINTING: "Printing",
-  GARMENT_PRINTING: "Printing",
-  EMBROIDERY_FABRIC: "Embroidery",
-  EMBROIDERY_GARMENT: "Embroidery",
-  CUTTING: "Cutting",
-  STITCHING: "Stitching",
-  WASHING: "Washing",
-  HAND_WORK: "Hand Work",
-  FINISHING: "Finishing",
-  QC_CHECK: "QC Check",
-  PACKING: "Packing",
-};
+// Tab badge counts use pipelineWiring as single source of truth
 
-function opBelongsToDeptHub(op: any, deptTabName: string): boolean {
-  if (op.stage) {
-    const mapped = STAGE_TO_DEPT_HUB[op.stage];
-    if (mapped) return mapped.toLowerCase() === deptTabName.toLowerCase();
-  }
-  if (op.workstationType) {
-    if (op.workstationType.toLowerCase() === deptTabName.toLowerCase()) return true;
-  }
-  return (op.name || "").toLowerCase().includes(deptTabName.toLowerCase());
-}
-
-export default function WorkOrderTaskHub({ production, onUpdateWorkOrder, karigars, initialTab }: Props) {
+export default function WorkOrderTaskHub({ production, onUpdateWorkOrder, karigars, initialTab, inventory = [], onUpdateInventory, onCreateGatePass }: Props) {
   const [activeTab, setActiveTab] = useState<string>(initialTab ?? TABS[0].id);
 
   const currentTab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
@@ -87,9 +65,9 @@ export default function WorkOrderTaskHub({ production, onUpdateWorkOrder, kariga
     production.reduce((total, wo) => {
       const ops = (wo.operations || []).filter(
         (op: any) =>
-          opBelongsToDeptHub(op, taskName) &&
+          pipelineOpBelongsToDept(op, taskName) &&
           (op.status || "PENDING").toUpperCase() !== "COMPLETED" &&
-          op.workflowState !== "Completed"
+          (op.workflowState || "").toLowerCase() !== "completed"
       );
       return total + ops.length;
     }, 0);
@@ -186,6 +164,9 @@ export default function WorkOrderTaskHub({ production, onUpdateWorkOrder, kariga
             production={production}
             onUpdateWorkOrder={onUpdateWorkOrder}
             karigars={karigars}
+            inventory={inventory}
+            onUpdateInventory={onUpdateInventory}
+            onCreateGatePass={onCreateGatePass}
           />
         )}
         {currentTab.type === "operations" && <OperationsMaster />}

@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { getItem, setItem } from '../utils/indexedDB';
-import { motion, AnimatePresence } from 'framer-motion';
+import { uuidShort } from "../utils/uuid";
+import { getItem, setItem } from '../utils/networkClient';
+import { motion, AnimatePresence } from 'motion/react';
 import { ProductionJob, Karigar, Design, CuttingLog, Machine, ProductionLog, SampleRequest, Order, InventoryItem, GarmentRoutingTemplate, GarmentOperationTemplate, GarmentWorkOrderOperation, GarmentBundleTicket } from '../types';
 import { 
   Plus, Edit2, Scissors, Factory, 
@@ -15,6 +16,7 @@ import ProductionPlan from './ProductionPlan';
 import GenerateJobSlip from './GenerateJobSlip';
 import GenerateQR from './GenerateQR';
 import { ManufacturingPipeline } from './ManufacturingPipeline';
+import { ROUTING_STORAGE_KEY, DEFAULT_ROUTING_TEMPLATES as MASTER_DEFAULT_TEMPLATES } from './work-orders/RoutingMaster';
 import JobslipAnalytics from './JobslipAnalytics';
 import Workstations from './Workstations';
 
@@ -58,7 +60,7 @@ const DEFAULT_ROUTING_TEMPLATES: GarmentRoutingTemplate[] = [
   {
     id: 'ROUTE-KURTI-STD',
     name: 'Kurti Standard Route',
-    category: 'KURTI',
+    category: 'Kurti',
     operations: [
       { id: 'OP-FABRIC-ISSUE', name: 'Fabric Issue', stage: 'CUTTING', processType: 'IN_HOUSE', workstationType: 'Store', plannedHours: 1, qualityCheckpoint: false },
       { id: 'OP-CUTTING', name: 'Panel Cutting', stage: 'CUTTING', processType: 'IN_HOUSE', workstationType: 'Cutting Table', plannedHours: 4, qualityCheckpoint: true },
@@ -104,7 +106,7 @@ const mergeGarmentSetup = (parsed: any): GarmentManufacturingSetup => {
 const makeWorkOrderOperations = (route?: GarmentRoutingTemplate): GarmentWorkOrderOperation[] =>
   (route?.operations || []).map((operation) => ({
     ...operation,
-    id: `${operation.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: `${operation.id}-${uuidShort(8)}`,
     status: 'PENDING',
     completedQuantity: 0,
     rejectedQuantity: 0,
@@ -152,8 +154,21 @@ const Production: React.FC<ProductionProps> = ({
   const [garmentSetup, setGarmentSetup] = useState<GarmentManufacturingSetup>(DEFAULT_GARMENT_SETUP);
   const [garmentSetupLoaded, setGarmentSetupLoaded] = useState(false);
   useEffect(() => {
-    getItem<any>(GARMENT_SETUP_KEY).then(parsed => {
-      if (parsed) setGarmentSetup(mergeGarmentSetup(parsed));
+    Promise.all([
+      getItem<any>(GARMENT_SETUP_KEY),
+      getItem<GarmentRoutingTemplate[]>(ROUTING_STORAGE_KEY),
+    ]).then(([parsed, routingTemplates]) => {
+      const base = parsed ? mergeGarmentSetup(parsed) : DEFAULT_GARMENT_SETUP;
+      // Always prefer RoutingMaster templates as the authoritative source
+      if (Array.isArray(routingTemplates) && routingTemplates.length > 0) {
+        // Merge: inject any new default templates not yet in stored set
+        const savedIds = new Set(routingTemplates.map((t: GarmentRoutingTemplate) => t.id));
+        const missing = MASTER_DEFAULT_TEMPLATES.filter(t => !savedIds.has(t.id));
+        const merged = missing.length > 0 ? [...routingTemplates, ...missing] : routingTemplates;
+        setGarmentSetup({ ...base, routingTemplates: merged });
+      } else {
+        setGarmentSetup(base);
+      }
       setGarmentSetupLoaded(true);
     }).catch(() => setGarmentSetupLoaded(true));
   }, []);
@@ -337,13 +352,13 @@ const Production: React.FC<ProductionProps> = ({
 
   const handleJobSizeChange = (size: string, val: number) => {
     const newSizeWise = { ...formData.sizeWise, [size]: val };
-    const newTotal = Object.values(newSizeWise).reduce((sum, v) => sum + (v || 0), 0);
+    const newTotal = Object.values(newSizeWise).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0);
     setFormData({ ...formData, sizeWise: newSizeWise, quantity: newTotal });
   };
 
   const handleSizeChange = (size: string, val: number) => {
     const newSizeWise = { ...logData.sizeWise, [size]: val };
-    const newTotal = Object.values(newSizeWise).reduce((sum, v) => sum + (v || 0), 0);
+    const newTotal = Object.values(newSizeWise).reduce((sum: number, v: any) => sum + (Number(v) || 0), 0);
     setLogData({ ...logData, sizeWise: newSizeWise, quantity: newTotal });
   };
 
@@ -410,7 +425,7 @@ const Production: React.FC<ProductionProps> = ({
     const nextRoute: GarmentRoutingTemplate = {
       id: `ROUTE-${Date.now()}`,
       name: `Custom Route ${garmentSetup.routingTemplates.length + 1}`,
-      category: 'KURTI',
+      category: 'Kurti',
       operations: [],
     };
     saveGarmentSetup({ ...garmentSetup, routingTemplates: [...garmentSetup.routingTemplates, nextRoute] });
@@ -419,7 +434,7 @@ const Production: React.FC<ProductionProps> = ({
 
   const resolveRouteForDesign = (design?: Design) =>
     garmentSetup.routingTemplates.find(route => route.id === design?.routingTemplateId) ||
-    garmentSetup.routingTemplates.find(route => route.category === design?.category) ||
+    garmentSetup.routingTemplates.find(route => route.category?.toLowerCase() === design?.category?.toLowerCase()) ||
     garmentSetup.routingTemplates[0];
 
   const operationSummary = (job: ProductionJob) => {
@@ -461,7 +476,7 @@ const Production: React.FC<ProductionProps> = ({
   };
 
   const generateFormBundles = () => {
-    const jobId = formData.id || `JOB-${Date.now().toString().slice(-4)}`;
+    const jobId = formData.id || `JOB-${uuidShort(12)}`;
     setFormData({
       ...formData,
       id: formData.id || jobId,
@@ -931,7 +946,7 @@ const Production: React.FC<ProductionProps> = ({
                           
                           {job.sizeWise && Object.keys(job.sizeWise).length > 0 && (
                             <div className="flex flex-wrap gap-1 mb-3">
-                              {Object.entries(job.sizeWise).map(([size, qty]) => qty > 0 && (
+                              {Object.entries(job.sizeWise).map(([size, qty]: [string, any]) => (qty as number) > 0 && (
                                 <span key={size} className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded">
                                   {size}: {qty}
                                 </span>
@@ -1082,7 +1097,7 @@ const Production: React.FC<ProductionProps> = ({
                           )}
                           {job.sizeWise && Object.keys(job.sizeWise).length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mt-1.5">
-                              {Object.entries(job.sizeWise).map(([size, qty]) => qty > 0 && (
+                              {Object.entries(job.sizeWise).map(([size, qty]: [string, any]) => (qty as number) > 0 && (
                                 <span key={size} className="text-[9px] font-bold text-slate-400">
                                   {size}: {qty}
                                 </span>
@@ -1166,7 +1181,7 @@ const Production: React.FC<ProductionProps> = ({
               const route = garmentSetup.routingTemplates.find(item => item.id === formData.routingTemplateId);
               onAddJob({
                 ...formData,
-                id:`JOB-${Date.now().toString().slice(-4)}`,
+                id:`JOB-${uuidShort(12)}`,
                 startDate: new Date().toISOString().split('T')[0],
                 operations: formData.operations?.length ? formData.operations : makeWorkOrderOperations(route),
               } as any);
@@ -1617,7 +1632,7 @@ const Production: React.FC<ProductionProps> = ({
                       
                       {log.sizeWise && Object.keys(log.sizeWise).length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-4">
-                          {Object.entries(log.sizeWise).map(([size, qty]) => qty > 0 && (
+                          {Object.entries(log.sizeWise).map(([size, qty]: [string, any]) => (qty as number) > 0 && (
                             <div key={size} className="flex flex-col items-center bg-black/5 dark:bg-white/5 px-3 py-1.5 rounded-xl border border-macos-border dark:border-macos-darkBorder">
                               <span className="text-[8px] font-black text-slate-400 uppercase">{size}</span>
                               <span className="text-xs font-bold">{qty}</span>

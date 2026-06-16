@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { ExpenseClaim, TeamMember } from '../types';
 import { 
   Search, Plus, Receipt, Filter, 
@@ -43,7 +44,7 @@ const ExpenseClaimComp: React.FC<ExpenseClaimProps> = ({
 
     const oData = {
       ...formData,
-      id: formData.id || `EXP-${Date.now().toString().slice(-4)}`,
+      id: formData.id || `EXP-${uuidShort(12)}`,
     } as ExpenseClaim;
 
     if (formData.id) onUpdate(oData);

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { InventoryItem, PurchaseOrder } from '../types';
 import { 
   Search, Plus, Filter, MoreHorizontal, ArrowLeft, Save, 
@@ -6,29 +7,54 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { toast } from "../utils/toast";
 
 interface PurchaseInwardProps {
   purchaseOrders: PurchaseOrder[];
   inventory: InventoryItem[];
   onUpdateInventory: (item: InventoryItem) => void;
   onUpdatePO: (po: PurchaseOrder) => void;
+  onAddPO?: (po: PurchaseOrder) => void;
+  pendingPOId?: string;
+  onClearPending?: () => void;
   currency?: string;
 }
 
 const PurchaseInward: React.FC<PurchaseInwardProps> = ({ 
-  purchaseOrders, inventory, onUpdateInventory, onUpdatePO, currency = '₹' 
+  purchaseOrders, inventory, onUpdateInventory, onUpdatePO, onAddPO, pendingPOId, onClearPending, currency = '₹' 
 }) => {
-  const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>('LIST');
+  const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>(pendingPOId ? 'FORM' : 'LIST');
   const [filter, setFilter] = useState('');
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   
-  const [selectedPOId, setSelectedPOId] = useState<string>('');
+  const [selectedPOId, setSelectedPOId] = useState<string>(pendingPOId || '');
   
-  const [formData, setFormData] = useState<Partial<PurchaseOrder>>({ 
-    status: 'DRAFT', 
-    items: [], 
-    date: new Date().toISOString().split('T')[0],
+  const [formData, setFormData] = useState<Partial<PurchaseOrder>>(() => {
+    if (pendingPOId) {
+      // Will be populated by useEffect once purchaseOrders are available
+      return { status: 'DRAFT', items: [], date: new Date().toISOString().split('T')[0] };
+    }
+    return { status: 'DRAFT', items: [], date: new Date().toISOString().split('T')[0] };
   });
+
+  // Pre-populate form from source PO when navigated via CONVERT_TO_PURCHASE_RECEIPT
+  React.useEffect(() => {
+    if (pendingPOId && purchaseOrders.length > 0) {
+      const sourcePO = purchaseOrders.find(p => p.id === pendingPOId);
+      if (sourcePO) {
+        setSelectedPOId(pendingPOId);
+        setFormData({
+          ...sourcePO,
+          id: undefined, // new GRN record
+          status: 'DRAFT',
+          date: new Date().toISOString().split('T')[0],
+          items: (sourcePO.items || []).map(i => ({ ...i, received: 0 })),
+        });
+        setViewMode('FORM');
+        onClearPending?.(); // clear so re-visiting this page starts fresh
+      }
+    }
+  }, [pendingPOId, purchaseOrders]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Only receipts (inwards) - let's identify "Purchase Receipts" by their status being "RECEIVED" from the POs.
   // In ERPNext, PR is a separate doctype. Here we are using POs with RECEIVED status or creating them as GRNs.
@@ -71,10 +97,21 @@ const PurchaseInward: React.FC<PurchaseInwardProps> = ({
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.supplierName || !formData.items?.length) return;
+
+    // Guard: prevent duplicate GRN for same challan/invoice number
+    if (formData.challanNo && !formData.id) {
+      const dupChallan = purchaseOrders.find(
+        po => po.challanNo && po.challanNo.trim() === formData.challanNo!.trim() && po.id !== formData.id
+      );
+      if (dupChallan) {
+        toast.warn(`Challan No. "${formData.challanNo}" already received as ${dupChallan.id}. Cannot create duplicate GRN.`);
+        return;
+      }
+    }
     
     const pr: PurchaseOrder = {
        ...formData,
-       id: formData.id || `GRN-${Date.now().toString().slice(-4)}`,
+       id: formData.id || `GRN-${uuidShort(12)}`,
        status: 'RECEIVED',
        updatedAt: new Date().toISOString()
     } as PurchaseOrder;
@@ -82,17 +119,29 @@ const PurchaseInward: React.FC<PurchaseInwardProps> = ({
     if (formData.id) {
        onUpdatePO(pr);
     } else {
-       onUpdatePO(pr); // Acts as add
+       // Use onAddPO for new GRN records to properly insert, not upsert by ID
+       if (onAddPO) {
+         onAddPO(pr);
+       } else {
+         onUpdatePO(pr);
+       }
        // Standard behavior: Mark original PO as received and update stock
        if (selectedPOId) {
           const originalPO = purchaseOrders.find(o => o.id === selectedPOId);
           if (originalPO) {
+             // Guard: prevent double-receiving an already-RECEIVED PO
+             if (originalPO.status === 'RECEIVED') {
+               toast.warn(`PO ${selectedPOId} is already received. Stock was not updated again.`);
+               setViewMode('LIST');
+               return;
+             }
              onUpdatePO({ ...originalPO, status: 'RECEIVED', updatedAt: new Date().toISOString() });
           }
        }
-       // Update inventory quantities
+       // Update inventory quantities — case-insensitive item name match
        (pr.items || []).forEach(item => {
-          const invItem = inventory.find(i => i.name === item.productName);
+          const itemLower = item.productName.toLowerCase();
+          const invItem = inventory.find(i => i.name.toLowerCase() === itemLower);
           if (invItem) {
              onUpdateInventory({
                 ...invItem,
@@ -365,8 +414,9 @@ const PurchaseInward: React.FC<PurchaseInwardProps> = ({
                                            value={it.quantity} 
                                            onChange={e => {
                                               const qty = Number(e.target.value);
-                                              const items = [...(formData.items || [])];
-                                              items[idx].quantity = qty;
+                                              const items = (formData.items || []).map((item, i) =>
+                                                i === idx ? { ...item, quantity: qty } : item
+                                              );
                                               const t = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
                                               setFormData({...formData, items: items, totalAmount: t});
                                            }}

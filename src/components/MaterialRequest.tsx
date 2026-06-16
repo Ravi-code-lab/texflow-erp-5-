@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { MaterialRequest, InventoryItem, MaterialRequestItem } from '../types';
 import { 
   Search, Plus, FileCheck, Filter, 
@@ -44,7 +45,7 @@ const MaterialRequestComp: React.FC<MaterialRequestProps> = ({
 
     const oData = {
       ...formData,
-      id: formData.id || `MR-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`,
+      id: formData.id || `MR-${uuidShort(12)}`,
     } as MaterialRequest;
 
     if (formData.id) onUpdate(oData);

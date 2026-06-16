@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getItem, setItem } from '../utils/indexedDB';
+import { uuidShort } from "../utils/uuid";
+import { getItem, setItem } from '../utils/networkClient';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, Warehouse, Droplets, Scale, Scissors, Grid, Sparkles, 
@@ -10,6 +11,7 @@ import {
 import { Design, Karigar, Machine, ProductionJob } from '../types';
 import BaseModal from './BaseModal';
 import ProductImageThumb from './ProductImageThumb';
+import { toast, confirm } from "../utils/toast";
 
 export interface PipelineStageLog {
   stageId: string;
@@ -259,7 +261,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
     const defaultMetrics: Record<string, string> = {};
     
     if (stageId === 'GRAY_ORDER') {
-      defaultMetrics.poNumber = logsMetrics.poNumber || `PO-${Date.now().toString().slice(-4)}`;
+      defaultMetrics.poNumber = logsMetrics.poNumber || `PO-${Date.now().toString(36).toUpperCase().slice(-6)}`;
       defaultMetrics.weaveSupplier = logsMetrics.weaveSupplier || '';
       defaultMetrics.ratePerMeter = String(logsMetrics.ratePerMeter || '');
     } else if (stageId === 'GRAY_INVENTORY') {
@@ -293,7 +295,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
       defaultMetrics.minorDefects = String(logsMetrics.minorDefects || '0');
       defaultMetrics.qcStatusResult = logsMetrics.qcStatusResult || 'PASS';
     } else if (stageId === 'PACKING') {
-      defaultMetrics.cartonBarcode = logsMetrics.cartonBarcode || `BOX-BAR-${Date.now().toString().slice(-4)}`;
+      defaultMetrics.cartonBarcode = logsMetrics.cartonBarcode || `BOX-BAR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
       defaultMetrics.boxSequenceNumber = logsMetrics.boxSequenceNumber || 'BOX-A1';
       defaultMetrics.isHandoffReady = logsMetrics.isHandoffReady || 'YES';
     }
@@ -315,7 +317,11 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
   const handleCreateBatch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newBatchId || !newDesignName) {
-      alert('Please fill out all mandatory fields.');
+      toast.error('Please fill out all mandatory fields.');
+      return;
+    }
+    if (batches.some(b => b.id === newBatchId.toUpperCase().trim())) {
+      toast.error(`Batch ID "${newBatchId.toUpperCase()}" already exists. Use a unique ID.`);
       return;
     }
 
@@ -337,7 +343,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
           completedAt: new Date().toISOString().split('T')[0],
           completedBy: 'Staff Operator',
           notes: 'Batch initiated into production line.',
-          metrics: firstStage === 'GRAY_ORDER' ? { poNumber: `PO-${Date.now().toString().slice(-4)}` } : {}
+          metrics: firstStage === 'GRAY_ORDER' ? { poNumber: `PO-${Date.now().toString(36).toUpperCase().slice(-6)}` } : {}
         }
       }
     };
@@ -403,7 +409,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
 
     const currentIndex = activeSteps.findIndex(s => s.id === activeBatch.currentStageId);
     if (currentIndex === -1 || currentIndex >= activeSteps.length - 1) {
-      alert('This batch is already completed in final stage (Packing).');
+      toast.warn('This batch is already completed in final stage (Packing).');
       return;
     }
 
@@ -442,8 +448,14 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
     handleSelectStageDetails(nextStage.id);
   };
 
-  const handleDeleteBatch = (id: string) => {
-    if (confirm(`Are you sure you want to remove manufacturing batch ${id} from control workspace?`)) {
+  const handleDeleteBatch = async (id: string) => {
+    const ok = await confirm({
+      title: `Remove batch ${id}?`,
+      message: 'This batch will be permanently deleted from the control workspace.',
+      confirmLabel: 'Delete',
+      confirmClass: 'bg-red-600 hover:bg-red-700 text-white',
+    });
+    if (ok) {
       const filtered = batches.filter(b => b.id !== id);
       setBatches(filtered);
       if (selectedBatchId === id && filtered.length > 0) {
@@ -515,7 +527,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
             <h3 className="text-sm font-black uppercase text-slate-500 tracking-wider">Production Batches</h3>
             <button 
               onClick={() => {
-                setNewBatchId(`BND-${Date.now().toString().slice(-4)}`);
+                setNewBatchId(`BND-${uuidShort(12)}`);
                 setShowCreateModal(true);
               }}
               className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold tracking-tight px-3 py-1.5 rounded-lg transition-colors shadow-sm"
@@ -1360,7 +1372,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
                           if (newCustomSteps.length > 2) {
                             setNewCustomSteps(newCustomSteps.filter(id => id !== step.id));
                           } else {
-                            alert('A minimum of two active pipeline routing stages are required.');
+                            toast.warn('A minimum of two active pipeline routing stages are required.');
                           }
                         } else {
                           const updated = [...newCustomSteps, step.id];
@@ -1463,7 +1475,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
               </button>
               <button
                 onClick={() => {
-                  alert('Command transmitted to Honeywell Thermal printer over local Ethernet portsuccessfully!');
+                  toast.success('Command transmitted to Honeywell Thermal printer over local Ethernet port successfully!');
                   setShowThermalLabel(false);
                 }}
                 className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 rounded-xl text-xs flex justify-center items-center gap-2 shadow-md"
@@ -1511,7 +1523,7 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
                           if (selectedRoutingSteps.length > 2) {
                             setSelectedRoutingSteps(selectedRoutingSteps.filter(id => id !== step.id));
                           } else {
-                            alert('A minimum of two active pipeline routing stages are required.');
+                            toast.warn('A minimum of two active pipeline routing stages are required.');
                           }
                         } else {
                           const updated = [...selectedRoutingSteps, step.id];

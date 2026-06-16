@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import BaseModal from './BaseModal';
 import { compressImage } from '../utils/imageUtils';
+import { toast, confirm } from "../utils/toast";
 
 // ─── Platform ─────────────────────────────────────────────────────────────────
 const isElectron = typeof window !== 'undefined' && (window as any).process?.type === 'renderer';
@@ -157,7 +158,7 @@ const Gallery: React.FC<GalleryProps> = ({ items, onAdd, onDelete, onUpdate }) =
         height: img.naturalHeight,
       }));
     } catch {
-      alert('Upload failed. Please try again.');
+      toast.error('Upload failed. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -237,7 +238,11 @@ const Gallery: React.FC<GalleryProps> = ({ items, onAdd, onDelete, onUpdate }) =
   // ─── Share ─────────────────────────────────────────────────────────────────
   const getShareLink = (item: GalleryItem) => {
     const token = item.shareToken || genShareToken();
-    return `${window.location.origin}/shared/gallery/${token}`;
+    // window.location.origin returns "file://" in Electron — use LAN server URL instead
+    const base = (typeof window !== 'undefined' && window.location.protocol !== 'file:')
+      ? window.location.origin
+      : 'http://localhost:3001';
+    return `${base}/shared/gallery/${token}`;
   };
 
   const handleShare = (item: GalleryItem) => {
@@ -255,18 +260,18 @@ const Gallery: React.FC<GalleryProps> = ({ items, onAdd, onDelete, onUpdate }) =
     navigator.clipboard.writeText(getShareLink(shareItem)).then(() => {
       setCopiedToken(true);
       setTimeout(() => setCopiedToken(false), 2000);
-    });
+    }).catch(() => toast.error('Could not copy link to clipboard.'));
   };
 
   // ─── Delete ────────────────────────────────────────────────────────────────
-  const handleDeleteOne = (id: string, e?: React.MouseEvent) => {
+  const handleDeleteOne = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (confirm('Remove this image from gallery? The file will remain in the vault.')) onDelete(id);
+    const ok = await confirm({ title: 'Remove this image?', message: 'The file will remain in the vault.', confirmLabel: 'Remove' }); if (ok) onDelete(id);
   };
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     if (!selectedIds.size) return;
-    if (confirm(`Remove ${selectedIds.size} selected image(s)?`)) {
+    const ok = await confirm({ title: `Remove ${selectedIds.size} selected image(s)?`, confirmLabel: 'Remove' }); if (ok) {
       selectedIds.forEach(id => onDelete(id));
       setSelectedIds(new Set());
     }

@@ -1,5 +1,7 @@
 import React, { useState } from "react";
+import { uuidShort } from "../../utils/uuid";
 import { Plus, Edit2, Trash2, Save, X, Hammer, Search, Settings2 } from "lucide-react";
+import { toast, useConfirm } from "../../utils/toast";
 
 interface Operation {
   id: string;
@@ -37,7 +39,7 @@ const TASK_CONFIG: Record<string, { color: string; bg: string; border: string; i
 };
 
 const emptyOp = (): Operation => ({
-  id: `OP-${String(Math.floor(Math.random() * 9000) + 1000)}`,
+  id: `OP-${uuidShort(8)}`,
   name: "",
   workstation: "",
   defaultTime: "15 Mins",
@@ -48,6 +50,7 @@ const emptyOp = (): Operation => ({
 });
 
 export default function OperationsMaster() {
+  const { confirm, ConfirmModal } = useConfirm();
   const [operations, setOperations] = useState<Operation[]>(DEFAULT_OPERATIONS);
   const [editing, setEditing] = useState<Operation | null>(null);
   const [isNew, setIsNew] = useState(false);
@@ -74,8 +77,9 @@ export default function OperationsMaster() {
     setIsNew(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (!window.confirm("Delete this operation template?")) return;
+  const handleDelete = async (id: string) => {
+    const ok = await confirm({ title: "Delete operation template?", message: "This cannot be undone." });
+    if (!ok) return;
     setOperations((prev) => prev.filter((o) => o.id !== id));
   };
 
@@ -180,6 +184,7 @@ export default function OperationsMaster() {
 
   return (
     <div className="flex flex-col h-full bg-slate-50 min-h-screen">
+      <ConfirmModal />
       <div className="flex-none bg-white border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">

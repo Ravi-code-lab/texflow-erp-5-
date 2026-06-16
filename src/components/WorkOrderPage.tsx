@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from "react";
+import { uuidShort } from "../utils/uuid";
 import {
   Plus, Search, ChevronRight, Package, Calendar, Hash,
   Layers, CheckCircle2, Clock, AlertCircle, PlayCircle,
@@ -15,8 +16,10 @@ import {
 } from "lucide-react";
 import type { ProductionJob, Karigar, Design, Order, InventoryItem, Machine, SampleRequest, GarmentRoutingTemplate, GarmentWorkOrderOperation } from "../types";
 import { DEFAULT_ROUTING_TEMPLATES, getProcessMeta, ROUTING_STORAGE_KEY } from "./work-orders/RoutingMaster";
-import { getItem } from "../utils/indexedDB";
+import { getItem } from "../utils/networkClient";
 import ProductImageThumb, { resolveProductImage } from "./ProductImageThumb";
+import { toast } from "../utils/toast";
+import { WorkOrderPrintDesk } from "./work-orders/WorkOrderPrintDesk";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +34,7 @@ interface WorkOrderPageProps {
   onAddJob: (job: ProductionJob) => void;
   onUpdateJob: (job: ProductionJob) => void;
   onDeleteJob?: (id: string) => void;
+  onAction?: (action: string, data: any) => void;
   currency?: string;
 }
 
@@ -54,7 +58,7 @@ const STEP_STATUS_STYLE = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function genId() { return `WO-${Date.now().toString().slice(-6)}`; }
+function genId() { return `WO-${uuidShort(12)}`; }
 function totalSizes(sw: Record<string, number> = {}) {
   return Object.values(sw).reduce((s, v) => s + (Number(v) || 0), 0);
 }
@@ -167,15 +171,65 @@ function WorkOrderForm({
     // Only auto-assign operations if creating new or no operations yet
     if (!isEdit || !form.operations?.length) {
       const tpl = templates.find(t => t.id === templateId);
-      if (tpl) set({ routingTemplateId: templateId, operations: makeOperationsFromTemplate(tpl) });
+      if (tpl) {
+        set({ routingTemplateId: templateId, operations: makeOperationsFromTemplate(tpl) });
+        // Auto-fill deadline from start date + cumulative planned hours
+        autoFillDeadline(form.startDate, tpl);
+      }
     } else {
       set({ routingTemplateId: templateId });
     }
   };
 
+  const autoFillDeadline = (startDate: string | undefined, tpl: GarmentRoutingTemplate) => {
+    if (!startDate || !tpl) return;
+    const totalHours = tpl.operations.reduce((s, op) => s + (op.plannedHours || 0), 0);
+    const workingHrsPerDay = 8;
+    const calendarDays = Math.ceil(totalHours / workingHrsPerDay);
+    const deadline = new Date(startDate);
+    deadline.setDate(deadline.getDate() + calendarDays);
+    set({ deadline: deadline.toISOString().split("T")[0] });
+  };
+
+  // Per-dept estimated dates based on cumulative planned hours from start date
+  const deptSchedule = useMemo(() => {
+    const tpl = templates.find(t => t.id === selectedTemplateId);
+    if (!tpl || !form.startDate) return [];
+    let cumHours = 0;
+    const workHrsPerDay = 8;
+    // Group ops by stage/dept
+    const seen = new Map<string, { dept: string; hours: number; startDay: number; endDay: number }>();
+    for (const op of tpl.operations) {
+      const dept = op.workstationType || op.stage;
+      if (!seen.has(dept)) {
+        seen.set(dept, { dept, hours: 0, startDay: Math.floor(cumHours / workHrsPerDay), endDay: 0 });
+      }
+      seen.get(dept)!.hours += op.plannedHours || 0;
+    }
+    // Re-derive start/end days sequentially
+    let cursor = 0;
+    const result: { dept: string; startDate: string; endDate: string; hours: number }[] = [];
+    for (const [, entry] of seen) {
+      const start = new Date(form.startDate!);
+      start.setDate(start.getDate() + Math.floor(cursor / workHrsPerDay));
+      cursor += entry.hours;
+      const end = new Date(form.startDate!);
+      end.setDate(end.getDate() + Math.ceil(cursor / workHrsPerDay));
+      result.push({
+        dept: entry.dept,
+        hours: entry.hours,
+        startDate: start.toISOString().split("T")[0],
+        endDate: end.toISOString().split("T")[0],
+      });
+    }
+    return result;
+  }, [selectedTemplateId, form.startDate, templates]);
+
+
+
   const handleSubmit = () => {
-    if (!form.productName?.trim()) return alert("Please enter a product name.");
-    if (!form.quantity || form.quantity < 1) return alert("Quantity must be at least 1.");
+    if (!form.productName?.trim()) { toast.error("Please enter a product name."); return; }
+    if (!form.quantity || form.quantity < 1) { toast.error("Quantity must be at least 1."); return; }
     const ops = form.operations?.length
       ? form.operations
       : selectedTemplateId
@@ -334,6 +388,29 @@ function WorkOrderForm({
               </div>
             </div>
           )}
+          {/* Dept-wise Auto Date Schedule */}
+          {deptSchedule.length > 0 && (
+            <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" /> Auto-Scheduled Dates (based on start date + planned hours)
+              </p>
+              <div className="space-y-2">
+                {deptSchedule.map((d, i) => (
+                  <div key={`${d.dept}-${i}`} className="flex items-center gap-3 text-xs">
+                    <div className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
+                    <span className="font-black text-slate-700 dark:text-slate-200 w-32 truncate">{d.dept}</span>
+                    <span className="text-slate-500 font-mono">{d.startDate}</span>
+                    <ArrowRight className="w-3 h-3 text-slate-300 shrink-0" />
+                    <span className="text-slate-500 font-mono">{d.endDate}</span>
+                    <span className="ml-auto text-slate-400 font-semibold">{d.hours}h planned</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-3">
+                ⚡ Deadline auto-filled. Based on 8 working hrs/day. Adjust in Schedule section.
+              </p>
+            </div>
+          )}
         </FormSection>
 
         {/* Section 3: Quantity */}
@@ -362,7 +439,11 @@ function WorkOrderForm({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <FLabel>Start Date</FLabel>
-              <input type="date" className="finput w-full" value={form.startDate || ""} onChange={e => set({ startDate: e.target.value })} />
+              <input type="date" className="finput w-full" value={form.startDate || ""} onChange={e => {
+                set({ startDate: e.target.value });
+                const tpl = templates.find(t => t.id === selectedTemplateId);
+                if (tpl) autoFillDeadline(e.target.value, tpl);
+              }} />
             </div>
             <div>
               <FLabel>Deadline</FLabel>
@@ -429,14 +510,39 @@ function StepAdvanceModal({
   const ops = job.operations || [];
   const [localOps, setLocalOps] = useState<GarmentWorkOrderOperation[]>(JSON.parse(JSON.stringify(ops)));
 
-  const updateOp = (id: string, status: GarmentWorkOrderOperation["status"]) => {
-    setLocalOps(prev => prev.map((o, i) => {
-      if (o.id !== id) return o;
-      const updated = { ...o, status };
-      if (status === "IN_PROGRESS" && !o.startedAt) updated.startedAt = new Date().toISOString();
-      if (status === "COMPLETED") updated.completedAt = new Date().toISOString();
-      return updated;
-    }));
+  const updateOp = (id: string, newStatus: GarmentWorkOrderOperation["status"]) => {
+    setLocalOps(prev => {
+      const opIndex = prev.findIndex(o => o.id === id);
+      if (opIndex === -1) return prev;
+
+      // Prevent advancing if prior steps are not completed
+      const isTryingToProgress = newStatus !== "PENDING";
+      if (isTryingToProgress) {
+        for (let i = 0; i < opIndex; i++) {
+          if (prev[i].status !== "COMPLETED" && prev[i].status !== "SKIPPED") {
+            toast.warn("Please complete previous steps first. Cannot skip sequence.");
+            return prev;
+          }
+        }
+      }
+
+      return prev.map((o, i) => {
+        // Update the target step
+        if (i === opIndex) {
+          const u = { ...o, status: newStatus };
+          if (newStatus === "IN_PROGRESS" && !o.startedAt) u.startedAt = new Date().toISOString();
+          if (newStatus === "COMPLETED") u.completedAt = new Date().toISOString();
+          return u;
+        }
+
+        // Cascade regression to subsequent steps
+        if (i > opIndex && (newStatus === "PENDING" || newStatus === "IN_PROGRESS")) {
+           return { ...o, status: "PENDING", startedAt: undefined, completedAt: undefined };
+        }
+
+        return o;
+      });
+    });
   };
 
   const handleSave = () => {
@@ -615,7 +721,7 @@ const EMPTY_FORM: Partial<ProductionJob> = {
 };
 
 export default function WorkOrderPage({
-  jobs, designs = [], inventory = [], orders = [], samples = [],
+  jobs, designs = [], inventory = [], orders = [], samples = [], karigars = [], onAction,
   onAddJob, onUpdateJob, onDeleteJob, currency = "₹",
 }: WorkOrderPageProps) {
   const [view, setView] = useState<"list" | "form">("list");
@@ -624,13 +730,20 @@ export default function WorkOrderPage({
   const [search, setSearch] = useState("");
   const [filterStage, setFilterStage] = useState("ALL");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<GarmentRoutingTemplate[]>(DEFAULT_ROUTING_TEMPLATES);
 
   // Load routing templates from IndexedDB
   useEffect(() => {
     getItem<GarmentRoutingTemplate[]>(ROUTING_STORAGE_KEY).then(saved => {
-      if (saved && saved.length) setTemplates(saved);
-    }).catch(() => {});
+      if (saved && saved.length) {
+        const savedIds = new Set(saved.map((t: GarmentRoutingTemplate) => t.id));
+        const missing = DEFAULT_ROUTING_TEMPLATES.filter(t => !savedIds.has(t.id));
+        setTemplates(missing.length > 0 ? [...saved, ...missing] : saved);
+      }
+    }).catch(() => {
+      console.warn('Could not load routing templates from storage.');
+    });
   }, []);
 
   // ── Unique active stages for filter chips
@@ -666,7 +779,7 @@ export default function WorkOrderPage({
 
   // ── Actions
   const handleNew = () => { setEditing(EMPTY_FORM); setView("form"); };
-  const handleEdit = (job: ProductionJob) => { setEditing(job); setView("form"); };
+  const handleEdit = (job: ProductionJob) => { setEditing({ ...job, sizeWise: job.sizeWise || {} }); setView("form"); };
   const handleSave = (data: ProductionJob) => {
     if (data.id && jobs.find(j => j.id === data.id)) onUpdateJob(data);
     else onAddJob(data);
@@ -677,6 +790,7 @@ export default function WorkOrderPage({
   if (view === "form" && editing !== null) {
     return (
       <WorkOrderForm
+        key={editing?.id || 'new'}
         initial={editing} designs={designs} orders={orders} samples={samples}
         templates={templates} onSave={handleSave}
         onCancel={() => { setView("list"); setEditing(null); }}
@@ -858,6 +972,13 @@ export default function WorkOrderPage({
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
+                      <button
+                        onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
+                        className="p-1.5 rounded-lg hover:bg-teal-50 text-slate-400 hover:text-teal-600 transition-colors"
+                        title="Print Job Card"
+                      >
+                        <ChevronRight className={`w-3.5 h-3.5 transition-transform ${expandedJobId === job.id ? 'rotate-90' : ''}`} />
+                      </button>
                       {onDeleteJob && (
                         <button
                           onClick={() => setConfirmDelete(job.id)}
@@ -870,6 +991,16 @@ export default function WorkOrderPage({
                     </div>
                   </div>
                 </div>
+                {/* ── Inline Print Desk ── */}
+                {expandedJobId === job.id && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <WorkOrderPrintDesk
+                      job={job}
+                      karigars={karigars}
+                      currency={currency}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}

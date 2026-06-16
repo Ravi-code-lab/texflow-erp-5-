@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { Truck, Plus, Trash2, ShieldCheck, MapPin } from 'lucide-react';
 
 interface VehiclesProps {
@@ -21,7 +22,7 @@ export default function Vehicles({ vehicles, onAdd, onDelete, currency = '₹' }
     if (!plate.trim() || !model.trim()) return;
 
     onAdd({
-      id: `VEH-${Date.now().toString().slice(-4)}`,
+      id: `VEH-${uuidShort(12)}`,
       plateNumber: plate,
       vehicleModel: model,
       driverName: driver || 'Direct Pool Driver',

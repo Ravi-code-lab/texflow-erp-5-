@@ -1,21 +1,63 @@
 
-import { getItem, setItem } from '../utils/indexedDB';
+import { getItem, setItem } from '../utils/networkClient';
 import React, { useState, useEffect } from 'react';
-import { 
-  Building, RefreshCw, Landmark, LayoutGrid, Brush, Shield, 
-  Save, Image as ImageIcon, Database, FolderSearch, Activity, History,
-  Sun, Moon, Check, Download, Landmark as BankIcon, Settings2, Trash2,
-  ShoppingCart, Truck, Factory, Boxes, Wallet, Briefcase, HardDrive, Terminal,
-  FileDigit, Globe, Server, RotateCcw, IndianRupee, Coins, Undo2, Banknote,
-  FlaskRound, MapPin, ShieldCheck, Layers, Palette, Archive, SearchCheck,
-  BookOpen, Fingerprint, Store, Info, Plus, Minus, Monitor
-} from 'lucide-react';
+import {
+  Building,
+  RefreshCw,
+  Landmark,
+  LayoutGrid,
+  Brush,
+  Shield,
+  Save,
+  Image as ImageIcon,
+  Database,
+  FolderSearch,
+  Activity,
+  History,
+  Sun,
+  Moon,
+  Check,
+  Download,
+  Settings2,
+  Trash2,
+  ShoppingCart,
+  Truck,
+  Factory,
+  Boxes,
+  Wallet,
+  Briefcase,
+  HardDrive,
+  Terminal,
+  FileDigit,
+  Globe,
+  Server,
+  RotateCcw,
+  IndianRupee,
+  Coins,
+  Undo2,
+  Banknote,
+  FlaskRound,
+  MapPin,
+  ShieldCheck,
+  Layers,
+  Palette,
+  Archive,
+  SearchCheck,
+  BookOpen,
+  Fingerprint,
+  Store,
+  Info,
+  Plus,
+  Minus,
+  Monitor,
+} from "lucide-react";
 import { exportAllDataToZip, restoreDataFromZip, clearAllDataFlag } from '../utils/indexedDB';
 import { 
   TeamMember, UIPreferences, CompanyInfo, 
   InvoiceConfig, ShopifyConfig, SecurityConfig, CommunicationConfig, AdvancedConfig, RolePermission, UserRole
 } from '../types';
 import { ERP_MODULE_GROUPS } from '../modules/registry';
+import { toast, useConfirm } from "../utils/toast";
 
 const isElectron = typeof window !== 'undefined' && (window as any).process && (window as any).process.type === 'renderer';
 const ipc = isElectron ? (window as any).require('electron').ipcRenderer : null;
@@ -58,6 +100,7 @@ const Settings: React.FC<SettingsProps> = ({
   onUpdateRolePermission,
   onDeleteRolePermission
 }) => {
+  const { confirm, ConfirmModal } = useConfirm();
   const [activeTab, setActiveTab] = useState<'COMPANY' | 'BILLING' | 'MODULES' | 'CUSTOMIZER' | 'THEME' | 'STORAGE' | 'INTEGRATIONS' | 'SECURITY' | 'RBAC' | 'SERVER' | 'COMMUNICATION' | 'ADVANCED'>('COMPANY');
   const [isSaving, setIsSaving] = useState(false);
   const [vaultStatus, setVaultStatus] = useState<any>(null);
@@ -168,13 +211,19 @@ const Settings: React.FC<SettingsProps> = ({
 
   const handleVaultAction = async (action: 'SELECT' | 'BACKUP' | 'RESTORE_ZIP' | 'RESTORE_FOLDER' | 'VERIFY' | 'RESET') => {
     if (action === 'RESET') {
-        if (window.confirm("💥 WARNING: Are you absolutely sure you want to RESET the workspace and CLEAR all current databases? This will purge all demo/transaction entries to let you start with a completely clean slate like ERPNext. This cannot be undone.")) {
+        const ok = await confirm({
+            title: '⚠️ Reset workspace & clear all databases?',
+            message: 'This will purge all demo/transaction entries for a clean slate. This CANNOT be undone.',
+            confirmLabel: 'Yes, Reset Everything',
+            confirmClass: 'px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg text-sm font-bold transition-colors'
+        });
+        if (ok) {
             try {
                 await clearAllDataFlag();
-                alert("Database reset successfully! The application will now reload to set up your custom Company configuration.");
-                window.location.reload();
+                toast.success("Database reset successfully! Reloading...");
+                setTimeout(() => window.location.reload(), 1200);
             } catch(e) {
-                alert("Reset failed: " + e);
+                toast.error("Reset failed: " + e);
             }
         }
         return;
@@ -184,7 +233,7 @@ const Settings: React.FC<SettingsProps> = ({
             try {
                 await exportAllDataToZip();
             } catch (e) {
-                alert("Backup failed: " + e);
+                toast.error("Backup failed: " + e);
             }
         } else if (action === 'RESTORE_ZIP') {
             const input = document.createElement('input');
@@ -193,19 +242,20 @@ const Settings: React.FC<SettingsProps> = ({
             input.onchange = async (e: any) => {
                 const file = e.target.files[0];
                 if (file) {
-                    if (window.confirm("Are you sure? This will OVERWRITE all current data with the contents of the ZIP file.")) {
+                    const ok = await confirm({ title: 'Overwrite all current data?', message: 'This will replace all data with the contents of the ZIP file. Cannot be undone.', confirmLabel: 'Overwrite & Restore', confirmClass: 'px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition-colors' });
+                    if (ok) {
                         try {
                             await restoreDataFromZip(file);
                             window.location.reload();
                         } catch (err) {
-                            alert("Restore failed. Ensure it's a valid TexFlow Backup ZIP.");
+                            toast.error("Restore failed. Ensure it's a valid TexFlow Backup ZIP.");
                         }
                     }
                 }
             };
             input.click();
         } else {
-            alert("This operation requires the Desktop (Electron) version of TexFlow ERP.");
+            toast.info("This operation requires the Desktop (Electron) version of TexFlow ERP.");
         }
         return;
     }
@@ -221,7 +271,7 @@ const Settings: React.FC<SettingsProps> = ({
             await refreshVaultInfo();
             if (action === 'RESTORE_ZIP' || action === 'RESTORE_FOLDER') window.location.reload();
         } else if (res?.error) {
-            alert(`Storage Error: ${res.error}`);
+            toast.error(`Storage Error: ${res.error}`);
         }
     } catch (e) { console.error(e); }
   };
@@ -238,8 +288,7 @@ const Settings: React.FC<SettingsProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 animate-fade-in font-sans">
-      
-      {/* Header */}
+      <ConfirmModal />
       <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <Settings2 className="w-5 h-5 text-indigo-600" />
@@ -754,11 +803,11 @@ const Settings: React.FC<SettingsProps> = ({
                                         
                                         <div className="flex gap-3">
                                             {!isLanServerRunning ? (
-                                                <button type="button" onClick={() => { if (ipc) ipc.invoke('lan:start').then((res: any) => { setIsLanServerRunning(!!res.success); if(res.ip) setLanIp(res.ip); if(res.port) setLanPort(res.port); }); }} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest shadow-lg transition-transform active:scale-95 flex items-center gap-2">
+                                                <button type="button" onClick={() => { if (ipc) ipc.invoke('lan:start').then((res: any) => { setIsLanServerRunning(!!res.success); if(res.ip) setLanIp(res.ip); if(res.port) setLanPort(res.port); }).catch((e: any) => toast.error(`Failed to start server: ${e?.message || e}`)); }} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest shadow-lg transition-transform active:scale-95 flex items-center gap-2">
                                                     Start Server
                                                 </button>
                                             ) : (
-                                                <button type="button" onClick={() => { if (ipc) ipc.invoke('lan:stop').then(() => setIsLanServerRunning(false)); }} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest shadow-lg transition-transform active:scale-95 flex items-center gap-2">
+                                                <button type="button" onClick={() => { if (ipc) ipc.invoke('lan:stop').then(() => setIsLanServerRunning(false)).catch((e: any) => toast.error(`Failed to stop server: ${e?.message || e}`)); }} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest shadow-lg transition-transform active:scale-95 flex items-center gap-2">
                                                     Stop Server
                                                 </button>
                                             )}

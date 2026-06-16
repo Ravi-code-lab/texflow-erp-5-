@@ -14,6 +14,7 @@ import {
   ArrowLeftRight, TrendingDown, Package, Truck, Scissors
 } from 'lucide-react';
 import BaseModal from './BaseModal';
+import { toast } from "../utils/toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -273,11 +274,11 @@ const Accounting: React.FC<AccountingProps> = ({
   const receivables = useMemo(() => {
     const now = Date.now();
     return salesOrders
-      .filter(o => o.paymentStatus !== 'PAID')
+      .filter(o => o.paymentStatus !== 'PAID' && o.status !== 'CANCELLED' && o.status !== 'RETURNED')
       .map(o => {
         const days = Math.floor((now - new Date(o.orderDate).getTime()) / 86400000);
         const bucket = days <= 30 ? '0–30 days' : days <= 60 ? '31–60 days' : days <= 90 ? '61–90 days' : '90+ days';
-        return { ...o, daysOld: days, bucket };
+        return { ...(o as any), daysOld: days, bucket };
       })
       .sort((a, b) => b.daysOld - a.daysOld);
   }, [salesOrders]);
@@ -289,7 +290,7 @@ const Accounting: React.FC<AccountingProps> = ({
       .map(p => {
         const days = Math.floor((now - new Date(p.date).getTime()) / 86400000);
         const bucket = days <= 30 ? '0–30 days' : days <= 60 ? '31–60 days' : days <= 90 ? '61–90 days' : '90+ days';
-        return { ...p, daysOld: days, bucket };
+        return { ...(p as any), daysOld: days, bucket };
       })
       .sort((a, b) => b.daysOld - a.daysOld);
   }, [purchaseOrders]);
@@ -359,12 +360,12 @@ const Accounting: React.FC<AccountingProps> = ({
   const handleAddJournal = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     const validRows = journalRows.filter(r => r.account && r.amount > 0);
-    if (validRows.length < 2) { alert('At least two valid entries are required.'); return; }
+    if (validRows.length < 2) { toast.error('At least two valid entries are required.'); return; }
     
     let drTotal = validRows.filter(r => r.accountType === 'DEBIT').reduce((s,r) => s + r.amount, 0);
     let crTotal = validRows.filter(r => r.accountType === 'CREDIT').reduce((s,r) => s + r.amount, 0);
     if (Math.abs(drTotal - crTotal) > 0.01) {
-      alert(`Debit and Credit amounts must match. Diff: ${Math.abs(drTotal - crTotal)}`);
+      toast.error(`Debit and Credit amounts must match. Diff: ₹${Math.abs(drTotal - crTotal).toFixed(2)}`);
       return;
     }
 

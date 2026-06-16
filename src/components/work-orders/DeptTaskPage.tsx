@@ -1,33 +1,85 @@
 /**
- * DeptTaskPage.tsx  — ERPNext-style Dynamic Subpage Upgrade
+ * DeptTaskPage.tsx — Garment Manufacturing Edition v3
  *
- * Subpages (tabs inside each dept page):
- *  1. Job Board       — Kanban / List view of all job cards (existing TaskBoard)
- *  2. Analytics       — Live charts: throughput, rejection trend, karigar efficiency
- *  3. Timeline        — Chronological log of all operations this dept
- *  4. Vendor Tracker  — For Embroidery / Printing / Washing dispatch tracking
- *  5. Quality Log     — QC pass/fail detail per job card
- *  6. Bulk Actions    — Multi-select and bulk status change / assignment
- *
- * Each subpage is a full dynamic page with its own state.
- * Inspired by ERPNext's doctype detail tabs pattern.
+ * NEW in this version (beyond the ERPNext upgrade in v2):
+ *  1. Production Targets Panel  — Daily target vs actual pcs, % hit rate
+ *  2. Efficiency Heatmap        — Worker × hour matrix, shows hot/cold hours
+ *  3. SLA / TAT Tracking        — Per-job card: planned hrs, actual TAT, SLA breach flag
+ *  4. Alteration Loop Tracker   — Tracks pieces that went back for rework from Finishing
+ *  5. Size Breakup View         — Displays S/M/L/XL split per WO in dept
+ *  6. Lot Splitting Panel       — Log how big lots are split across multiple karigars/machines
+ *  7. Rework & Rejection Drill  — Breakdown of rejection by defect type per dept
+ *  8. WIP Inventory (Gate Pass) — Pieces in / out count per dept for in-transit tracking
+ *  9. SMV / Efficiency Monitor  — For Stitching: planned SMV vs actual, operator OEE %
+ * 10. Vendor Challan Tracker    — Detailed challan log for Embroidery/Printing/Washing vendors
  */
 
 import React, { useMemo, useState, useCallback } from "react";
 import TaskBoard from "../TaskBoard";
 import type { ProductionJob as WorkOrder, Karigar } from "../../types";
+import { computeBlockState, computePipelineProgress, opBelongsToDept as pipelineOpBelongsToDept } from "../pipelineWiring";
+import { PipelineStrip, WORouteSummary } from "../PipelineStrip";
 import {
-  AlertTriangle, Users, TrendingUp, TrendingDown, Clock,
-  CheckCircle2, Package, ChevronDown, ChevronUp, RefreshCw,
-  ArrowRight, Zap, BarChart2, Eye, EyeOff, Info,
-  LayoutGrid, List, Activity, ShieldCheck, Truck, CheckSquare,
-  Filter, Download, Search, Edit3, Layers, XCircle, PlusCircle,
-  ArrowUpRight, ArrowDownRight, Minus, Star, GitBranch,
-  AlertCircle, Timer, Target, Award, TrendingDown as Reject,
-  ChevronRight, RotateCcw, Play, Pause, Check,
+  AlertTriangle,
+  Users,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  CheckCircle2,
+  Package,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  ArrowRight,
+  Zap,
+  BarChart2,
+  Eye,
+  EyeOff,
+  Info,
+  LayoutGrid,
+  List,
+  Activity,
+  ShieldCheck,
+  Truck,
+  CheckSquare,
+  Filter,
+  Download,
+  Search,
+  Edit3,
+  Layers,
+  XCircle,
+  PlusCircle,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  Star,
+  GitBranch,
+  AlertCircle,
+  Timer,
+  Target,
+  Award,
+  ChevronRight,
+  RotateCcw,
+  Play,
+  Pause,
+  Check,
+  Scissors,
+  FileText,
+  Hash,
+  Flame,
+  BarChart,
+  Maximize2,
+  ArrowLeft,
+  Clipboard,
+  Tag,
+  Scale,
+  Repeat,
+  ArrowUpDown,
+  Gauge,
+  XOctagon,
 } from "lucide-react";
 
-// ─── Department Meta ────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface DeptMeta {
   icon: string;
@@ -37,6 +89,8 @@ interface DeptMeta {
   vendorFields: string[];
   tips: string[];
   kpis: { label: string; formula: (ops: DeptOp[]) => string; icon: React.ElementType; color: string }[];
+  rejectionTypes: string[];
+  slaHours: number; // planned SLA per operation in hours
 }
 
 type DeptOp = {
@@ -54,12 +108,20 @@ type DeptOp = {
   woQty: number;
   woDeadline?: string;
   opIndex: number;
+  priority?: string;
+  dueDate?: string;
+  subTasks?: any[];
+  _blocked?: boolean;
+  _blockedBy?: string;
 };
+
+// ─── Department Meta ─────────────────────────────────────────────────────────
 
 const DEPT_META: Record<string, DeptMeta> = {
   Cutting: {
-    icon: "✂️", label: "Cutting", accent: "rose",
+    icon: "✂️", label: "Cutting", accent: "rose", slaHours: 8,
     hasVendor: false, vendorFields: [],
+    rejectionTypes: ["Wrong Size", "Notch Error", "Fabric Defect", "Marker Error", "Short Pieces", "Grain Error"],
     tips: [
       "Check fabric grain before spreading layers",
       "Verify marker length vs. fabric roll",
@@ -67,13 +129,15 @@ const DEPT_META: Record<string, DeptMeta> = {
     ],
     kpis: [
       { label: "Efficiency", formula: ops => { const c = ops.filter(o => norm(o) === "COMPLETED"); const t = c.reduce((s,o) => s + (o.completedQuantity||0),0); const total = ops.reduce((s,o) => s + (o.woQty||0),0); return total > 0 ? Math.round((t/total)*100)+"%" : "—"; }, icon: Target, color: "text-rose-600" },
-      { label: "Waste Jobs", formula: ops => ops.filter(o => (o.customData?.wasteKg || 0) > 0).length + " lots", icon: AlertCircle, color: "text-amber-600" },
-      { label: "Tables Active", formula: ops => { const t = new Set(ops.filter(o => norm(o)==="IN_PROGRESS").map(o => o.customData?.tableNo).filter(Boolean)); return t.size + " tables"; }, icon: Layers, color: "text-rose-500" },
+      { label: "Bundles Out", formula: ops => { const b = ops.reduce((s,o)=>s+Number(o.customData?.bundlesOut||0),0); return b > 0 ? b + " bundles" : "—"; }, icon: Layers, color: "text-rose-500" },
+      { label: "Waste (kg)", formula: ops => { const w = ops.reduce((s,o)=>s+Number(o.customData?.wasteKg||0),0); return w > 0 ? w.toFixed(1)+" kg" : "—"; }, icon: AlertCircle, color: "text-amber-600" },
+      { label: "Tables Active", formula: ops => { const t = new Set(ops.filter(o => norm(o)==="IN_PROGRESS").map(o => o.customData?.tableNo).filter(Boolean)); return t.size + " tables"; }, icon: Layers, color: "text-rose-400" },
     ],
   },
   Stitching: {
-    icon: "🧵", label: "Stitching", accent: "indigo",
+    icon: "🧵", label: "Stitching", accent: "indigo", slaHours: 24,
     hasVendor: false, vendorFields: [],
+    rejectionTypes: ["Open Seam", "Stitch Skip", "Wrong Thread", "Uneven Hem", "Pucker", "Label Error", "Wrong Measurement"],
     tips: [
       "Set machine tension before each batch",
       "Log target/hr to track efficiency",
@@ -82,11 +146,13 @@ const DEPT_META: Record<string, DeptMeta> = {
     kpis: [
       { label: "Avg Target/Hr", formula: ops => { const vals = ops.map(o => Number(o.customData?.targetPerHr||0)).filter(v => v > 0); return vals.length > 0 ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) + " pcs/hr" : "—"; }, icon: Zap, color: "text-indigo-600" },
       { label: "Machines Active", formula: ops => { const m = new Set(ops.filter(o => norm(o)==="IN_PROGRESS").map(o => o.customData?.machineNo).filter(Boolean)); return m.size + " machines"; }, icon: Activity, color: "text-indigo-500" },
+      { label: "Avg SMV", formula: ops => { const v = ops.map(o => Number(o.customData?.smv||0)).filter(v=>v>0); return v.length > 0 ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1)+" min" : "—"; }, icon: Timer, color: "text-indigo-400" },
     ],
   },
   Embroidery: {
-    icon: "🌸", label: "Embroidery", accent: "violet",
+    icon: "🌸", label: "Embroidery", accent: "violet", slaHours: 72,
     hasVendor: true, vendorFields: ["vendor","sentQty","receivedQty"],
+    rejectionTypes: ["Design Mismatch", "Colour Bleed", "Thread Pull", "Hole in Fabric", "Stitch Count Wrong", "Frame Mark"],
     tips: [
       "Confirm design & stitch count with vendor",
       "Track sent vs received qty per vendor",
@@ -98,21 +164,25 @@ const DEPT_META: Record<string, DeptMeta> = {
     ],
   },
   Printing: {
-    icon: "🖨️", label: "Printing", accent: "amber",
+    icon: "🖨️", label: "Printing", accent: "amber", slaHours: 48,
     hasVendor: true, vendorFields: ["vendor"],
+    rejectionTypes: ["Colour Mismatch", "Print Fade", "Registration Error", "Ink Bleed", "Incomplete Print", "Wrong Placement"],
     tips: [
       "Confirm colour proofs before bulk print",
       "Note ink lot for traceability",
       "Allow full drying time before packing",
-    ], 
+    ],
     kpis: [
       { label: "Print Types", formula: ops => { const t = new Set(ops.map(o => o.customData?.printType).filter(Boolean)); return t.size + " types"; }, icon: BarChart2, color: "text-amber-600" },
-      { label: "Avg Dry Time", formula: ops => { const v = ops.map(o => Number(o.customData?.dryTime||0)).filter(v=>v>0); return v.length>0 ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1)+" hrs" : "—"; }, icon: Timer, color: "text-amber-500" },
+      { label: "Avg Colours", formula: ops => { const v = ops.map(o => Number(o.customData?.colorCount||0)).filter(v=>v>0); return v.length>0 ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(0)+" clrs" : "—"; }, icon: Star, color: "text-amber-500" },
+      { label: "Avg Dry Time", formula: ops => { const v = ops.map(o => Number(o.customData?.dryTime||0)).filter(v=>v>0); return v.length>0 ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1)+" hrs" : "—"; }, icon: Timer, color: "text-amber-400" },
+      { label: "Avg Shrinkage", formula: ops => { const v = ops.map(o => { const mats = o.customData?.materialConsumptions || [{ fabricLength: o.customData?.fabricLength||0, foldLength: o.customData?.foldLength||0 }]; const issuedArea = mats.reduce((s: number, r: any) => { const len=Number(r.fabricLength||0); const fold=Number(r.foldLength||0)/100; return s+(fold>0?len*fold:len); }, 0); const recM=Number(o.customData?.receivedFabricMeters||0); const firstMat=mats[0]||{}; const recFold=Number(o.customData?.receivedFoldLength||firstMat.foldLength||0)/100; const recArea=recFold>0?recM*recFold:recM; if(issuedArea>0&&recArea>0) return ((issuedArea-recArea)/issuedArea*100); return null; }).filter((v): v is number => v !== null && v > 0); return v.length>0 ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1)+"%" : "—"; }, icon: TrendingDown, color: "text-amber-300" },
     ],
   },
   Washing: {
-    icon: "🫧", label: "Washing", accent: "cyan",
+    icon: "🫧", label: "Washing", accent: "cyan", slaHours: 36,
     hasVendor: true, vendorFields: ["vendor","sentQty","receivedQty"],
+    rejectionTypes: ["Colour Bleed", "Shrinkage Excess", "Damage", "Shade Variation", "Pilling", "Stain"],
     tips: [
       "Log wash temperature and shrinkage %",
       "Match received qty to dispatch challan",
@@ -120,75 +190,121 @@ const DEPT_META: Record<string, DeptMeta> = {
     ],
     kpis: [
       { label: "Out at Vendor", formula: ops => ops.reduce((s,o) => s + Math.max(0,(o.customData?.sentQty||0)-(o.customData?.receivedQty||0)),0) + " pcs", icon: Truck, color: "text-cyan-600" },
-      { label: "Avg Shrinkage", formula: ops => { const v = ops.map(o => Number(o.customData?.shrinkage||0)).filter(v=>v>0); return v.length>0 ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1)+"%" : "—"; }, icon: TrendingDown, color: "text-cyan-500" },
+      { label: "Avg Shrinkage", formula: ops => { const v = ops.map(o => { const s = Number(o.customData?.sentQty||0); const r = Number(o.customData?.receivedQty||0); if (s > 0 && r > 0) return ((s-r)/s*100); return Number(o.customData?.shrinkageLengthPct||o.customData?.shrinkage||0) || null; }).filter(v => v !== null && (v as number) > 0) as number[]; return v.length>0 ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1)+"%" : "—"; }, icon: TrendingDown, color: "text-cyan-500" },
+      { label: "Wash Types", formula: ops => { const t = new Set(ops.map(o => o.customData?.washType).filter(Boolean)); return t.size > 0 ? t.size + " types" : "—"; }, icon: Activity, color: "text-cyan-400" },
     ],
   },
   Finishing: {
-    icon: "✨", label: "Finishing", accent: "emerald",
+    icon: "✨", label: "Finishing", accent: "emerald", slaHours: 16,
     hasVendor: false, vendorFields: [],
+    rejectionTypes: ["Ironing Mark", "Button Missing", "Label Wrong", "Measurement Off", "Thread Hanging", "Stain", "Damage"],
     tips: [
       "Steam press before attaching labels",
       "Log QC pass/fail count per WO",
       "Alteration pieces must loop back to stitching",
     ],
     kpis: [
-      { label: "QC Pass Rate", formula: ops => { const pass = ops.reduce((s,o)=>s+(o.customData?.qcPass||0),0); const fail = ops.reduce((s,o)=>s+(o.customData?.qcFail||0),0); return (pass+fail)>0 ? Math.round((pass/(pass+fail))*100)+"%" : "—"; }, icon: ShieldCheck, color: "text-emerald-600" },
-      { label: "For Alteration", formula: ops => ops.reduce((s,o)=>s+(o.customData?.alterationQty||0),0) + " pcs", icon: RotateCcw, color: "text-amber-600" },
+      { label: "QC Pass Rate", formula: ops => { const pass = ops.reduce((s,o)=>s+(Number(o.customData?.qcPassQty||o.customData?.qcPass||0)),0); const fail = ops.reduce((s,o)=>s+(Number(o.customData?.qcFailQty||o.customData?.qcFail||0)),0); return (pass+fail)>0 ? Math.round((pass/(pass+fail))*100)+"%" : "—"; }, icon: ShieldCheck, color: "text-emerald-600" },
+      { label: "For Alteration", formula: ops => ops.reduce((s,o)=>s+(Number(o.customData?.alterationQty||0)),0) + " pcs", icon: RotateCcw, color: "text-amber-600" },
+      { label: "To Packing", formula: ops => ops.reduce((s,o)=>s+(Number(o.customData?.forwardedToPacking||o.completedQuantity||0)),0).toLocaleString() + " pcs", icon: Package, color: "text-sky-600" },
+      { label: "Tagged", formula: ops => { const done = ops.filter(o => o.customData?.taggingDone).length; return done > 0 ? done + "/" + ops.length + " WOs" : "—"; }, icon: CheckSquare, color: "text-emerald-500" },
     ],
   },
   Packing: {
-    icon: "📦", label: "Packing", accent: "sky",
+    icon: "📦", label: "Packing", accent: "sky", slaHours: 8,
     hasVendor: false, vendorFields: [],
+    rejectionTypes: ["Wrong Tag", "Barcode Error", "Wrong Size", "Packing Damage", "Label Error"],
     tips: [
       "Scan barcodes to verify before sealing",
       "Record carton numbers for dispatch",
       "Size-wise segregation before poly-bag",
     ],
     kpis: [
-      { label: "Boxes Packed", formula: ops => ops.reduce((s,o)=>s+(o.customData?.boxCount||0),0) + " boxes", icon: Package, color: "text-sky-600" },
-      { label: "Scan Done", formula: ops => { const done = ops.filter(o => o.customData?.barcodeScanned === "Done").length; return done + "/" + ops.length; }, icon: CheckCircle2, color: "text-sky-500" },
+      { label: "Pcs Packed", formula: ops => ops.reduce((s,o)=>s+(Number(o.customData?.totalPacked||0)),0).toLocaleString() + " pcs", icon: Package, color: "text-sky-600" },
+      { label: "Cartons", formula: ops => ops.reduce((s,o)=>s+(Number(o.customData?.totalCartons||0)),0) + " ctns", icon: CheckCircle2, color: "text-sky-500" },
+      { label: "Scan Status", formula: ops => { const done = ops.filter(o => (o.customData?.barcodeScanned||"").includes("100%")).length; return done + "/" + ops.length + " WOs scanned"; }, icon: CheckSquare, color: "text-sky-400" },
+    ],
+  },
+
+  // ── Fabric Inspection ─────────────────────────────────────────────────────
+  "Fabric Inspection": {
+    icon: "🔍", label: "Fabric Inspection", accent: "slate", slaHours: 4,
+    hasVendor: false, vendorFields: [],
+    rejectionTypes: ["Shade Variation", "Width Short", "Weave Defect", "Hole / Tear", "Stain", "GSM Mismatch", "Wrong Article"],
+    tips: [
+      "Record roll numbers against GRN before inspection begins",
+      "Use 4-point grading for export orders",
+      "Log accepted meters immediately to update grey fabric stock",
+    ],
+    kpis: [
+      { label: "Accepted Mtrs", formula: ops => ops.reduce((s,o)=>s+Number(o.customData?.acceptedMeters||0),0).toFixed(1) + " m", icon: CheckCircle2, color: "text-lime-600" },
+      { label: "Defect Mtrs", formula: ops => ops.reduce((s,o)=>s+Number(o.customData?.defectMeters||0),0).toFixed(1) + " m", icon: AlertCircle, color: "text-rose-500" },
+      { label: "Rolls In", formula: ops => { const r = ops.reduce((s,o)=>s+Number(o.customData?.rollCount||0),0); return r > 0 ? r + " rolls" : "—"; }, icon: Layers, color: "text-lime-500" },
+      { label: "4-Pt Fails", formula: ops => { const f = ops.filter(o => Number(o.customData?.fourPointScore||0) > 40).length; return f > 0 ? f + " lots" : "✅ All pass"; }, icon: AlertCircle, color: "text-amber-600" },
+    ],
+  },
+
+  // ── Dyeing ────────────────────────────────────────────────────────────────
+  Dyeing: {
+    icon: "🎨", label: "Dyeing", accent: "violet", slaHours: 48,
+    hasVendor: true, vendorFields: ["vendor", "sentMeters", "receivedMeters"],
+    rejectionTypes: ["Shade Mismatch", "Patchy Dyeing", "Colour Bleeding", "Shrinkage Excess", "Fabric Damage", "Wrong Colour"],
+    tips: [
+      "Always get shade approval from buyer before bulk dyeing",
+      "Track sent vs received meters — log shrinkage accurately",
+      "Note dye recipe reference for repeat orders",
+    ],
+    kpis: [
+      { label: "Out at Dyer", formula: ops => { const out = ops.reduce((s,o) => s + Math.max(0, Number(o.customData?.sentMeters||0) - Number(o.customData?.receivedMeters||0)), 0); return out.toFixed(1) + " m"; }, icon: Truck, color: "text-pink-600" },
+      { label: "Avg Shrinkage", formula: ops => { const v = ops.map(o => { const s = Number(o.customData?.sentMeters||0); const r = Number(o.customData?.receivedMeters||0); return s > 0 ? ((s-r)/s*100) : null; }).filter(v => v !== null) as number[]; return v.length > 0 ? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1)+"%" : "—"; }, icon: TrendingDown, color: "text-pink-500" },
+      { label: "Recipes Logged", formula: ops => { const n = ops.filter(o => o.customData?.dyeRecipeRef).length; return n > 0 ? n + "/" + ops.length : "—"; }, icon: Activity, color: "text-pink-400" },
+    ],
+  },
+
+  // ── Hand Work ─────────────────────────────────────────────────────────────
+  "Hand Work": {
+    icon: "🤲", label: "Hand Work", accent: "amber", slaHours: 16,
+    hasVendor: true, vendorFields: ["karigarName", "sentQty", "receivedQty"],
+    rejectionTypes: ["Loose Embellishment", "Wrong Design", "Uneven Work", "Colour Bleed", "Missing Element", "Fabric Damage"],
+    tips: [
+      "Always issue materials (beads, mirrors, etc.) against a challan",
+      "First piece approval is mandatory before bulk karigar dispatch",
+      "Log rate/pc at issuance to auto-compute karigar payment",
+    ],
+    kpis: [
+      { label: "Out at Karigar", formula: ops => ops.reduce((s,o) => s + Math.max(0, Number(o.customData?.sentQty||0) - Number(o.customData?.receivedQty||0)), 0) + " pcs", icon: Truck, color: "text-yellow-600" },
+      { label: "Rejection %", formula: ops => { const rec = ops.reduce((s,o)=>s+Number(o.customData?.receivedQty||0),0); const rej = ops.reduce((s,o)=>s+Number(o.customData?.rejectedQty||0),0); return rec > 0 ? (rej/rec*100).toFixed(1)+"%" : "—"; }, icon: AlertCircle, color: "text-rose-500" },
+      { label: "Payable (₹)", formula: ops => { const total = ops.reduce((s,o)=>{ const rate=Number(o.customData?.ratePerPc||0); const acc=Math.max(0,Number(o.customData?.receivedQty||0)-Number(o.customData?.rejectedQty||0)); return s+(rate*acc); },0); return total>0 ? "₹"+total.toLocaleString() : "—"; }, icon: Activity, color: "text-yellow-700" },
+    ],
+  },
+
+  // ── QC Check ─────────────────────────────────────────────────────────────
+  "QC Check": {
+    icon: "🛡️", label: "QC Check", accent: "emerald", slaHours: 4,
+    hasVendor: false, vendorFields: [],
+    rejectionTypes: ["Stitching Skip", "Measurement Variation", "Colour Bleeding", "Broken Stitch", "Label Missing", "Embellishment Loose", "Soiling / Stain", "Pilling"],
+    tips: [
+      "100% inspection before shipment — log pass/fail per WO",
+      "Tag alteration pieces clearly with defect type",
+      "QC report must be signed before pieces move to packing",
+    ],
+    kpis: [
+      { label: "Pass Rate", formula: ops => { const pass = ops.reduce((s,o)=>s+Number(o.customData?.passQty||0),0); const ins = ops.reduce((s,o)=>s+Number(o.customData?.inspectedQty||0),0); return ins > 0 ? Math.round(pass/ins*100)+"%" : "—"; }, icon: ShieldCheck, color: "text-teal-600" },
+      { label: "For Alteration", formula: ops => ops.reduce((s,o)=>s+Number(o.customData?.alterationQty||0),0) + " pcs", icon: RotateCcw, color: "text-amber-600" },
+      { label: "Hard Reject", formula: ops => ops.reduce((s,o)=>s+Number(o.customData?.failQty||0),0) + " pcs", icon: XCircle, color: "text-rose-500" },
     ],
   },
 };
 
-// Maps both legacy status strings (PENDING / IN_PROGRESS / COMPLETED) AND
-// new TaskBoard workflowState values to a canonical tri-state used by DeptTaskPage.
-type NormState = "PENDING" | "IN_PROGRESS" | "COMPLETED";
-
-function norm(op: DeptOp): NormState {
-  const raw = (op.status || "PENDING");
-  // New workflow states (from TaskBoard)
-  switch (raw) {
-    case "Draft":
-    case "Open":
-    case "On Hold":
-    case "Rejected":
-      return "PENDING";
-    case "Work In Progress":
-    case "QC Review":
-      return "IN_PROGRESS";
-    case "Completed":
-      return "COMPLETED";
-  }
-  // Legacy uppercase strings
-  switch (raw.toUpperCase()) {
-    case "IN_PROGRESS":
-      return "IN_PROGRESS";
-    case "COMPLETED":
-      return "COMPLETED";
-    default:
-      return "PENDING";
-  }
-}
-
 function getDefaultMeta(taskName: string): DeptMeta {
   return {
-    icon: "🔧", label: taskName, accent: "slate",
+    icon: "🔧", label: taskName, accent: "slate", slaHours: 24,
     hasVendor: false, vendorFields: [], tips: [], kpis: [],
+    rejectionTypes: ["Quality Issue", "Damage", "Wrong Spec"],
   };
 }
 
-// ─── Accent helpers ─────────────────────────────────────────────────────────────
+// ─── Accent helpers ───────────────────────────────────────────────────────────
 
 const ACCENT_MAP: Record<string, Record<string, string>> = {
   slate:   { bg: "bg-slate-50 dark:bg-slate-950/20",     border: "border-slate-200 dark:border-slate-700",   text: "text-slate-700 dark:text-slate-300",   badge: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",  btn: "bg-slate-600 hover:bg-slate-700 text-white",   ring: "ring-slate-300" },
@@ -205,45 +321,40 @@ function ac(accent: string, v: "bg"|"border"|"text"|"badge"|"btn"|"ring") {
   return ACCENT_MAP[accent]?.[v] ?? ACCENT_MAP.slate[v];
 }
 
-// ─── Stage → Department mapping (mirrors TaskBoard.tsx) ────────────────────────
-// Must stay in sync with STAGE_TO_DEPT in TaskBoard.tsx
-const STAGE_TO_DEPT_MAP: Record<string, string> = {
-  FABRIC_INSPECTION:  "Fabric Inspection",
-  DYEING:             "Dyeing",
-  FABRIC_PRINTING:    "Printing",
-  GARMENT_PRINTING:   "Printing",
-  EMBROIDERY_FABRIC:  "Embroidery",
-  EMBROIDERY_GARMENT: "Embroidery",
-  CUTTING:            "Cutting",
-  STITCHING:          "Stitching",
-  WASHING:            "Washing",
-  HAND_WORK:          "Hand Work",
-  FINISHING:          "Finishing",
-  QC_CHECK:           "QC Check",
-  PACKING:            "Packing",
-};
+// ─── Stage → Department mapping ───────────────────────────────────────────────
 
+// opBelongsToDept delegates to pipelineWiring (single source of truth)
 function opBelongsToDeptLocal(op: any, deptTabName: string): boolean {
-  if (op.stage) {
-    const mapped = STAGE_TO_DEPT_MAP[op.stage];
-    if (mapped) return mapped.toLowerCase() === deptTabName.toLowerCase();
-  }
-  if (op.workstationType) {
-    if (op.workstationType.toLowerCase() === deptTabName.toLowerCase()) return true;
-  }
-  return (op.name || "").toLowerCase().includes(deptTabName.toLowerCase());
+  return pipelineOpBelongsToDept(op, deptTabName);
 }
 
+type NormState = "PENDING" | "IN_PROGRESS" | "COMPLETED";
 
+function norm(op: DeptOp | { status: string }): NormState {
+  const raw = (op.status || "PENDING");
+  switch (raw) {
+    case "Draft": case "Open": case "On Hold": case "Rejected": return "PENDING";
+    case "Work In Progress": case "QC Review": return "IN_PROGRESS";
+    case "Completed": return "COMPLETED";
+  }
+  switch (raw.toUpperCase()) {
+    case "IN_PROGRESS": return "IN_PROGRESS";
+    case "COMPLETED": return "COMPLETED";
+    default: return "PENDING";
+  }
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
   taskName: string;
   production: WorkOrder[];
   onUpdateWorkOrder: (w: WorkOrder) => void;
   karigars: Karigar[];
+  inventory?: any[];
+  onUpdateInventory?: (item: any) => void;
+  onCreateGatePass?: (gp: any) => void;
 }
-
-// ─── Subpage types ──────────────────────────────────────────────────────────────
 
 type SubPage =
   | "job_board"
@@ -251,7 +362,11 @@ type SubPage =
   | "timeline"
   | "vendor"
   | "quality"
-  | "bulk";
+  | "bulk"
+  | "targets"
+  | "smv"
+  | "rework"
+  | "wip";
 
 interface SubPageDef {
   id: SubPage;
@@ -261,7 +376,581 @@ interface SubPageDef {
   hidden?: boolean;
 }
 
-// ─── Subpage: Analytics ─────────────────────────────────────────────────────────
+// ─── Shared StatPill ──────────────────────────────────────────────────────────
+
+function StatPill({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
+  return (
+    <div className={`flex-1 min-w-0 rounded-xl border px-4 py-3 ${color}`}>
+      <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-0.5">{label}</p>
+      <p className="text-2xl font-black tabular-nums leading-none">{value}</p>
+      {sub && <p className="text-[10px] opacity-60 mt-0.5 font-semibold">{sub}</p>}
+    </div>
+  );
+}
+
+// ─── NEW: Production Targets Page ─────────────────────────────────────────────
+
+function TargetsPage({ ops, karigars, accent, meta }: { ops: DeptOp[]; karigars: Karigar[]; accent: string; meta: DeptMeta }) {
+  const [dailyTarget, setDailyTarget] = useState<number>(0);
+
+  const donePcs = ops.reduce((s, o) => s + (o.completedQuantity || 0), 0);
+  const totalPcs = ops.reduce((s, o) => s + (o.woQty || 0), 0);
+  const rejPcs = ops.reduce((s, o) => s + (o.rejectedQuantity || 0), 0);
+  const inProgressPcs = ops.filter(o => norm(o) === "IN_PROGRESS").reduce((s, o) => s + (o.woQty || 0), 0);
+
+  const hitRate = dailyTarget > 0 ? Math.min(100, Math.round((donePcs / dailyTarget) * 100)) : 0;
+
+  // SLA / TAT tracking
+  const slaBreaches = ops.filter(op => {
+    if (norm(op) === "COMPLETED") {
+      if (!op.startedAt || !op.completedAt) return false;
+      const tatHrs = (new Date(op.completedAt).getTime() - new Date(op.startedAt).getTime()) / 3600000;
+      return tatHrs > meta.slaHours;
+    }
+    if (norm(op) === "IN_PROGRESS" && op.startedAt) {
+      const elapsedHrs = (Date.now() - new Date(op.startedAt).getTime()) / 3600000;
+      return elapsedHrs > meta.slaHours;
+    }
+    return false;
+  });
+
+  // Per-karigar output today
+  const karigarOutput = useMemo(() => {
+    const map: Record<string, { name: string; done: number; rej: number; jobs: number }> = {};
+    for (const op of ops) {
+      if (!op.assignedTo) continue;
+      const k = karigars.find(k => k.id === op.assignedTo);
+      if (!k) continue;
+      if (!map[k.id]) map[k.id] = { name: k.name, done: 0, rej: 0, jobs: 0 };
+      map[k.id].done += op.completedQuantity || 0;
+      map[k.id].rej += op.rejectedQuantity || 0;
+      map[k.id].jobs++;
+    }
+    return Object.values(map).sort((a, b) => b.done - a.done);
+  }, [ops, karigars]);
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Daily target input */}
+      <div className={`flex items-center gap-4 p-4 rounded-2xl border ${ac(accent, "bg")} ${ac(accent, "border")}`}>
+        <Target className={`w-6 h-6 ${ac(accent, "text")} shrink-0`} />
+        <div className="flex-1">
+          <p className={`text-xs font-black ${ac(accent, "text")}`}>Daily Production Target</p>
+          <p className="text-[10px] text-slate-500">Set the target pieces for today to track hit rate</p>
+        </div>
+        <input
+          type="number"
+          min={0}
+          className="w-28 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-black text-right bg-white dark:bg-slate-900 outline-none focus:border-indigo-400"
+          placeholder="0 pcs"
+          value={dailyTarget || ""}
+          onChange={e => setDailyTarget(Number(e.target.value))}
+        />
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Done Today", value: donePcs.toLocaleString(), sub: `of ${totalPcs.toLocaleString()} total`, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800" },
+          { label: "Target Hit", value: dailyTarget > 0 ? `${hitRate}%` : "—", sub: dailyTarget > 0 ? `${donePcs} of ${dailyTarget} target` : "Set target above", icon: Target, color: hitRate >= 80 ? "text-emerald-600" : hitRate >= 50 ? "text-amber-600" : "text-rose-600", bg: hitRate >= 80 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200" : "bg-amber-50 dark:bg-amber-950/20 border-amber-200" },
+          { label: "In Pipeline", value: inProgressPcs.toLocaleString(), sub: "pieces in progress", icon: Activity, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" },
+          { label: "SLA Breaches", value: slaBreaches.length, sub: `>${meta.slaHours}hr TAT`, icon: AlertTriangle, color: slaBreaches.length > 0 ? "text-rose-600" : "text-slate-400", bg: slaBreaches.length > 0 ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200" : "bg-slate-50 dark:bg-slate-900 border-slate-200" },
+        ].map(c => (
+          <div key={c.label} className={`rounded-2xl border p-4 ${c.bg}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{c.label}</p>
+              <c.icon className={`w-4 h-4 ${c.color}`} />
+            </div>
+            <p className={`text-2xl font-black tabular-nums ${c.color}`}>{c.value}</p>
+            <p className="text-[10px] text-slate-500 mt-1">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Target progress bar */}
+      {dailyTarget > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">Production Progress</h3>
+            <span className={`text-sm font-black ${hitRate >= 80 ? "text-emerald-600" : hitRate >= 50 ? "text-amber-600" : "text-rose-600"}`}>{hitRate}%</span>
+          </div>
+          <div className="relative h-6 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 flex items-center justify-end pr-2 ${hitRate >= 80 ? "bg-emerald-500" : hitRate >= 50 ? "bg-amber-400" : "bg-rose-400"}`}
+              style={{ width: `${Math.max(hitRate, 2)}%` }}
+            >
+              {hitRate > 15 && <span className="text-[9px] font-black text-white">{donePcs} pcs</span>}
+            </div>
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-400 mt-2 font-semibold">
+            <span>0</span>
+            <span>Target: {dailyTarget} pcs</span>
+          </div>
+        </div>
+      )}
+
+      {/* SLA breach list */}
+      {slaBreaches.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-rose-200 dark:border-rose-800 overflow-hidden">
+          <div className="px-5 py-3 border-b border-rose-100 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/20 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-600" />
+            <h3 className="text-xs font-black uppercase tracking-widest text-rose-700 dark:text-rose-300">SLA Breaches ({slaBreaches.length})</h3>
+          </div>
+          <div className="divide-y divide-slate-50 dark:divide-slate-800">
+            {slaBreaches.map(op => {
+              const startedAt = op.startedAt ? new Date(op.startedAt) : null;
+              const endAt = op.completedAt ? new Date(op.completedAt) : new Date();
+              const tatHrs = startedAt ? ((endAt.getTime() - startedAt.getTime()) / 3600000).toFixed(1) : "—";
+              return (
+                <div key={`${op.woId}-${op.opIndex}`} className="flex items-center gap-3 px-5 py-3">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">{op.woProduct}</p>
+                    <p className="text-[10px] text-slate-500">{op.woId}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-black text-rose-600">{tatHrs} hrs</p>
+                    <p className="text-[9px] text-slate-400">SLA: {meta.slaHours}hr</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Per-worker output */}
+      {karigarOutput.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className={`px-5 py-3 border-b border-slate-100 dark:border-slate-800 ${ac(accent, "bg")}`}>
+            <h3 className={`text-xs font-black uppercase tracking-widest ${ac(accent, "text")} flex items-center gap-2`}>
+              <Users className="w-4 h-4" /> Worker Output
+            </h3>
+          </div>
+          <div className="divide-y divide-slate-50 dark:divide-slate-800">
+            {karigarOutput.map((k, i) => {
+              const pct = dailyTarget > 0 && karigarOutput.length > 0
+                ? Math.min(100, Math.round((k.done / (dailyTarget / karigarOutput.length)) * 100))
+                : 0;
+              return (
+                <div key={k.name} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                  <span className="w-6 text-center text-sm font-black text-slate-400">{i + 1}</span>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${ac(accent, "badge")}`}>
+                    {k.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-black text-slate-800 dark:text-slate-100">{k.name}</p>
+                    <p className="text-[10px] text-slate-400">{k.jobs} job cards</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-black text-emerald-600">{k.done.toLocaleString()} pcs</p>
+                    {k.rej > 0 && <p className="text-[10px] text-rose-500">{k.rej} rejected</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── NEW: SMV / Efficiency Monitor (Stitching-specific) ───────────────────────
+
+function SMVPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Karigar[]; accent: string }) {
+  const stitchingOps = ops.filter(o => o.customData?.smv || o.customData?.targetPerHr || o.customData?.machineNo);
+
+  const totalSMV = stitchingOps.reduce((s, o) => s + Number(o.customData?.smv || 0), 0);
+  const avgSMV = stitchingOps.length > 0 ? (totalSMV / stitchingOps.length).toFixed(1) : "—";
+
+  // OEE per karigar
+  const oeeData = useMemo(() => {
+    const map: Record<string, { name: string; targetHr: number; actualOutput: number; smv: number; jobs: number }> = {};
+    for (const op of stitchingOps) {
+      if (!op.assignedTo) continue;
+      const k = karigars.find(k => k.id === op.assignedTo);
+      if (!k) continue;
+      if (!map[k.id]) map[k.id] = { name: k.name, targetHr: 0, actualOutput: 0, smv: 0, jobs: 0 };
+      map[k.id].targetHr = Math.max(map[k.id].targetHr, Number(op.customData?.targetPerHr || 0));
+      map[k.id].actualOutput += op.completedQuantity || 0;
+      map[k.id].smv += Number(op.customData?.smv || 0);
+      map[k.id].jobs++;
+    }
+    return Object.values(map).sort((a, b) => b.actualOutput - a.actualOutput);
+  }, [stitchingOps, karigars]);
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Overview */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Avg SMV", value: avgSMV + (avgSMV !== "—" ? " min" : ""), icon: Timer, color: "text-indigo-600" },
+          { label: "Machines Active", value: new Set(ops.filter(o => norm(o) === "IN_PROGRESS").map(o => o.customData?.machineNo).filter(Boolean)).size, icon: Zap, color: "text-amber-600" },
+          { label: "Total Workers", value: new Set(ops.filter(o => o.assignedTo).map(o => o.assignedTo)).size, icon: Users, color: "text-indigo-600" },
+        ].map(c => (
+          <div key={c.label} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <c.icon className={`w-3.5 h-3.5 ${c.color}`} />
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{c.label}</p>
+            </div>
+            <p className={`text-xl font-black tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Operator OEE table */}
+      {oeeData.length > 0 ? (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className={`px-5 py-3 border-b border-slate-100 dark:border-slate-800 ${ac(accent, "bg")}`}>
+            <h3 className={`text-xs font-black uppercase tracking-widest ${ac(accent, "text")} flex items-center gap-2`}>
+              <Gauge className="w-4 h-4" /> Operator Efficiency (OEE)
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800">
+                  {["Operator", "Jobs", "Target/Hr", "Output (pcs)", "Avg SMV", "Efficiency"].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                {oeeData.map(k => {
+                  const avgSmvPerJob = k.jobs > 0 ? (k.smv / k.jobs).toFixed(1) : "—";
+                  // OEE ≈ actual / (target × available shift hrs)
+                  const shiftHrs = 8;
+                  const theoreticalOutput = k.targetHr * shiftHrs;
+                  const oee = theoreticalOutput > 0 ? Math.min(100, Math.round((k.actualOutput / theoreticalOutput) * 100)) : 0;
+                  return (
+                    <tr key={k.name} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black ${ac(accent, "badge")}`}>{k.name.charAt(0)}</div>
+                          <span className="text-sm font-black text-slate-800 dark:text-slate-100">{k.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 font-semibold">{k.jobs}</td>
+                      <td className="px-4 py-3 font-black text-amber-600">{k.targetHr > 0 ? k.targetHr + " pcs/hr" : "—"}</td>
+                      <td className="px-4 py-3 font-black text-emerald-600">{k.actualOutput.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 font-semibold">{avgSmvPerJob} min</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${oee >= 80 ? "bg-emerald-500" : oee >= 60 ? "bg-amber-400" : "bg-rose-400"}`} style={{ width: `${oee}%` }} />
+                          </div>
+                          <span className={`text-[11px] font-black ${oee >= 80 ? "text-emerald-600" : oee >= 60 ? "text-amber-600" : "text-rose-600"}`}>{oee}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+          <Gauge className="w-12 h-12 mb-3 opacity-20" />
+          <p className="font-bold">No SMV data yet</p>
+          <p className="text-sm mt-1">Fill in SMV and Target/Hr fields on Stitching job cards.</p>
+        </div>
+      )}
+
+      {/* Machine-wise table */}
+      {(() => {
+        const machines = new Map<string, { no: string; ops: DeptOp[]; output: number }>();
+        for (const op of ops) {
+          const m = op.customData?.machineNo;
+          if (!m) continue;
+          if (!machines.has(m)) machines.set(m, { no: m, ops: [], output: 0 });
+          machines.get(m)!.ops.push(op);
+          machines.get(m)!.output += op.completedQuantity || 0;
+        }
+        if (machines.size === 0) return null;
+        return (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className={`px-5 py-3 border-b border-slate-100 dark:border-slate-800 ${ac(accent, "bg")}`}>
+              <h3 className={`text-xs font-black uppercase tracking-widest ${ac(accent, "text")}`}>Machine-wise Output</h3>
+            </div>
+            <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {[...machines.values()].map(m => {
+                const active = m.ops.some(o => norm(o) === "IN_PROGRESS");
+                return (
+                  <div key={m.no} className={`rounded-xl border p-3 ${active ? "border-indigo-300 bg-indigo-50 dark:bg-indigo-950/20 dark:border-indigo-800" : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40"}`}>
+                    <p className="text-xs font-black text-slate-700 dark:text-slate-200">{m.no}</p>
+                    <p className={`text-lg font-black tabular-nums mt-1 ${active ? "text-indigo-600" : "text-slate-500"}`}>{m.output} <span className="text-xs font-semibold">pcs</span></p>
+                    <p className={`text-[9px] font-black mt-0.5 ${active ? "text-indigo-500" : "text-slate-400"}`}>{active ? "● Active" : "○ Idle"}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+// ─── NEW: Rework & Rejection Drill ────────────────────────────────────────────
+
+function ReworkPage({ ops, accent, meta }: { ops: DeptOp[]; accent: string; meta: DeptMeta }) {
+  const [newDefect, setNewDefect] = useState("");
+  const [newCount, setNewCount] = useState(0);
+  const [selectedOp, setSelectedOp] = useState<string | null>(null);
+
+  // Aggregate defect types from customData
+  const defectTotals = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const op of ops) {
+      const defects: Record<string, number> = op.customData?.defects || {};
+      for (const [type, count] of Object.entries(defects)) {
+        map[type] = (map[type] || 0) + Number(count);
+      }
+    }
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [ops]);
+
+  const totalRej = ops.reduce((s, o) => s + (o.rejectedQuantity || 0), 0);
+  const totalDone = ops.reduce((s, o) => s + (o.completedQuantity || 0), 0);
+  const rejRate = totalDone > 0 ? ((totalRej / totalDone) * 100).toFixed(1) : "0";
+
+  // Alteration tracking (Finishing dept)
+  const alterationOps = ops.filter(o => (o.customData?.alterationQty || 0) > 0);
+  const totalAlteration = alterationOps.reduce((s, o) => s + (o.customData?.alterationQty || 0), 0);
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Total Rejected", value: totalRej.toLocaleString(), icon: XCircle, color: "text-rose-600", bg: "bg-rose-50 dark:bg-rose-950/20 border-rose-200" },
+          { label: "Rejection Rate", value: `${rejRate}%`, icon: XOctagon, color: Number(rejRate) > 5 ? "text-rose-600" : "text-emerald-600", bg: Number(rejRate) > 5 ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200" : "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200" },
+          { label: "Alteration Queue", value: totalAlteration.toLocaleString(), icon: RotateCcw, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200" },
+        ].map(c => (
+          <div key={c.label} className={`rounded-xl border p-3 ${c.bg}`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <c.icon className={`w-3.5 h-3.5 ${c.color}`} />
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{c.label}</p>
+            </div>
+            <p className={`text-xl font-black tabular-nums ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Defect type breakdown */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className={`px-5 py-3 border-b border-slate-100 dark:border-slate-800 ${ac(accent, "bg")}`}>
+          <h3 className={`text-xs font-black uppercase tracking-widest ${ac(accent, "text")}`}>Defect Analysis — {meta.label}</h3>
+        </div>
+        <div className="p-5 space-y-4">
+          {/* Common defect types for this dept */}
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Common Defect Types for {meta.label}</p>
+            <div className="flex flex-wrap gap-2">
+              {meta.rejectionTypes.map(t => (
+                <span key={t} className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${ac(accent, "badge")} ${ac(accent, "border")}`}>{t}</span>
+              ))}
+            </div>
+          </div>
+
+          {defectTotals.length > 0 && (
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Logged Defects</p>
+              <div className="space-y-2">
+                {defectTotals.map(([type, count]) => {
+                  const pct = totalRej > 0 ? Math.round((count / totalRej) * 100) : 0;
+                  return (
+                    <div key={type} className="flex items-center gap-3">
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 w-32 shrink-0 truncate">{type}</span>
+                      <div className="flex-1 h-4 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-rose-400 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-[10px] font-black text-rose-600 w-16 text-right">{count} pcs ({pct}%)</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {defectTotals.length === 0 && (
+            <p className="text-sm text-slate-400 text-center py-8">No defect data logged yet. Add defect types in the job card Dept fields.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Alteration detail — Finishing */}
+      {alterationOps.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-amber-200 dark:border-amber-800 overflow-hidden">
+          <div className="px-5 py-3 border-b border-amber-100 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 flex items-center gap-2">
+            <RotateCcw className="w-4 h-4 text-amber-600" />
+            <h3 className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Alteration Queue</h3>
+          </div>
+          <div className="divide-y divide-slate-50 dark:divide-slate-800">
+            {alterationOps.map(op => (
+              <div key={`${op.woId}-${op.opIndex}`} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <RotateCcw className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">{op.woProduct}</p>
+                  <p className="text-[10px] text-slate-500">{op.woId}</p>
+                </div>
+                <span className="text-sm font-black text-amber-600">{op.customData?.alterationQty} pcs</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── NEW: WIP Inventory (Gate Pass Tracker) ───────────────────────────────────
+
+function WIPPage({ ops, accent, taskName, production }: { ops: DeptOp[]; accent: string; taskName: string; production: WorkOrder[] }) {
+  const totalPcs = ops.reduce((s, o) => s + (o.woQty || 0), 0);
+  const donePcs = ops.reduce((s, o) => s + (o.completedQuantity || 0), 0);
+  const wipPcs = ops.filter(o => norm(o) === "IN_PROGRESS").reduce((s, o) => s + (o.woQty || 0), 0);
+  const pendingPcs = ops.filter(o => norm(o) === "PENDING" && !(o as any)._blocked).reduce((s, o) => s + (o.woQty || 0), 0);
+  const blockedPcs = ops.filter(o => (o as any)._blocked).reduce((s, o) => s + (o.woQty || 0), 0);
+
+  const WO_WIP = useMemo(() => {
+    const map: Record<string, { product: string; total: number; done: number; wip: number; pending: number }> = {};
+    for (const op of ops) {
+      if (!map[op.woId]) map[op.woId] = { product: op.woProduct, total: op.woQty, done: 0, wip: 0, pending: 0 };
+      const s = norm(op);
+      if (s === "COMPLETED") map[op.woId].done += op.completedQuantity || 0;
+      else if (s === "IN_PROGRESS") map[op.woId].wip += op.woQty || 0;
+      else map[op.woId].pending += op.woQty || 0;
+    }
+    return Object.entries(map).sort((a, b) => b[1].wip - a[1].wip);
+  }, [ops]);
+
+  // Unique WOs that have ops in this dept — for full pipeline view
+  const uniqueWOIds = useMemo(() => [...new Set(ops.map(o => o.woId))], [ops]);
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total in Dept", value: totalPcs.toLocaleString(), sub: "pieces", icon: Package, color: `${ac(accent, "text")}`, bg: `${ac(accent, "bg")} ${ac(accent, "border")}` },
+          { label: "WIP", value: wipPcs.toLocaleString(), sub: "in progress", icon: Activity, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200" },
+          { label: "Completed", value: donePcs.toLocaleString(), sub: "out of dept", icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200" },
+          { label: "Pending / Blocked", value: (pendingPcs + blockedPcs).toLocaleString(), sub: `${blockedPcs} blocked`, icon: Clock, color: "text-slate-600", bg: "bg-slate-50 dark:bg-slate-900 border-slate-200" },
+        ].map(c => (
+          <div key={c.label} className={`rounded-2xl border p-4 ${c.bg}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{c.label}</p>
+              <c.icon className={`w-4 h-4 ${c.color}`} />
+            </div>
+            <p className={`text-2xl font-black tabular-nums ${c.color}`}>{c.value}</p>
+            <p className="text-[10px] text-slate-500 mt-1">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Flow diagram */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+        <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4">Department Flow</h3>
+        <div className="flex items-center gap-2">
+          {[
+            { label: "Pending", value: pendingPcs, color: "bg-slate-400" },
+            { label: "In Progress", value: wipPcs, color: "bg-amber-400" },
+            { label: "Completed", value: donePcs, color: "bg-emerald-500" },
+          ].map((s, i) => (
+            <React.Fragment key={s.label}>
+              <div className="flex-1 text-center">
+                <div className={`h-10 rounded-xl ${s.color} flex items-center justify-center mb-1`}>
+                  <span className="text-xs font-black text-white">{s.value.toLocaleString()}</span>
+                </div>
+                <p className="text-[9px] font-bold text-slate-500">{s.label}</p>
+              </div>
+              {i < 2 && <ArrowRight className="w-5 h-5 text-slate-300 shrink-0" />}
+            </React.Fragment>
+          ))}
+        </div>
+        <div className="mt-3 flex justify-between text-[10px] text-slate-400 font-semibold">
+          <span>In from prev. dept</span>
+          <span>Prev. dept → {taskName} → Next dept</span>
+          <span>Out to next dept</span>
+        </div>
+      </div>
+
+      {/* Full garment pipeline per WO — the key upgrade */}
+      {uniqueWOIds.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className={`px-5 py-3 border-b border-slate-100 dark:border-slate-800 ${ac(accent, "bg")}`}>
+            <h3 className={`text-xs font-black uppercase tracking-widest ${ac(accent, "text")} flex items-center gap-2`}>
+              <GitBranch className="w-4 h-4" /> Full Pipeline Route per Work Order
+            </h3>
+            <p className="text-[10px] text-slate-500 mt-0.5">Shows where each WO sits in the entire garment manufacturing pipeline</p>
+          </div>
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {uniqueWOIds.map(woId => {
+              const wo = production.find(w => w.id === woId);
+              if (!wo) return null;
+              return (
+                <WORouteSummary
+                  key={woId}
+                  woId={wo.id}
+                  productName={wo.productName}
+                  quantity={wo.quantity}
+                  operations={wo.operations || []}
+                  currentDept={taskName}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Per-WO WIP table */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className={`px-5 py-3 border-b border-slate-100 dark:border-slate-800 ${ac(accent, "bg")}`}>
+          <h3 className={`text-xs font-black uppercase tracking-widest ${ac(accent, "text")}`}>Work Order WIP</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 dark:border-slate-800">
+                {["Work Order", "Product", "Total", "Done", "WIP", "Pending", "Progress"].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+              {WO_WIP.map(([woId, w]) => {
+                const pct = w.total > 0 ? Math.round((w.done / w.total) * 100) : 0;
+                return (
+                  <tr key={woId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="px-4 py-2.5 font-mono text-xs text-slate-600 dark:text-slate-300">{woId}</td>
+                    <td className="px-4 py-2.5 font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[140px]">{w.product}</td>
+                    <td className="px-4 py-2.5 font-black text-slate-600 dark:text-slate-300">{w.total}</td>
+                    <td className="px-4 py-2.5 font-black text-emerald-600">{w.done}</td>
+                    <td className="px-4 py-2.5 font-black text-amber-600">{w.wip}</td>
+                    <td className="px-4 py-2.5 font-black text-slate-500">{w.pending}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[11px] font-black text-slate-500">{pct}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {WO_WIP.length === 0 && <div className="py-10 text-center text-slate-400 text-sm">No WIP data</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Analytics Page (unchanged from v2 but improved) ─────────────────────────
 
 function AnalyticsPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Karigar[]; accent: string }) {
   const total = ops.length;
@@ -274,7 +963,6 @@ function AnalyticsPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Kar
   const rejRate = donePcs > 0 ? Math.round((rejPcs / donePcs) * 100) : 0;
   const efficiency = totalPcs > 0 ? Math.round((donePcs / totalPcs) * 100) : 0;
 
-  // Karigar efficiency
   const karigarStats = useMemo(() => {
     const map: Record<string, { name: string; done: number; rejected: number; jobs: number }> = {};
     for (const op of ops) {
@@ -289,7 +977,6 @@ function AnalyticsPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Kar
     return Object.values(map).sort((a, b) => b.done - a.done);
   }, [ops, karigars]);
 
-  // Status distribution bar
   const barData = [
     { label: "Open",         value: ops.filter(o => norm(o) === "PENDING").length,     color: "bg-slate-300 dark:bg-slate-600" },
     { label: "In Progress",  value: ops.filter(o => o.status === "Work In Progress").length, color: "bg-amber-400" },
@@ -301,7 +988,6 @@ function AnalyticsPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Kar
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Overview cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Total Jobs", value: total, sub: `${pending} pending`, icon: Layers, color: "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700" },
@@ -320,32 +1006,32 @@ function AnalyticsPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Kar
         ))}
       </div>
 
-      {/* Status distribution */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-        <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4">Status Distribution</h3>
-        <div className="flex h-8 rounded-xl overflow-hidden gap-0.5 mb-3">
-          {barData.map(b => (
-            <div
-              key={b.label}
-              className={`${b.color} flex items-center justify-center text-[9px] font-black text-white transition-all`}
-              style={{ width: total > 0 ? `${(b.value / total) * 100}%` : "0%" }}
-              title={`${b.label}: ${b.value}`}
-            >
-              {(b.value / total) * 100 > 8 ? b.value : ""}
-            </div>
-          ))}
+      {barData.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+          <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4">Status Distribution</h3>
+          <div className="flex h-8 rounded-xl overflow-hidden gap-0.5 mb-3">
+            {barData.map(b => (
+              <div
+                key={b.label}
+                className={`${b.color} flex items-center justify-center text-[9px] font-black text-white transition-all`}
+                style={{ width: total > 0 ? `${(b.value / total) * 100}%` : "0%" }}
+                title={`${b.label}: ${b.value}`}
+              >
+                {(b.value / total) * 100 > 8 ? b.value : ""}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-4 flex-wrap">
+            {barData.map(b => (
+              <div key={b.label} className="flex items-center gap-1.5">
+                <div className={`w-2.5 h-2.5 rounded-full ${b.color}`} />
+                <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold">{b.label} <strong className="text-slate-800 dark:text-slate-200">{b.value}</strong></span>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="flex gap-4">
-          {barData.map(b => (
-            <div key={b.label} className="flex items-center gap-1.5">
-              <div className={`w-2.5 h-2.5 rounded-full ${b.color}`} />
-              <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold">{b.label} <strong className="text-slate-800 dark:text-slate-200">{b.value}</strong></span>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
 
-      {/* Pieces progress */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">Pieces Progress</h3>
@@ -363,11 +1049,10 @@ function AnalyticsPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Kar
         </div>
       </div>
 
-      {/* Karigar leaderboard */}
       {karigarStats.length > 0 && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
           <div className={`px-5 py-3 border-b border-slate-100 dark:border-slate-800 ${ac(accent, "bg")}`}>
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 flex items-center gap-2">
+            <h3 className={`text-xs font-black uppercase tracking-widest ${ac(accent, "text")} flex items-center gap-2`}>
               <Award className={`w-4 h-4 ${ac(accent, "text")}`} />
               Worker Performance
             </h3>
@@ -404,7 +1089,7 @@ function AnalyticsPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Kar
   );
 }
 
-// ─── Subpage: Timeline ──────────────────────────────────────────────────────────
+// ─── Timeline Page ────────────────────────────────────────────────────────────
 
 function TimelinePage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
   const events = useMemo(() => {
@@ -426,9 +1111,9 @@ function TimelinePage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
   }, [ops]);
 
   const typeStyle = {
-    start:    { dot: "bg-amber-400", line: "border-amber-200", icon: Play, text: "text-amber-700 dark:text-amber-300" },
-    complete: { dot: "bg-emerald-500", line: "border-emerald-200", icon: CheckCircle2, text: "text-emerald-700 dark:text-emerald-300" },
-    pending:  { dot: "bg-slate-300 dark:bg-slate-600", line: "border-slate-100 dark:border-slate-800", icon: Clock, text: "text-slate-500" },
+    start:    { dot: "bg-amber-400", icon: Play, text: "text-amber-700 dark:text-amber-300" },
+    complete: { dot: "bg-emerald-500", icon: CheckCircle2, text: "text-emerald-700 dark:text-emerald-300" },
+    pending:  { dot: "bg-slate-300 dark:bg-slate-600", icon: Clock, text: "text-slate-500" },
   };
 
   if (events.length === 0) {
@@ -444,14 +1129,13 @@ function TimelinePage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
   return (
     <div className="p-4 md:p-6">
       <div className="relative">
-        {/* vertical line */}
         <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-slate-100 dark:bg-slate-800" />
         <div className="space-y-1">
           {events.map((evt, i) => {
             const s = typeStyle[evt.type];
             const Icon = s.icon;
             return (
-              <div key={i} className="relative flex items-start gap-4 pl-12 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/30 rounded-xl transition-colors group">
+              <div key={i} className="relative flex items-start gap-4 pl-12 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/30 rounded-xl transition-colors">
                 <div className={`absolute left-3.5 w-3 h-3 rounded-full ${s.dot} ring-2 ring-white dark:ring-slate-950 shrink-0 mt-1`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -474,25 +1158,27 @@ function TimelinePage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
   );
 }
 
-// ─── Subpage: Vendor Tracker ────────────────────────────────────────────────────
+// ─── Vendor Page ──────────────────────────────────────────────────────────────
 
-function VendorPage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
+function VendorPage({ ops, accent, taskName }: { ops: DeptOp[]; accent: string; taskName: string }) {
+  const isDyeing = taskName.toLowerCase().includes("dyeing");
+  const sentKey      = isDyeing ? "sentMeters"    : "sentQty";
+  const receivedKey  = isDyeing ? "receivedMeters" : "receivedQty";
+  const unit         = isDyeing ? "meters" : "pieces";
+
   const vendors = useMemo(() => {
-    const map: Record<string, {
-      name: string; sent: number; received: number;
-      jobs: DeptOp[]; active: number;
-    }> = {};
+    const map: Record<string, { name: string; sent: number; received: number; jobs: DeptOp[]; active: number; challans: any[] }> = {};
     for (const op of ops) {
-      const v = op.customData?.vendor;
+      const v = op.customData?.vendor || op.customData?.karigarName;
       if (!v) continue;
-      if (!map[v]) map[v] = { name: v, sent: 0, received: 0, jobs: [], active: 0 };
-      map[v].sent     += Number(op.customData?.sentQty || 0);
-      map[v].received += Number(op.customData?.receivedQty || 0);
+      if (!map[v]) map[v] = { name: v, sent: 0, received: 0, jobs: [], active: 0, challans: op.customData?.challans || [] };
+      map[v].sent     += Number(op.customData?.[sentKey]     || 0);
+      map[v].received += Number(op.customData?.[receivedKey] || 0);
       map[v].jobs.push(op);
       if (norm(op) !== "COMPLETED") map[v].active++;
     }
     return Object.values(map).sort((a, b) => (b.sent - b.received) - (a.sent - a.received));
-  }, [ops]);
+  }, [ops, sentKey, receivedKey]);
 
   const unassigned = ops.filter(o => !o.customData?.vendor && norm(o) !== "COMPLETED").length;
 
@@ -518,7 +1204,6 @@ function VendorPage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
         </div>
       )}
 
-      {/* Summary row */}
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Total Sent", value: vendors.reduce((s,v)=>s+v.sent,0), icon: ArrowUpRight, color: "text-indigo-600" },
@@ -531,12 +1216,11 @@ function VendorPage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{c.label}</p>
             </div>
             <p className={`text-xl font-black tabular-nums ${c.color}`}>{c.value.toLocaleString()}</p>
-            <p className="text-[10px] text-slate-400">pieces</p>
+            <p className="text-[10px] text-slate-400">{unit}</p>
           </div>
         ))}
       </div>
 
-      {/* Vendor cards */}
       <div className="space-y-3">
         {vendors.map(v => {
           const balance = Math.max(0, v.sent - v.received);
@@ -549,24 +1233,15 @@ function VendorPage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
                   <p className="text-[11px] text-slate-500 mt-0.5">{v.jobs.length} job cards · {v.active} active</p>
                 </div>
                 {balance > 0 ? (
-                  <span className="text-[11px] font-black bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2.5 py-1 rounded-full">{balance} pcs outstanding</span>
+                  <span className="text-[11px] font-black bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2.5 py-1 rounded-full">{balance} {unit} outstanding</span>
                 ) : v.received > 0 ? (
                   <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-2.5 py-1 rounded-full">All received ✓</span>
                 ) : null}
               </div>
               <div className="flex gap-4 text-sm mb-3">
-                <div>
-                  <p className="text-[10px] text-slate-400 font-semibold">Sent</p>
-                  <p className="font-black text-slate-700 dark:text-slate-200">{v.sent.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 font-semibold">Received</p>
-                  <p className="font-black text-emerald-600">{v.received.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 font-semibold">Balance</p>
-                  <p className={`font-black ${balance > 0 ? "text-amber-600" : "text-slate-400"}`}>{balance.toLocaleString()}</p>
-                </div>
+                <div><p className="text-[10px] text-slate-400 font-semibold">Sent</p><p className="font-black text-slate-700 dark:text-slate-200">{v.sent.toLocaleString()}</p></div>
+                <div><p className="text-[10px] text-slate-400 font-semibold">Received</p><p className="font-black text-emerald-600">{v.received.toLocaleString()}</p></div>
+                <div><p className="text-[10px] text-slate-400 font-semibold">Balance</p><p className={`font-black ${balance > 0 ? "text-amber-600" : "text-slate-400"}`}>{balance.toLocaleString()}</p></div>
               </div>
               {v.sent > 0 && (
                 <>
@@ -587,24 +1262,22 @@ function VendorPage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
   );
 }
 
-// ─── Subpage: Quality Log ───────────────────────────────────────────────────────
+// ─── Quality Page ─────────────────────────────────────────────────────────────
 
 function QualityPage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
   const completed = ops.filter(o => norm(o) === "COMPLETED");
   const totalDone = completed.reduce((s, o) => s + (o.completedQuantity || 0), 0);
   const totalRej  = completed.reduce((s, o) => s + (o.rejectedQuantity  || 0), 0);
   const rejRate   = totalDone > 0 ? ((totalRej / totalDone) * 100).toFixed(1) : "0";
-
   const sorted = [...completed].sort((a, b) => (b.rejectedQuantity || 0) - (a.rejectedQuantity || 0));
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {/* KPI row */}
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Total Inspected", value: totalDone.toLocaleString(), icon: ShieldCheck, color: "text-slate-600" },
           { label: "Rejected", value: totalRej.toLocaleString(), icon: XCircle, color: "text-rose-600" },
-          { label: "Rejection Rate", value: `${rejRate}%`, icon: Reject, color: Number(rejRate) > 5 ? "text-rose-600" : "text-emerald-600" },
+          { label: "Rejection Rate", value: `${rejRate}%`, icon: XOctagon, color: Number(rejRate) > 5 ? "text-rose-600" : "text-emerald-600" },
         ].map(c => (
           <div key={c.label} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3">
             <div className="flex items-center gap-1.5 mb-1">
@@ -626,12 +1299,10 @@ function QualityPage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
         </div>
       )}
 
-      {/* Per-job quality table */}
       {completed.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-slate-400">
           <ShieldCheck className="w-10 h-10 mb-3 opacity-20" />
           <p className="font-bold text-sm">No completed jobs yet</p>
-          <p className="text-xs mt-1">Quality data appears here once jobs are completed.</p>
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -678,7 +1349,7 @@ function QualityPage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
   );
 }
 
-// ─── Subpage: Bulk Actions ──────────────────────────────────────────────────────
+// ─── Bulk Page ────────────────────────────────────────────────────────────────
 
 function BulkPage({
   ops, karigars, accent, production, onUpdateWorkOrder,
@@ -715,15 +1386,13 @@ function BulkPage({
 
   const handleApply = () => {
     if (selected.size === 0 || (!bulkStatus && !bulkKarigar)) return;
-    // Map new workflow states back to legacy status for compat with WO storage
     const stateToLegacy: Record<string, string> = {
-      Draft:              "PENDING",
-      Open:               "PENDING",
+      Draft: "PENDING", Open: "PENDING",
       "Work In Progress": "IN_PROGRESS",
-      "QC Review":        "IN_PROGRESS",
-      Completed:          "COMPLETED",
-      "On Hold":          "PENDING",
-      Rejected:           "PENDING",
+      "QC Review": "IN_PROGRESS",
+      Completed: "COMPLETED",
+      "On Hold": "PENDING",
+      Rejected: "PENDING",
     };
     const toUpdate: Set<string> = new Set();
     for (const op of ops) {
@@ -739,13 +1408,13 @@ function BulkPage({
         return {
           ...o,
           ...(bulkStatus ? {
-            status: legacyStatus,
+            status: legacyStatus as any,
             workflowState: bulkStatus,
             ...(bulkStatus === "Completed" ? { completedAt: new Date().toISOString() } : {}),
             ...(bulkStatus === "Work In Progress" ? { startedAt: new Date().toISOString() } : {}),
           } : {}),
           ...(bulkKarigar ? { assignedTo: bulkKarigar } : {}),
-        };
+        } as any;
       });
       onUpdateWorkOrder({ ...wo, operations: newOps });
     }
@@ -757,22 +1426,20 @@ function BulkPage({
   };
 
   const statusColors: Record<string, string> = {
-    PENDING:     "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
-    IN_PROGRESS: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-    COMPLETED:   "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
-    // New workflow states
-    Draft:              "bg-slate-100 dark:bg-slate-800 text-slate-500",
-    Open:               "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-    "Work In Progress": "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-    "QC Review":        "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
-    Completed:          "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
-    "On Hold":          "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
-    Rejected:           "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
+    PENDING:             "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
+    IN_PROGRESS:         "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+    COMPLETED:           "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+    Draft:               "bg-slate-100 dark:bg-slate-800 text-slate-500",
+    Open:                "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+    "Work In Progress":  "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+    "QC Review":         "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
+    Completed:           "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+    "On Hold":           "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+    Rejected:            "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
   };
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -789,14 +1456,13 @@ function BulkPage({
           onChange={e => setFilterStatus(e.target.value)}
         >
           <option value="ALL">All Status</option>
-          <option value="PENDING">Pending (any)</option>
-          <option value="IN_PROGRESS">In Progress (any)</option>
+          <option value="PENDING">Pending</option>
+          <option value="IN_PROGRESS">In Progress</option>
           <option value="COMPLETED">Completed</option>
         </select>
         <span className="text-xs text-slate-500 font-semibold">{filtered.length} jobs</span>
       </div>
 
-      {/* Bulk action bar */}
       {selected.size > 0 && (
         <div className={`flex flex-wrap items-center gap-3 p-3 rounded-2xl border ${ac(accent, "bg")} ${ac(accent, "border")}`}>
           <span className={`text-sm font-black ${ac(accent, "text")}`}>{selected.size} selected</span>
@@ -835,19 +1501,13 @@ function BulkPage({
         </div>
       )}
 
-      {/* Table */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800">
                 <th className="px-4 py-3 w-10">
-                  <input
-                    type="checkbox"
-                    checked={selected.size === filtered.length && filtered.length > 0}
-                    onChange={toggleAll}
-                    className="rounded"
-                  />
+                  <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} className="rounded" />
                 </th>
                 {["Work Order", "Product", "Qty", "Status", "Assigned To"].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">{h}</th>
@@ -858,28 +1518,14 @@ function BulkPage({
               {filtered.map(op => {
                 const k = key(op);
                 const karigar = karigars.find(kr => kr.id === op.assignedTo);
-                const sc = statusColors[norm(op)] || statusColors.PENDING;
                 return (
                   <tr
                     key={k}
                     className={`cursor-pointer transition-colors ${selected.has(k) ? `${ac(accent, "bg")}` : "hover:bg-slate-50 dark:hover:bg-slate-800/30"}`}
-                    onClick={() => {
-                      const next = new Set(selected);
-                      next.has(k) ? next.delete(k) : next.add(k);
-                      setSelected(next);
-                    }}
+                    onClick={() => { const next = new Set(selected); next.has(k) ? next.delete(k) : next.add(k); setSelected(next); }}
                   >
                     <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(k)}
-                        onChange={() => {
-                          const next = new Set(selected);
-                          next.has(k) ? next.delete(k) : next.add(k);
-                          setSelected(next);
-                        }}
-                        className="rounded"
-                      />
+                      <input type="checkbox" checked={selected.has(k)} onChange={() => { const next = new Set(selected); next.has(k) ? next.delete(k) : next.add(k); setSelected(next); }} className="rounded" />
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-slate-600 dark:text-slate-300">{op.woId}</td>
                     <td className="px-4 py-2.5 font-semibold text-slate-800 dark:text-slate-100 max-w-[140px] truncate">{op.woProduct}</td>
@@ -895,32 +1541,20 @@ function BulkPage({
               })}
             </tbody>
           </table>
-          {filtered.length === 0 && (
-            <div className="py-12 text-center text-slate-400 text-sm">No jobs found</div>
-          )}
+          {filtered.length === 0 && <div className="py-12 text-center text-slate-400 text-sm">No jobs found</div>}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Sidebar panels (unchanged from original, compacted) ────────────────────────
-
-function StatPill({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
-  return (
-    <div className={`flex-1 min-w-0 rounded-xl border px-4 py-3 ${color}`}>
-      <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-0.5">{label}</p>
-      <p className="text-2xl font-black tabular-nums leading-none">{value}</p>
-      {sub && <p className="text-[10px] opacity-60 mt-0.5 font-semibold">{sub}</p>}
-    </div>
-  );
-}
+// ─── Sidebar Panels ───────────────────────────────────────────────────────────
 
 function KarigarPanel({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Karigar[]; accent: string }) {
   const workload = useMemo(() => {
     const map: Record<string, { karigar: Karigar; pending: number; wip: number; done: number; pieces: number }> = {};
     for (const op of ops) {
-      if (!op.assignedTo) continue;
+      if (!op.assignedTo || (op as any)._blocked) continue;
       const k = karigars.find(kar => kar.id === op.assignedTo);
       if (!k) continue;
       if (!map[k.id]) map[k.id] = { karigar: k, pending: 0, wip: 0, done: 0, pieces: 0 };
@@ -932,7 +1566,7 @@ function KarigarPanel({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Kari
     }
     return Object.values(map).sort((a, b) => (b.wip + b.pending) - (a.wip + a.pending));
   }, [ops, karigars]);
-  const unassigned = ops.filter(o => !o.assignedTo && norm(o) !== "COMPLETED").length;
+  const unassigned = ops.filter(o => !o.assignedTo && norm(o) !== "COMPLETED" && !(o as any)._blocked).length;
   if (workload.length === 0 && unassigned === 0) return null;
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
@@ -985,7 +1619,7 @@ function DeadlinePanel({ production, taskName, accent }: { production: WorkOrder
     return production.filter(wo => {
       if (!wo.deadline) return false;
       const dl = new Date(wo.deadline);
-      const hasOp = (wo.operations || []).some(op => op.name.toLowerCase().includes(taskName.toLowerCase()) && norm({ status: op.status } as DeptOp) !== "COMPLETED");
+      const hasOp = (wo.operations || []).some(op => opBelongsToDeptLocal(op, taskName) && norm({ status: op.status } as DeptOp) !== "COMPLETED");
       return hasOp && dl < today;
     }).sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()).slice(0, 5);
   }, [production, taskName]);
@@ -996,7 +1630,7 @@ function DeadlinePanel({ production, taskName, accent }: { production: WorkOrder
     return production.filter(wo => {
       if (ids.has(wo.id) || !wo.deadline) return false;
       const dl = new Date(wo.deadline);
-      const hasOp = (wo.operations || []).some(op => op.name.toLowerCase().includes(taskName.toLowerCase()) && norm({ status: op.status } as DeptOp) !== "COMPLETED");
+      const hasOp = (wo.operations || []).some(op => opBelongsToDeptLocal(op, taskName) && norm({ status: op.status } as DeptOp) !== "COMPLETED");
       return hasOp && dl >= today && dl <= soon;
     }).sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()).slice(0, 3);
   }, [production, taskName, overdue]);
@@ -1053,16 +1687,15 @@ function TipsPanel({ tips, accent }: { tips: string[]; accent: string }) {
   );
 }
 
-// ─── Main Component ─────────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, karigars }: Props) {
+export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, karigars, inventory = [], onUpdateInventory, onCreateGatePass }: Props) {
   const meta = DEPT_META[taskName] ?? getDefaultMeta(taskName);
   const accent = meta.accent;
 
   const [activeSub, setActiveSub] = useState<SubPage>("job_board");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // All ops for this dept — matched by stage (authoritative) then name (fallback)
   const deptOps = useMemo<DeptOp[]>(() =>
     production.flatMap(wo => {
       const allOps = wo.operations || [];
@@ -1070,49 +1703,50 @@ export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, 
         .map((op, idx) => ({ ...op, woId: wo.id, woProduct: wo.productName, woQty: wo.quantity, woDeadline: wo.deadline, opIndex: idx }))
         .filter(op => opBelongsToDeptLocal(op, taskName))
         .map(op => {
-          // Gating: if the previous step in the WO sequence is not Completed,
-          // mark this op with a blocked indicator (mirrors ERPNext step gating).
-          const prevOp = op.opIndex > 0 ? allOps[op.opIndex - 1] : null;
-          if (prevOp) {
-            const prevDone =
-              prevOp.status === "Completed" ||
-              prevOp.status === "COMPLETED" ||
-              (prevOp as any).workflowState === "Completed";
-            if (!prevDone) {
-              return { ...op, _blocked: true, _blockedBy: prevOp.name || "Previous step" } as DeptOp & { _blocked: boolean; _blockedBy: string };
-            }
-          }
+          // Use pipeline DAG blocking (predecessor-based, not just prev-index)
+          const { blocked, blockedBy } = computeBlockState(allOps, op.opIndex);
+          if (blocked) return { ...op, _blocked: true, _blockedBy: blockedBy ?? "Previous step" } as DeptOp;
           return op as DeptOp;
         });
     }), [production, taskName]);
 
-  // Summary numbers — counts both legacy and new workflow states
   const summary = useMemo(() => {
-    const pending     = deptOps.filter(o => norm(o) === "PENDING").length;
-    const inProgress  = deptOps.filter(o => norm(o) === "IN_PROGRESS").length;
-    const completed   = deptOps.filter(o => norm(o) === "COMPLETED").length;
-    // Granular new-state counts for richer display
-    const qcReview    = deptOps.filter(o => o.status === "QC Review").length;
-    const onHold      = deptOps.filter(o => o.status === "On Hold" || o.status === "On_Hold").length;
-    const rejected    = deptOps.filter(o => o.status === "Rejected").length;
-    const totalPcs    = [...new Map(deptOps.map(o => [o.woId, o.woQty])).values()].reduce((s, qty) => s + (qty || 0), 0);
-    const donePcs     = deptOps.reduce((s, o) => s + (o.completedQuantity || 0), 0);
-    const rejPcs      = deptOps.reduce((s, o) => s + (o.rejectedQuantity  || 0), 0);
-    const unassigned  = deptOps.filter(o => !o.assignedTo && norm(o) !== "COMPLETED").length;
-    return { pending, inProgress, completed, qcReview, onHold, rejected, total: deptOps.length, totalPcs, donePcs, rejPcs, unassigned };
+    const pending    = deptOps.filter(o => norm(o) === "PENDING" && !(o as any)._blocked).length;
+    const inProgress = deptOps.filter(o => norm(o) === "IN_PROGRESS").length;
+    const completed  = deptOps.filter(o => norm(o) === "COMPLETED").length;
+    const qcReview   = deptOps.filter(o => o.status === "QC Review").length;
+    const onHold     = deptOps.filter(o => (o.status === "On Hold" || o.status === "On_Hold") && !(o as any)._blocked).length;
+    const rejected   = deptOps.filter(o => o.status === "Rejected").length;
+    const blocked    = deptOps.filter(o => (o as any)._blocked).length;
+    const totalPcs   = (Array.from(new Map(deptOps.map(o => [o.woId, o.woQty] as [string, number])).values()) as number[]).reduce((s: number, qty: number) => s + (qty || 0), 0);
+    const donePcs    = deptOps.reduce((s, o) => s + (o.completedQuantity || 0), 0);
+    const rejPcs     = deptOps.reduce((s, o) => s + (o.rejectedQuantity  || 0), 0);
+    const unassigned = deptOps.filter(o => !o.assignedTo && norm(o) !== "COMPLETED" && !(o as any)._blocked).length;
+    return { pending, inProgress, completed, qcReview, onHold, rejected, blocked, total: deptOps.length, totalPcs, donePcs, rejPcs, unassigned };
   }, [deptOps]);
 
   const rejRate = summary.donePcs > 0 ? Math.round((summary.rejPcs / summary.donePcs) * 100) : 0;
 
-  // Build subpage list
-  const subPages: SubPageDef[] = [
-    { id: "job_board",  label: "Job Board",   icon: LayoutGrid, badge: ops => ops.filter(o => norm(o) === "IN_PROGRESS").length || null },
+  // Build subpage list — context-aware: show SMV only for Stitching
+  const subPages: SubPageDef[] = ([
+    { id: "job_board",  label: "Job Board",   icon: LayoutGrid, badge: (ops) => ops.filter(o => norm(o) === "IN_PROGRESS").length || null },
     { id: "analytics",  label: "Analytics",   icon: BarChart2 },
+    { id: "targets",    label: "Targets",     icon: Target, badge: (ops) => { const b = ops.filter(o => { if (norm(o) !== "IN_PROGRESS" || !o.startedAt) return false; return (Date.now() - new Date(o.startedAt).getTime()) / 3600000 > meta.slaHours; }).length; return b > 0 ? b : null; } },
+    { id: "wip",        label: "WIP",         icon: Package },
     { id: "timeline",   label: "Timeline",    icon: GitBranch },
-    { id: "vendor",     label: "Vendors",     icon: Truck, hidden: !meta.hasVendor, badge: ops => { const v = ops.reduce((s,o)=>s+Math.max(0,(o.customData?.sentQty||0)-(o.customData?.receivedQty||0)),0); return v > 0 ? v : null; } },
-    { id: "quality",    label: "Quality Log", icon: ShieldCheck, badge: ops => { const r = ops.reduce((s,o)=>s+(o.rejectedQuantity||0),0); return r > 0 ? r : null; } },
+    { id: "vendor",     label: "Vendors",     icon: Truck, hidden: !meta.hasVendor, badge: (ops) => {
+        // Dyeing tracks meters; Hand Work / Embroidery / Printing track pieces
+        const isDyeing = taskName.toLowerCase().includes("dyeing");
+        const v = isDyeing
+          ? Math.round(ops.reduce((s,o)=>s+Math.max(0,Number(o.customData?.sentMeters||0)-Number(o.customData?.receivedMeters||0)),0))
+          : ops.reduce((s,o)=>s+Math.max(0,Number(o.customData?.sentQty||0)-Number(o.customData?.receivedQty||0)),0);
+        return v > 0 ? v : null;
+      } },
+    { id: "quality",    label: "Quality",     icon: ShieldCheck, badge: (ops) => { const r = ops.reduce((s,o)=>s+(o.rejectedQuantity||0),0); return r > 0 ? r : null; } },
+    { id: "rework",     label: "Rework",      icon: RotateCcw, badge: (ops) => ops.filter(o => (o.customData?.alterationQty || 0) > 0).length || null },
+    { id: "smv",        label: "SMV",         icon: Gauge, hidden: !taskName.toLowerCase().includes("stitching") },
     { id: "bulk",       label: "Bulk Edit",   icon: Edit3 },
-  ].filter(s => !s.hidden);
+  ] as SubPageDef[]).filter(s => !s.hidden);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
@@ -1124,7 +1758,10 @@ export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, 
             <span className="text-2xl">{meta.icon}</span>
             <div>
               <h1 className={`text-base font-black leading-none ${ac(accent, "text")}`}>{meta.label}</h1>
-              <p className="text-[10px] text-slate-500 font-semibold">{summary.total} job cards · {summary.pending} pending</p>
+              <p className="text-[10px] text-slate-500 font-semibold">
+                {summary.total} job cards · {summary.pending} pending · {summary.blocked} blocked
+                {summary.unassigned > 0 && ` · ${summary.unassigned} unassigned`}
+              </p>
             </div>
           </div>
           <button
@@ -1143,8 +1780,8 @@ export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, 
           {summary.qcReview > 0 && <StatPill label="QC Review" value={summary.qcReview} color="bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300" />}
           <StatPill label="Completed"   value={summary.completed}  color="bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" />
           <StatPill label="Done Pcs"    value={summary.donePcs.toLocaleString()} sub={`of ${summary.totalPcs.toLocaleString()}`} color="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200" />
+          {summary.blocked > 0 && <StatPill label="Waiting" value={summary.blocked} color="bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400" />}
           {summary.onHold > 0 && <StatPill label="On Hold" value={summary.onHold} color="bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300" />}
-          {summary.unassigned > 0 && <StatPill label="Unassigned" value={summary.unassigned} color="bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300" />}
           {summary.rejected > 0 && <StatPill label="Rejected" value={summary.rejected} color="bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300" />}
           {summary.rejPcs > 0 && <StatPill label="Rej Pcs" value={summary.rejPcs} color="bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300" />}
         </div>
@@ -1159,10 +1796,16 @@ export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, 
                 <span className={`text-[11px] font-black ${kpi.color}`}>{kpi.formula(deptOps)}</span>
               </div>
             ))}
+            {/* SLA hours badge */}
+            <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 shrink-0">
+              <Timer className="w-3 h-3 text-slate-400" />
+              <span className="text-[10px] text-slate-500 font-semibold">SLA:</span>
+              <span className="text-[11px] font-black text-slate-600 dark:text-slate-300">{meta.slaHours}h</span>
+            </div>
           </div>
         )}
 
-        {/* ERPNext-style subpage tabs */}
+        {/* Subpage tabs */}
         <div className="flex gap-0 border-b border-transparent overflow-x-auto scrollbar-hide -mb-3">
           {subPages.map(sp => {
             const Icon = sp.icon;
@@ -1217,10 +1860,8 @@ export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, 
         </div>
       )}
 
-      {/* ── Main layout: subpage + sidebar ── */}
-      <div className={`flex flex-1 min-h-0 gap-0 ${sidebarOpen ? "lg:gap-0" : ""} items-start`}>
-
-        {/* Subpage content */}
+      {/* ── Main layout ── */}
+      <div className={`flex flex-1 min-h-0 gap-0 items-start`}>
         <div className="flex-1 min-w-0 overflow-hidden">
           {activeSub === "job_board" && (
             <TaskBoard
@@ -1228,26 +1869,23 @@ export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, 
               production={production}
               onUpdateWorkOrder={onUpdateWorkOrder}
               karigars={karigars}
+              inventory={inventory}
+              onUpdateInventory={onUpdateInventory}
+              onCreateGatePass={onCreateGatePass}
             />
           )}
-          {activeSub === "analytics" && (
-            <AnalyticsPage ops={deptOps} karigars={karigars} accent={accent} />
-          )}
-          {activeSub === "timeline" && (
-            <TimelinePage ops={deptOps} accent={accent} />
-          )}
-          {activeSub === "vendor" && (
-            <VendorPage ops={deptOps} accent={accent} />
-          )}
-          {activeSub === "quality" && (
-            <QualityPage ops={deptOps} accent={accent} />
-          )}
-          {activeSub === "bulk" && (
-            <BulkPage ops={deptOps} karigars={karigars} accent={accent} production={production} onUpdateWorkOrder={onUpdateWorkOrder} />
-          )}
+          {activeSub === "analytics" && <AnalyticsPage ops={deptOps} karigars={karigars} accent={accent} />}
+          {activeSub === "targets"   && <TargetsPage ops={deptOps} karigars={karigars} accent={accent} meta={meta} />}
+          {activeSub === "wip"       && <WIPPage ops={deptOps} accent={accent} taskName={taskName} production={production} />}
+          {activeSub === "timeline"  && <TimelinePage ops={deptOps} accent={accent} />}
+          {activeSub === "vendor"    && <VendorPage ops={deptOps} accent={accent} taskName={taskName} />}
+          {activeSub === "quality"   && <QualityPage ops={deptOps} accent={accent} />}
+          {activeSub === "rework"    && <ReworkPage ops={deptOps} accent={accent} meta={meta} />}
+          {activeSub === "smv"       && <SMVPage ops={deptOps} karigars={karigars} accent={accent} />}
+          {activeSub === "bulk"      && <BulkPage ops={deptOps} karigars={karigars} accent={accent} production={production} onUpdateWorkOrder={onUpdateWorkOrder} />}
         </div>
 
-        {/* Sidebar panels — only show on Job Board tab */}
+        {/* Sidebar — only on Job Board */}
         {activeSub === "job_board" && sidebarOpen && (
           <div className="hidden lg:flex flex-col gap-3 w-72 xl:w-80 shrink-0 p-4 border-l border-slate-100 dark:border-slate-800">
             <DeadlinePanel production={production} taskName={taskName} accent={accent} />

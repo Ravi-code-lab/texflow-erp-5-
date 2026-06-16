@@ -5,6 +5,7 @@ import {
   Cpu, Layers, HeartPulse, Sparkles, Code, TerminalSquare, AlertCircle, Wrench, SearchCheck, ChevronDown, Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getItem } from '../utils/networkClient';
 
 interface PatchLog {
   id: string;
@@ -282,27 +283,15 @@ export const UpgradeModule: React.FC = () => {
         setDiagnosisStep(currentStep + 1);
       } else {
         clearInterval(interval);
-        // Compile physical metrics from localStorage / local states
-        let totalRecordsCount = 0;
-        let customFieldsCount = 0;
-        try {
-          // Read local count
-          const customFieldsRaw = localStorage.getItem('erpnext_custom_fields');
-          if (customFieldsRaw) customFieldsCount = JSON.parse(customFieldsRaw).length || 0;
-
-          // Estimate records in localStorage
-          const stores = ['orders', 'production', 'inventory', 'customers', 'suppliers', 'transactions', 'karigars'];
-          stores.forEach(st => {
-            try {
-              const raw = localStorage.getItem(st) || localStorage.getItem(`texflow_${st}`);
-              if (raw) {
-                const arr = JSON.parse(raw);
-                if (Array.isArray(arr)) totalRecordsCount += arr.length;
-              }
-            } catch {}
-          });
-        } catch {}
-
+        (async () => {
+        // Compile physical metrics from IndexedDB
+        const IDB_STORE_KEYS = ['orders', 'production', 'inventory', 'customers', 'suppliers', 'transactions', 'karigars'];
+        const [customFieldsArr, ...storeResults] = await Promise.all([
+          getItem<any[]>('erpnext_custom_fields').catch(() => null),
+          ...IDB_STORE_KEYS.map(k => getItem<any[]>(k).catch(() => null)),
+        ]);
+        let customFieldsCount = Array.isArray(customFieldsArr) ? customFieldsArr.length : 0;
+        let totalRecordsCount = storeResults.reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
         if (totalRecordsCount === 0) totalRecordsCount = 42; // default safe fallback
 
         setDoctorReport({
@@ -321,6 +310,7 @@ export const UpgradeModule: React.FC = () => {
           ] : []
         });
         setIsDiagnosing(false);
+        })();
       }
     }, 800);
   };

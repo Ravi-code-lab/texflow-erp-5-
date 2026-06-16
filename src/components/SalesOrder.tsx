@@ -9,6 +9,7 @@ import {
 import { createERPDocument } from '../modules/documentEngine';
 import { getAvailableTransitions } from '../modules/workflows';
 import ProductImageThumb from './ProductImageThumb';
+import { getItem } from '../utils/networkClient';
 
 interface SalesOrderProps {
   orders: Order[];
@@ -44,16 +45,11 @@ const SalesOrder: React.FC<SalesOrderProps> = ({
   const [customFields, setCustomFields] = useState<any[]>([]);
 
   useEffect(() => {
-    let raw: string | null = null;
-    try { raw = localStorage.getItem('erpnext_custom_fields'); } catch {}
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
+    getItem<any[]>('erpnext_custom_fields').then(parsed => {
+      if (Array.isArray(parsed)) {
         setCustomFields(parsed.filter((f: any) => f.docType === 'Order'));
-      } catch (e) {
-        console.error(e);
       }
-    }
+    }).catch(() => {});
   }, []);
 
   const filteredOrders = useMemo(() => {

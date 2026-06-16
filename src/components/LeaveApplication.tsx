@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { uuidShort } from "../utils/uuid";
 import { LeaveRequest, TeamMember } from '../types';
 import { 
   Search, Plus, BookOpen, Filter, 
@@ -42,7 +43,7 @@ const LeaveApplication: React.FC<LeaveApplicationProps> = ({
 
     const data = {
       ...formData,
-      id: formData.id || `LVE-${Date.now().toString().slice(-4)}`
+      id: formData.id || `LVE-${uuidShort(12)}`
     } as LeaveRequest;
 
     if (formData.id) onUpdateLeave(data);

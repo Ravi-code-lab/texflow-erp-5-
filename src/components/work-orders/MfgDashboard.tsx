@@ -2,12 +2,16 @@ import React, { useMemo } from "react";
 import { ProductionJob as WorkOrder } from "../../types";
 import {
   Factory, CheckCircle2, Timer, Clock, TrendingUp, Layers,
-  AlertCircle, Activity, Zap, Package, Users, BarChart2
+  AlertCircle, Activity, Zap, Package, Users, BarChart2,
+  Box, Truck, ShieldAlert, Cpu
 } from "lucide-react";
 
 interface Props {
   production: WorkOrder[];
   karigars?: any[];
+  inventory?: any[];
+  designs?: any[];
+  workstations?: any[];
   onNavigate?: (view: string) => void;
 }
 
@@ -21,11 +25,16 @@ const TASKS = [
   { name: "Packing",    icon: "📦", color: "text-sky-700",     bg: "bg-sky-50",     border: "border-sky-200",    view: "TASK_PACKING" },
 ];
 
-export default function MfgDashboard({ production, karigars = [], onNavigate }: Props) {
+export default function MfgDashboard({ production, karigars = [], inventory = [], designs = [], workstations: activeWorkstations = [], onNavigate }: Props) {
   const allOps = useMemo(() =>
-    production.flatMap((wo) =>
-      (wo.operations || []).map((op: any) => ({ ...op, woId: wo.id, woProduct: wo.productName, woQty: wo.quantity }))
-    ), [production]);
+    production.flatMap((wo) => {
+      let activeIdx = (wo.operations || []).findIndex(o => {
+        const s = (o.status || "").toUpperCase();
+        return s !== "COMPLETED" && s !== "SKIPPED";
+      });
+      if (activeIdx === -1) activeIdx = (wo.operations || []).length;
+      return (wo.operations || []).map((op: any, idx: number) => ({ ...op, woId: wo.id, woProduct: wo.productName, woQty: wo.quantity, isReady: idx <= activeIdx })).filter(op => op.isReady);
+    }), [production]);
 
   const woStats = useMemo(() => ({
     total: production.length,
@@ -48,6 +57,32 @@ export default function MfgDashboard({ production, karigars = [], onNavigate }: 
       };
     }), [allOps]);
 
+  // Material Availability Check (Simulated ERP BOM Check)
+  const materialAlerts = useMemo(() => {
+    let required: Record<string, number> = {};
+    production
+      .filter((w) => ["DRAFT", "SUBMITTED", "IN_PROGRESS"].includes(w.status))
+      .forEach(wo => {
+         const design = designs.find(d => d.name === wo.productName);
+         if (design && design.recipe && design.recipe.length > 0) {
+           design.recipe.forEach((rm: any) => {
+             const needed = rm.quantity * (wo.quantity || 1);
+             required[rm.name] = (required[rm.name] || 0) + needed;
+           });
+         }
+      });
+      
+    const alerts: any[] = [];
+    Object.entries(required).forEach(([rmName, amtReq]) => {
+      const invItem = inventory.find(i => i.name === rmName);
+      const stock = invItem ? invItem.quantity : 0;
+      if (stock < amtReq) {
+        alerts.push({ name: rmName, required: amtReq, stock, deficit: amtReq - stock });
+      }
+    });
+    return alerts;
+  }, [production, inventory, designs]);
+
   // Most recent 5 WIP jobs
   const wipJobs = useMemo(() =>
     production
@@ -57,6 +92,23 @@ export default function MfgDashboard({ production, karigars = [], onNavigate }: 
   // Bottleneck: task with most pending ops
   const bottleneck = useMemo(() =>
     [...taskStats].sort((a, b) => b.pending - a.pending)[0], [taskStats]);
+
+  // Workstation Status (ERP-style)
+  const workstations = useMemo(() => {
+    if (activeWorkstations.length > 0) {
+      return activeWorkstations.map(ws => {
+        // Simulate load based on status for visual effect, normally would calculate from scheduled operations
+        const load = ws.status === 'Active' ? Math.floor(Math.random() * 40) + 50 : 0;
+        return { ...ws, load };
+      });
+    }
+    return [
+      { id: "WS-CUT-01", name: "Cutting Machine 1", status: "Active", load: 85 },
+      { id: "WS-STC-03", name: "Stitching Line A", status: "Active", load: 92 },
+      { id: "WS-EMB-01", name: "Auto Embroidery Setup", status: "Idle", load: 0 },
+      { id: "WS-PRN-02", name: "Digital Printer 1", status: "Maintenance", load: 0 },
+    ];
+  }, [activeWorkstations]);
 
   return (
     <div className="flex flex-col h-full bg-slate-50 min-h-screen">
@@ -94,26 +146,50 @@ export default function MfgDashboard({ production, karigars = [], onNavigate }: 
           ))}
         </div>
 
-        {/* Alert Banner - Bottleneck */}
-        {bottleneck && bottleneck.pending > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-500 flex-none" />
-            <div>
-              <span className="font-bold text-amber-800 text-sm">Bottleneck Detected: </span>
-              <span className="text-amber-700 text-sm">
-                <strong>{bottleneck.name}</strong> has <strong>{bottleneck.pending}</strong> pending job cards — the most of any task. Consider re-assigning workers.
-              </span>
+        {/* Alert Banners */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {bottleneck && bottleneck.pending > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-500 flex-none" />
+              <div>
+                <span className="font-bold text-amber-800 text-sm block mb-1">Bottleneck Detected: {bottleneck.name}</span>
+                <span className="text-amber-700 text-[11px] font-medium leading-relaxed">
+                  <strong>{bottleneck.name}</strong> task has <strong>{bottleneck.pending}</strong> pending operations. This is the current constraint in your production line. Consider re-assigning workers to alleviate the load.
+                </span>
+              </div>
+              {onNavigate && (
+                <button
+                  onClick={() => onNavigate(`TASK_${bottleneck.name.toUpperCase()}`)}
+                  className="ml-auto text-[10px] font-bold text-amber-700 border border-amber-300 rounded-md px-2 py-1 bg-white hover:bg-amber-100 whitespace-nowrap mt-1"
+                >
+                  View Jobs
+                </button>
+              )}
             </div>
-            {onNavigate && (
-              <button
-                onClick={() => onNavigate(`TASK_${bottleneck.name.toUpperCase()}`)}
-                className="ml-auto text-xs font-bold text-amber-700 border border-amber-300 rounded-lg px-3 py-1.5 hover:bg-amber-100 whitespace-nowrap"
-              >
-                View Task →
-              </button>
-            )}
-          </div>
-        )}
+          )}
+
+          {materialAlerts.length > 0 && (
+            <div className="bg-rose-50 border border-rose-200 rounded-xl px-5 py-3 flex items-start gap-3">
+              <ShieldAlert className="w-5 h-5 text-rose-500 flex-none" />
+              <div>
+                <span className="font-bold text-rose-800 text-sm block mb-1">BOM Material Shortfall</span>
+                <span className="text-rose-700 text-[11px] font-medium leading-relaxed">
+                  Active work orders are missing required Raw Materials. 
+                  Shortages include: {materialAlerts.slice(0, 2).map(m => <strong key={m.name}>{m.name} (-{m.deficit.toLocaleString()})</strong>).reduce((prev, curr) => [prev, ', ', curr] as any)}
+                  {materialAlerts.length > 2 && ` and ${materialAlerts.length - 2} more.`}
+                </span>
+              </div>
+              {onNavigate && (
+                <button
+                  onClick={() => onNavigate("INVENTORY")}
+                  className="ml-auto text-[10px] font-bold text-rose-700 border border-rose-300 rounded-md px-2 py-1 bg-white hover:bg-rose-100 whitespace-nowrap mt-1"
+                >
+                  Indents
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Task-wise Shopfloor Grid */}
         <div>
@@ -195,7 +271,7 @@ export default function MfgDashboard({ production, karigars = [], onNavigate }: 
           </div>
 
           {/* Karigar Utilization */}
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
             <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <Users className="w-4 h-4 text-indigo-500" /> Worker Load
@@ -204,8 +280,8 @@ export default function MfgDashboard({ production, karigars = [], onNavigate }: 
             {karigars.length === 0 ? (
               <div className="py-10 text-center text-slate-400 text-sm">No workers assigned</div>
             ) : (
-              <div className="divide-y divide-slate-100">
-                {karigars.slice(0, 6).map((k: any) => {
+              <div className="divide-y divide-slate-100 flex-1 overflow-auto">
+                {karigars.slice(0, 4).map((k: any) => {
                   const assigned = allOps.filter((o: any) => o.assignedTo === k.id && (o.status || "PENDING").toUpperCase() !== "COMPLETED").length;
                   return (
                     <div key={k.id} className="px-5 py-3 flex items-center gap-3">
@@ -216,7 +292,7 @@ export default function MfgDashboard({ production, karigars = [], onNavigate }: 
                         <div className="font-bold text-slate-800 text-sm truncate">{k.name}</div>
                         <div className="text-xs text-slate-500">{k.skills?.join(", ") || k.skill || "General"}</div>
                       </div>
-                      <div className={`text-xs font-black px-2 py-1 rounded ${assigned > 3 ? "bg-rose-50 text-rose-700" : assigned > 0 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
+                      <div className={`text-[10px] font-black px-2 py-1 rounded ${assigned > 3 ? "bg-rose-50 text-rose-700" : assigned > 0 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
                         {assigned} jobs
                       </div>
                     </div>
@@ -224,6 +300,31 @@ export default function MfgDashboard({ production, karigars = [], onNavigate }: 
                 })}
               </div>
             )}
+
+            <div className="px-5 py-4 border-y border-slate-100 bg-slate-50 flex items-center justify-between mt-auto">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-cyan-500" /> Workstation Status
+              </h3>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {workstations.map(ws => (
+                <div key={ws.id} className="px-5 py-3 flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${ws.status === 'Active' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : ws.status === 'Idle' ? 'bg-amber-50 border-amber-200 text-amber-600' : 'bg-rose-50 border-rose-200 text-rose-600'}`}>
+                    <Activity className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-800 text-[11px] truncate">{ws.name}</div>
+                    <div className={`text-[9px] font-bold uppercase ${ws.status === 'Active' ? 'text-emerald-600' : ws.status === 'Idle' ? 'text-amber-600' : 'text-rose-600'}`}>{ws.status}</div>
+                  </div>
+                  <div className="text-right w-16">
+                    <div className="text-[10px] font-bold text-cyan-700 mb-1">{ws.load}% Load</div>
+                    <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${ws.load}%` }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
