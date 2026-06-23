@@ -95,7 +95,7 @@ function deptNameToStageId(deptTabName: string): string {
   }
   // Fuzzy: partial match
   for (const stage of GARMENT_PIPELINE) {
-    if (lower.includes(stage.dept.toLowerCase()) || stage.dept.toLowerCase().includes(lower)) return stage.id;
+    if (lower.includes(stage.dept.toLowerCase()) || stage.dept?.toLowerCase()?.includes(lower)) return stage.id;
   }
   // Fallback: spaces→underscores uppercase (better than plain toUpperCase with spaces)
   return deptTabName.trim().toUpperCase().replace(/\s+/g, "_").replace(/[^A-Z_]/g, "");
@@ -1953,10 +1953,10 @@ function CommentsFeed({ comments, setComments, stateHistory }: {
 
 // ─── Detail Form ──────────────────────────────────────────────────────────────
 
-function DetailForm({ task, dept, karigars, production, taskName, onSave, onCancel }: {
+function DetailForm({ task, dept, karigars, production, taskName, onSave, onCancel, onDelete }: {
   task: EnrichedTask; dept: DeptConfig; karigars: Karigar[];
   production: WorkOrder[]; taskName: string;
-  onSave: (t: EnrichedTask) => void; onCancel: () => void;
+  onSave: (t: EnrichedTask) => void; onCancel: () => void; onDelete: (t: EnrichedTask) => void;
 }) {
   const [form, setForm] = useState<EnrichedTask>(task);
   const [activeSection, setActiveSection] = useState("output");
@@ -2124,15 +2124,14 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
   const validNextStates = wf.nextStates;
 
   const SECTIONS = [
-    { id: "time_logs", label: "Time Logs", icon: Clock },
     { id: "output", label: "Output", icon: Target },
+    { id: "dept", label: "Parameters", icon: Zap, hidden: dept.extraFields.length === 0 },
+    { id: "time_logs", label: "Time Logs", icon: Clock },
     { id: "subtasks", label: "Sub-tasks", icon: GitBranch },
-    { id: "checklist", label: "Checklist", icon: ListChecks },
+    { id: "checklist", label: "Checklist", icon: ListChecks, hidden: ["Washing", "Dyeing"].includes(dept.label) },
     { id: "worker", label: "Worker", icon: Users },
-    { id: "dept", label: dept.label, icon: Zap },
     { id: "comments", label: "Comments", icon: MessageSquare },
-    { id: "notes", label: "Notes", icon: FileText },
-  ];
+  ].filter(s => !s.hidden);
 
   return (
     <div className="h-full bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden">
@@ -2193,12 +2192,38 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
             );
           })}
 
+          {!isNew && (
+            <button onClick={() => onDelete(task)}
+              title="Delete this task"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black transition-colors text-rose-600 border border-rose-200 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950/30">
+              <Trash2 className="w-3 h-3" /> Delete
+            </button>
+          )}
+
           <button onClick={() => onSave(form)}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black transition-colors ${dept.tw.btnBg}`}>
+            disabled={isNew && (!form.name || form.name.trim() === "" || form.name === taskName)}
+            title={isNew && (!form.name || form.name.trim() === "" || form.name === taskName) ? "Enter a task name first" : undefined}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black transition-colors ${dept.tw.btnBg} ${isNew && (!form.name || form.name.trim() === "" || form.name === taskName) ? "opacity-40 cursor-not-allowed" : ""}`}>
             <Save className="w-3 h-3" /> Save
           </button>
         </div>
       </div>
+
+      {/* New-task name field — without this, every new task is saved with the
+          department name as its name instead of a specific task name */}
+      {isNew && (
+        <div className={`px-3 py-2 shrink-0 ${dept.tw.bg} border-b ${dept.tw.border}`}>
+          <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 block mb-1">Task Name *</label>
+          <input
+            type="text"
+            autoFocus
+            value={form.name === taskName ? "" : form.name}
+            onChange={e => set({ name: e.target.value })}
+            placeholder={`e.g. "${taskName} — Lot 12" or a specific job description`}
+            className="w-full text-xs font-bold rounded-lg px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-current/20"
+          />
+        </div>
+      )}
 
       {/* Workflow pipeline strip — shows BOTH the WO's full garment pipeline AND the op-level state */}
       {!isNew && (
@@ -2476,11 +2501,11 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                 <div>
                   <FieldLabel>Total Order Target</FieldLabel>
                   <div className="erp-input bg-slate-50 dark:bg-slate-800 text-slate-400 text-xs sm:text-sm">
-                    {dept.label === "Printing" ? (() => {
+                    {["Printing", "Dyeing", "Fabric Inspection"].includes(dept.label) ? (() => {
                       const mats = form.customData?.materialConsumptions || [{ perPcConsumption: form.customData?.perPcConsumption || 0 }];
                       const totalPerPc = mats.reduce((s: number, r: any) => s + Number(r.perPcConsumption || 0), 0);
                       const totalM = totalPerPc > 0 && form.woQty ? (form.woQty * totalPerPc).toFixed(1) : null;
-                      return <><span className="font-black text-slate-600">{totalM ? `${totalM} m` : `${form.woQty || 0} pcs`}</span>{totalM && <span className="text-[10px] ml-1">({form.woQty} pcs)</span>}</>;
+                      return <><span className="font-black text-slate-600">{totalM ? `${totalM} Mtr` : `? Mtr`}</span> <span className="text-[10px] ml-1">({form.woQty} pcs)</span></>;
                     })() : (
                       <>{form.woQty || 0} pcs
                       {["Cutting"].includes(dept.label) ? (() => {
@@ -2492,25 +2517,14 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                   </div>
                 </div>
                 <div>
-                  <FieldLabel>{dept.label === "Printing" ? "Printed & Received (Meters) ✓" : "Completed (Qty/Meters) ✓"}</FieldLabel>
-                  {dept.label === "Printing" ? (
-                    // Printing: auto-filled from Stock Receipt → receivedFabricMeters (read-only hint)
-                    <div className="relative">
-                      <input type="number" min={0} className="erp-input w-full !bg-emerald-50 dark:!bg-emerald-950/30 !text-emerald-700 font-black"
-                        value={form.customData?.receivedFabricMeters || form.completedQuantity || ""}
-                        onChange={e => set({ customData: { ...form.customData, receivedFabricMeters: e.target.value }, completedQuantity: parseFloat(e.target.value) || 0 })}
-                        placeholder="Enter meters received back" />
-                      <p className="text-[9px] text-slate-400 mt-0.5 font-bold">↳ Auto-synced from Stock Receipt</p>
-                    </div>
-                  ) : (
-                    <input type="number" min={0} className="erp-input w-full !bg-emerald-50 dark:!bg-emerald-950/30 !text-emerald-700 font-black"
-                      value={form.completedQuantity || ""} onChange={e => set({ completedQuantity: parseInt(e.target.value) || 0 })} placeholder="0" />
-                  )}
+                  <FieldLabel>{["Printing", "Dyeing", "Fabric Inspection"].includes(dept.label) ? "Received (Meters) ✓" : "Completed Qty ✓"}</FieldLabel>
+                  <input type="number" min={0} step="0.1" className="erp-input w-full !bg-emerald-50 dark:!bg-emerald-950/30 !text-emerald-700 font-black"
+                    value={form.completedQuantity || ""} onChange={e => set({ completedQuantity: ["Printing", "Dyeing", "Fabric Inspection"].includes(dept.label) ? (parseFloat(e.target.value) || 0) : (parseInt(e.target.value) || 0) })} placeholder="0" />
                 </div>
                 <div>
-                  <FieldLabel>Rejected (Qty/Meters) ✗</FieldLabel>
-                  <input type="number" min={0} className="erp-input w-full !bg-rose-50 dark:!bg-rose-950/30 !text-rose-700 font-black"
-                    value={form.rejectedQuantity || ""} onChange={e => set({ rejectedQuantity: parseInt(e.target.value) || 0 })} placeholder="0" />
+                  <FieldLabel>Rejected {["Printing", "Dyeing", "Fabric Inspection"].includes(dept.label) ? "(Meters)" : "(Qty)"} ✗</FieldLabel>
+                  <input type="number" min={0} step="0.1" className="erp-input w-full !bg-rose-50 dark:!bg-rose-950/30 !text-rose-700 font-black"
+                    value={form.rejectedQuantity || ""} onChange={e => set({ rejectedQuantity: ["Printing", "Dyeing", "Fabric Inspection"].includes(dept.label) ? (parseFloat(e.target.value) || 0) : (parseInt(e.target.value) || 0) })} placeholder="0" />
                 </div>
               </div>
 
@@ -3768,7 +3782,7 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
       if (filterPriority && t.priority !== filterPriority) return false;
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
-        return t.woId?.toLowerCase().includes(q) || t.woProduct?.toLowerCase().includes(q) || t.name.toLowerCase().includes(q);
+        return t.woId?.toLowerCase()?.includes(q) || t.woProduct?.toLowerCase()?.includes(q) || t.name?.toLowerCase()?.includes(q);
       }
       return true;
     });
@@ -3811,10 +3825,11 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
     );
 
     if (updatedTask.isNew && updatedTask.woId) {
+      const taskTitle = (updatedTask.name || "").trim() || tn;
       newOps = [...(wo.operations || []), {
         id: `OP-${Date.now()}`,
-        name: tn,
-        stage: deptNameToStageId(tn), // ← FIX: was tn.toUpperCase() which produced "FABRIC INSPECTION" (spaces) — now produces "FABRIC_INSPECTION" (underscore StageId)
+        name: taskTitle,
+        stage: deptNameToStageId(tn), // stage/dept routing stays tied to the dept tab — only the display name changes
         processType: "IN_HOUSE" as const,
         workstationType: tn,
         plannedHours: 4,
@@ -3927,6 +3942,29 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
       }
     }
 
+    // ── Fabric Inspection → sync completedQuantity/rejectedQuantity ───────
+    // BUG FIX: the GRN block above only updates inventory; nothing was ever
+    // copying acceptedMeters/defectMeters into completedQuantity/rejectedQuantity,
+    // so every dashboard (WIP, Analytics, SLA, rejection rate) read 0 for this
+    // dept no matter what the user entered. Kept independent of onUpdateInventory
+    // so it still fires even when that block's guard conditions don't.
+    if (updatedTask.workflowState === "Completed" && dept.label === "Fabric Inspection" && !updatedTask.customData?.fabricInspectionQtyLogged) {
+      const totalMeters = Number(updatedTask.customData?.totalMeters || 0);
+      const defectMeters = Number(updatedTask.customData?.defectMeters || 0);
+      const acceptedMeters = updatedTask.customData?.acceptedMeters !== undefined
+        ? Number(updatedTask.customData.acceptedMeters)
+        : Math.max(0, totalMeters - defectMeters);
+      const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
+      if (opIdx >= 0 && (acceptedMeters > 0 || defectMeters > 0)) {
+        newOps[opIdx] = {
+          ...newOps[opIdx],
+          completedQuantity: acceptedMeters,
+          rejectedQuantity: defectMeters,
+          customData: { ...newOps[opIdx].customData, fabricInspectionQtyLogged: true },
+        };
+      }
+    }
+
     // ── Dyeing → Dyed Fabric Store Receipt on completion ──────────────────
     if (updatedTask.workflowState === "Completed" && dept.label === "Dyeing" && !updatedTask.customData?.dyedStockAdded && updatedTask.customData?.addToStore === "Yes – on completion") {
       const receivedMeters = Number(updatedTask.customData?.receivedMeters || 0);
@@ -3955,24 +3993,61 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
       }
     }
 
+    // ── Dyeing → sync completedQuantity from Received Back (Meters) ───────
+    // BUG FIX: the store-receipt block above only fires when the "Add to Store"
+    // toggle is set to Yes (defaults to No) and only touches inventory — nothing
+    // ever copied receivedMeters into completedQuantity, so every dashboard
+    // read 0 for this dept regardless of what was entered.
+    if (updatedTask.workflowState === "Completed" && dept.label === "Dyeing" && !updatedTask.customData?.dyeingQtyLogged) {
+      const receivedMeters = Number(updatedTask.customData?.receivedMeters || 0);
+      const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
+      if (opIdx >= 0 && receivedMeters > 0) {
+        newOps[opIdx] = {
+          ...newOps[opIdx],
+          completedQuantity: receivedMeters,
+          customData: { ...newOps[opIdx].customData, dyeingQtyLogged: true },
+        };
+      }
+    }
+
     // ── Hand Work → Karigar Return – piece count update ───────────────────
+    // BUG FIX: previously only set a "karigarReturnLogged" flag + toast; never
+    // copied receivedQty/rejectedQty into completedQuantity/rejectedQuantity,
+    // so this dept always showed 0 done pcs on every dashboard.
     if (updatedTask.workflowState === "Completed" && dept.label === "Hand Work" && !updatedTask.customData?.karigarReturnLogged) {
       const receivedQty = Number(updatedTask.customData?.receivedQty || 0);
       const rejectedQty = Number(updatedTask.customData?.rejectedQty || 0);
       if (receivedQty > 0) {
         const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
-        if (opIdx >= 0) newOps[opIdx].customData = { ...newOps[opIdx].customData, karigarReturnLogged: true };
+        if (opIdx >= 0) {
+          newOps[opIdx] = {
+            ...newOps[opIdx],
+            completedQuantity: Math.max(0, receivedQty - rejectedQty),
+            rejectedQuantity: rejectedQty,
+            customData: { ...newOps[opIdx].customData, karigarReturnLogged: true },
+          };
+        }
         toast.success(`Karigar Return — ${updatedTask.customData?.karigarName || '–'}: ${receivedQty - rejectedQty} accepted, ${rejectedQty} rejected`);
       }
     }
 
     // ── QC Check → Alteration + Pass-to-Packing log ───────────────────────
+    // BUG FIX: previously only set a "qcReportLogged" flag + toast; never copied
+    // passQty/failQty into completedQuantity/rejectedQuantity, so this dept
+    // always showed 0 done pcs on every dashboard.
     if (updatedTask.workflowState === "Completed" && dept.label === "QC Check" && !updatedTask.customData?.qcReportLogged) {
       const passQty = Number(updatedTask.customData?.passQty || 0);
       const failQty = Number(updatedTask.customData?.failQty || 0);
       const altQty = Number(updatedTask.customData?.alterationQty || 0);
       const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
-      if (opIdx >= 0) newOps[opIdx].customData = { ...newOps[opIdx].customData, qcReportLogged: true };
+      if (opIdx >= 0) {
+        newOps[opIdx] = {
+          ...newOps[opIdx],
+          completedQuantity: passQty,
+          rejectedQuantity: failQty,
+          customData: { ...newOps[opIdx].customData, qcReportLogged: true },
+        };
+      }
       if (passQty > 0 || failQty > 0) {
         toast.success(`QC ${updatedTask.customData?.qcStage || 'Final QC'} — Pass: ${passQty} ✅  Fail: ${failQty} ❌  Alt: ${altQty} 🔄  (${updatedTask.customData?.defectCategory || 'No defect noted'})`);
       }
@@ -4148,6 +4223,18 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
     if (clearSelection) setSelectedIds([]);
   }, [production, tn, onUpdateWorkOrder, dept, inventory, onUpdateInventory, onCreateGatePass]);
 
+  const deleteTask = useCallback((task: EnrichedTask) => {
+    const wo = production.find(w => w.id === task.woId);
+    if (!wo) return;
+    const ok = window.confirm(`Delete "${task.name}"? This cannot be undone.`);
+    if (!ok) return;
+    const newOps = (wo.operations || []).filter((_, i) => i !== task.opIndex);
+    onUpdateWorkOrder({ ...wo, operations: newOps });
+    toast.success(`Deleted "${task.name}"`);
+    setEditingTask(null);
+    setSelectedIds(prev => prev.filter(id => id !== task._uid));
+  }, [production, onUpdateWorkOrder]);
+
   const doTransition = useCallback((task: EnrichedTask, to: WorkflowState, opts?: { closeDrawer?: boolean; clearSelection?: boolean }) => {
     if (task._blocked) {
       toast.warn(`Cannot start task — complete: ${task._blockedBy} first`);
@@ -4167,19 +4254,56 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
     saveTask({ ...task, subTasks: newSubTasks }, { closeDrawer: false, clearSelection: false });
   }, [saveTask]);
 
-  const bulkComplete = () => {
-    filteredTasks.filter(t => selectedIds.includes(t._uid)).forEach(t =>
-      doTransition(t, "Completed", { closeDrawer: false, clearSelection: false })
-    );
+  // BUG FIX: bulkComplete/bulkHold previously called doTransition (→ saveTask)
+  // once per selected task in a synchronous loop. saveTask reads `wo` from the
+  // `production` prop closure, which doesn't change mid-loop (React doesn't
+  // re-render between forEach iterations) — so every iteration rebuilds
+  // `operations` from the SAME stale snapshot and overwrites the previous
+  // iteration's change. Any time 2+ selected tasks belong to the same work
+  // order — which is the normal case for multi-piece WOs (Kurti/Pant/Dupatta
+  // sets all share one woId) — only the last one processed actually survives;
+  // every earlier selected task's completion was silently discarded. Fixed by
+  // grouping selections by woId and writing one merged operations array per
+  // WO in a single onUpdateWorkOrder call.
+  const bulkTransition = (to: WorkflowState) => {
+    const selected = filteredTasks.filter(t => selectedIds.includes(t._uid));
+    const byWO = new Map<string, EnrichedTask[]>();
+    selected.forEach(t => {
+      if (!byWO.has(t.woId)) byWO.set(t.woId, []);
+      byWO.get(t.woId)!.push(t);
+    });
+    const stateToStatus: Record<WorkflowState, "PENDING" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED"> = {
+      Draft: "PENDING", Open: "PENDING",
+      "Work In Progress": "IN_PROGRESS",
+      "QC Review": "IN_PROGRESS",
+      Completed: "COMPLETED",
+      "On Hold": "PENDING",
+      Rejected: "PENDING",
+    };
+    byWO.forEach((tasks, woId) => {
+      const wo = production.find(w => w.id === woId);
+      if (!wo) return;
+      const now = new Date().toISOString();
+      const opIndexes = new Set(tasks.map(t => t.opIndex));
+      const newOps = (wo.operations || []).map((op: any, i: number) => {
+        if (!opIndexes.has(i)) return op;
+        const entry: StateTransition = { time: now, from: op.workflowState, to, user: "Me" };
+        return {
+          ...op,
+          status: stateToStatus[to],
+          workflowState: to,
+          stateHistory: [entry, ...(op.stateHistory || [])],
+          startedAt: to === "Work In Progress" && !op.startedAt ? now : op.startedAt,
+          completedAt: to === "Completed" ? now : op.completedAt,
+        };
+      });
+      onUpdateWorkOrder({ ...wo, operations: newOps });
+    });
     setSelectedIds([]);
   };
 
-  const bulkHold = () => {
-    filteredTasks.filter(t => selectedIds.includes(t._uid)).forEach(t =>
-      doTransition(t, "On Hold", { closeDrawer: false, clearSelection: false })
-    );
-    setSelectedIds([]);
-  };
+  const bulkComplete = () => bulkTransition("Completed");
+  const bulkHold = () => bulkTransition("On Hold");
 
   const openNew = () => {
     const firstWo = production[0];
@@ -4294,6 +4418,7 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
                 taskName={tn}
                 onSave={saveTask}
                 onCancel={() => setEditingTask(null)}
+                onDelete={deleteTask}
               />
             </div>
           </div>

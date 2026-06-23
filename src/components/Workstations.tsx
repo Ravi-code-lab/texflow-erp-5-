@@ -32,9 +32,9 @@ const Workstations: React.FC<WorkstationsProps> = ({ workstations, onAdd, onUpda
 
   const filtered = useMemo(() => 
     workstations.filter(m => 
-      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (m.type && m.type.toLowerCase().includes(searchQuery.toLowerCase()))
+      m.name?.toLowerCase()?.includes(searchQuery.toLowerCase()) ||
+      m.id?.toLowerCase()?.includes(searchQuery.toLowerCase()) ||
+      (m.type && m.type?.toLowerCase()?.includes(searchQuery.toLowerCase()))
     ),
     [workstations, searchQuery]
   );

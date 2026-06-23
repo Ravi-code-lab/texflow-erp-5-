@@ -19,7 +19,7 @@ export default function TrackLots({ jobs, onUpdateJob }: TrackLotsProps) {
   const [filterStr, setFilterStr] = useState('');
 
   const filtered = jobs.filter(j => 
-    j.productName.toLowerCase().includes(filterStr.toLowerCase()) ||
+    j.productName?.toLowerCase()?.includes(filterStr.toLowerCase()) ||
     String(j.id).toLowerCase().includes(filterStr.toLowerCase())
   );
 

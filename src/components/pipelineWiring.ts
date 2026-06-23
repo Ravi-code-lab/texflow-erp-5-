@@ -908,6 +908,7 @@ export const STAGE_TO_DEPT: Record<string, string> = Object.fromEntries(
  * "Dye House" → DYEING. "Hand Work" / "Karigar" → HAND_WORK.
  */
 export function getOpStageId(op: any): StageId | null {
+  if (!op) return null;
   // 1. Explicit stage field — must be a valid StageId
   if (op.stage && STAGE_MAP.has(op.stage as StageId)) return op.stage as StageId;
 
@@ -960,6 +961,7 @@ export function getOpStageId(op: any): StageId | null {
  * Result is sorted by GARMENT_PIPELINE order, filtered to only stages present in ops.
  */
 export function deriveWORoute(operations: any[]): { stage: PipelineStage; op: any }[] {
+  if (!operations?.length) return [];
   const pipelineOrder = GARMENT_PIPELINE.map(s => s.id);
   const seen = new Set<string>();
   const result: { stage: PipelineStage; op: any }[] = [];
@@ -990,6 +992,7 @@ export function deriveWORoute(operations: any[]): { stage: PipelineStage; op: an
  *   "Dye House" workstationType → "Dyeing"
  */
 export function opBelongsToDept(op: any, deptTabName: string): boolean {
+  if (!op || !deptTabName) return false;
   const stageId = getOpStageId(op);
   if (stageId) {
     const stage = STAGE_MAP.get(stageId);
@@ -1009,8 +1012,9 @@ export function opBelongsToDept(op: any, deptTabName: string): boolean {
     const name = (op.name || "").toLowerCase();
     if (dept === "fabric inspection" && (name.includes("fabric insp") || name.includes("fabric inspection"))) return true;
     if (dept === "qc check" && (name.includes("qc check") || name.includes("quality check") || name.includes("final qc"))) return true;
-    // If we can't tell, match on position: fabric inspection gets it if it's the first QC op
-    if (dept === "fabric inspection" || dept === "qc check") return name.includes("insp") ? dept === "fabric inspection" : dept === "qc check";
+    // Genuinely ambiguous (no stage, no name hint): don't guess based on which
+    // dept tab is asking — that silently dumps every vague QC op into "QC Check".
+    // Fall through to name-based fuzzy match below instead.
   }
 
   // Alias: "Dye House", "Dyehouse" → Dyeing
@@ -1019,8 +1023,9 @@ export function opBelongsToDept(op: any, deptTabName: string): boolean {
   // Alias: "Hand Work", "Handwork", "Karigar" → Hand Work
   if ((wst.includes("hand") || wst.includes("karigar")) && dept === "hand work") return true;
 
-  // Name-based fuzzy fallback
-  return (op.name || "").toLowerCase().includes(dept.replace(" ", ""));
+  // Name-based fuzzy fallback — replace spaces so "qc check" matches "qccheck" etc.
+  const deptNorm = dept.replace(/\s+/g, "");
+  return !!(op.name && deptNorm && op.name.toLowerCase().includes(deptNorm));
 }
 
 // ─── Blocking / gating logic ──────────────────────────────────────────────────
@@ -1123,6 +1128,7 @@ export interface PipelineProgress {
 }
 
 export function computePipelineProgress(operations: any[]): PipelineProgress {
+  if (!operations?.length) return { route: [], overallPct: 0, currentStage: "—", completedCount: 0 };
   const route = deriveWORoute(operations);
   const enriched = route.map(({ stage, op }, idx) => {
     const isCompleted = isOpCompleted(op);
@@ -1146,6 +1152,7 @@ export function computePipelineProgress(operations: any[]): PipelineProgress {
  * Used to surface "You just unlocked Stitching" alerts in the UI.
  */
 export function getUnlockedDepts(operations: any[], justCompletedOpIndex: number): string[] {
+  if (!operations?.length) return [];
   const justCompletedOp = operations[justCompletedOpIndex];
   if (!justCompletedOp) return [];
 

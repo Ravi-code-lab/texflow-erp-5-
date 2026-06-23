@@ -1,30 +1,21 @@
-
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import * as path from 'path';
+import tailwindcss from '@tailwindcss/vite';
 
-export default defineConfig(({ mode }) => {
-  // Casting process to any to avoid TS error about cwd() not existing on Process type in some environments
-  const env = loadEnv(mode, (process as any).cwd(), '');
-  return {
-    plugins: [react()],
-    resolve: {
-      alias: {
-        '@': path.resolve((process as any).cwd(), './'),
-      },
-    },
-    define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY),
-    },
-    base: './', // Important for Electron to find assets
-    build: {
-      outDir: 'dist',
-      emptyOutDir: true,
-    },
-    server: {
-      port: 3000,
-      host: '0.0.0.0',
-      allowedHosts: true
+export default defineConfig({
+  base: './', // CRITICAL for Electron: file:// loading needs relative asset paths, not "/assets/..."
+  plugins: [
+    tailwindcss(),
+    react()
+  ],
+  build: {
+    rollupOptions: {
+      onwarn(warning, warn) {
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message.includes('use client')) {
+          return;
+        }
+        warn(warning);
+      }
     }
-  };
+  }
 });

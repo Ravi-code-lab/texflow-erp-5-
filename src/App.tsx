@@ -1620,7 +1620,7 @@ const App: React.FC = () => {
         setPendingInvoiceOrderId(data?.id || undefined);
         setCurrentView("TAX_INVOICE");
         break;
-      case "CONVERT_TO_WORK_ORDER_FROM_SAMPLE":
+      case "CONVERT_TO_WORK_ORDER_FROM_SAMPLE": {
         const productionFromSample = createERPDocument("PRODUCTION", {
           productName: data.designName || "Custom Product",
           quantity: data.quantity || 1,
@@ -1631,15 +1631,15 @@ const App: React.FC = () => {
           qualityStatus: "PENDING",
           priority: data.priority || "NORMAL",
           progress: 0,
-          styleCode:
-            data.styleCode ||
-            `STL-${parseInt(uuidShort(4), 16).toString()}`,
+          styleCode: data.styleCode || `STL-${parseInt(uuidShort(4), 16).toString()}`,
           sourceDoc: `Sample Request #${data.id}`,
           sizeWise: data.sizeWise || { M: data.quantity || 1 },
         });
-        prodMgr.add(
-          productionFromSample,
-        );
+        prodMgr.add(productionFromSample);
+        // BUG FIX: mark source Sample Request as CONVERTED so it can't spawn
+        // a second Work Order (same pattern as CONVERT_TO_SALES_ORDER fix).
+        const sourceSample = samples.find((s: any) => s.id === data.id);
+        if (sourceSample) sampleMgr.update({ ...sourceSample, status: "CONVERTED" });
         handleAddNotification({
           title: "Work Order Triggered",
           message: `Successfully spawned Work Order from approved Sample Request #${data.id} (${data.designName}).`,
@@ -1647,7 +1647,8 @@ const App: React.FC = () => {
         });
         setCurrentView("PRODUCTION");
         break;
-      case "CONVERT_TO_WORK_ORDER":
+      }
+      case "CONVERT_TO_WORK_ORDER": {
         const productionBase = createERPDocument("PRODUCTION", {
           productName: data.items?.[0]?.productName || "Custom Product",
           quantity: data.items?.[0]?.quantity || 1,
@@ -1658,12 +1659,17 @@ const App: React.FC = () => {
           qualityStatus: "PENDING",
           priority: data.priority || "NORMAL",
           progress: 0,
+          sourceOrderId: data.id,
         });
-        prodMgr.add(
-          productionBase,
-        );
+        prodMgr.add(productionBase);
+        // BUG FIX: mark source Sales Order as CONVERTED so it can't be
+        // converted to a second Work Order (same omission that was already
+        // fixed for CONVERT_TO_SALES_ORDER → Quotation).
+        const sourceOrder = orders.find((o: any) => o.id === data.id);
+        if (sourceOrder) ordMgr.update({ ...sourceOrder, status: "CONVERTED" });
         setCurrentView("PRODUCTION");
         break;
+      }
       case "CONVERT_TO_JOB_CARD":
         const jobCardBase = createERPDocument("JOB_WORK", {
           status: "ISSUED",
@@ -1838,7 +1844,11 @@ const App: React.FC = () => {
             date: new Date().toISOString().split("T")[0],
             description: `Purchase Return: ${retPO.supplierName} - PO ${retPO.id}`,
             amount: retPO.totalAmount,
-            type: "EXPENSE",
+            // BUG FIX: was "EXPENSE" — a purchase return is a credit/recovery
+            // (money coming back from supplier), not an outgoing expense. Using
+            // EXPENSE was double-counting: the original PO already recorded the
+            // expense; the return should offset it, not add to it.
+            type: "INCOME",
             category: "PURCHASE_RETURN",
             paymentMethod: "ADJUSTMENT",
             subType: "DEBIT_NOTE",
@@ -2397,6 +2407,9 @@ const App: React.FC = () => {
     "TASK_FINISHING",
     "TASK_PACKING",
     "TASK_FABRIC_INSPECTION",
+    "TASK_DYEING",
+    "TASK_HAND_WORK",
+    "TASK_QC_CHECK",
     "MFG_DASHBOARD",
     "JOB_CARD_SUMMARY",
     "OPERATIONS_MASTER",
@@ -2976,6 +2989,8 @@ const App: React.FC = () => {
                   currentView === "TASK_FINISHING" ||
                   currentView === "TASK_PACKING" ||
                   currentView === "TASK_FABRIC_INSPECTION" ||
+                  currentView === "TASK_QC_CHECK" ||
+                  currentView === "TASK_HAND_WORK" ||
                   currentView === "TASK_DYEING") && effectiveFeatures["WORK_ORDER_TASKS"] !== false && (
                   <WorkOrderTaskHub
                     production={active(production)}
@@ -2994,6 +3009,8 @@ const App: React.FC = () => {
                       : currentView === "TASK_PACKING" ? "Packing"
                       : currentView === "TASK_FABRIC_INSPECTION" ? "Fabric Inspection"
                       : currentView === "TASK_DYEING" ? "Dyeing"
+                      : currentView === "TASK_QC_CHECK" ? "QC Check"
+                      : currentView === "TASK_HAND_WORK" ? "Hand Work"
                       : "Fabric Inspection"
                     }
                   />

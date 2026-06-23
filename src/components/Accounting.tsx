@@ -187,7 +187,7 @@ const Accounting: React.FC<AccountingProps> = ({
   const daybookRows = useMemo(() => {
     return transactions.filter(t => {
       const q = searchQ.toLowerCase();
-      const matchSearch = !q || t.description?.toLowerCase().includes(q) || t.category?.toLowerCase().includes(q);
+      const matchSearch = !q || t.description?.toLowerCase()?.includes(q) || t.category?.toLowerCase()?.includes(q);
       const matchFrom   = !dateFrom || t.date >= dateFrom;
       const matchTo     = !dateTo   || t.date <= dateTo;
       return matchSearch && matchFrom && matchTo;

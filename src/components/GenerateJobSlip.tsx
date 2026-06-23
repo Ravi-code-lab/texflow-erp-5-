@@ -20,12 +20,14 @@ const DEFAULT_ROUTE_OPTIONS = [
     id: 'ROUTE-KURTI-STD',
     name: 'Kurti Standard Route',
     operations: [
-      { id: 'OP-FABRIC-ISSUE', name: 'Fabric Issue', stage: 'CUTTING', processType: 'IN_HOUSE', workstationType: 'Store', plannedHours: 1, defaultRate: 5, qualityCheckpoint: false },
+      // NOTE: `stage` must be a valid GARMENT_PIPELINE StageId (pipelineWiring.ts)
+      // — see RoutingMaster.tsx for the same fix and full explanation.
+      { id: 'OP-FABRIC-ISSUE', name: 'Fabric Issue', stage: 'FABRIC_INSPECTION', processType: 'IN_HOUSE', workstationType: 'Store', plannedHours: 1, defaultRate: 5, qualityCheckpoint: false },
       { id: 'OP-CUTTING', name: 'Panel Cutting', stage: 'CUTTING', processType: 'IN_HOUSE', workstationType: 'Cutting Table', plannedHours: 4, defaultRate: 15, qualityCheckpoint: true },
-      { id: 'OP-EMBROIDERY', name: 'Embroidery / Print', stage: 'JOBWORK', processType: 'JOB_WORK', workstationType: 'Vendor', plannedHours: 24, defaultRate: 40, qualityCheckpoint: true },
+      { id: 'OP-EMBROIDERY', name: 'Embroidery / Print', stage: 'EMBROIDERY_GARMENT', processType: 'JOB_WORK', workstationType: 'Vendor', plannedHours: 24, defaultRate: 40, qualityCheckpoint: true },
       { id: 'OP-STITCHING', name: 'Stitching', stage: 'STITCHING', processType: 'IN_HOUSE', workstationType: 'Stitching Line', plannedHours: 8, defaultRate: 35, qualityCheckpoint: true },
       { id: 'OP-FINISHING', name: 'Thread Cutting & Finishing', stage: 'FINISHING', processType: 'IN_HOUSE', workstationType: 'Finishing Table', plannedHours: 3, defaultRate: 10, qualityCheckpoint: true },
-      { id: 'OP-PACKING', name: 'Pressing & Packing', stage: 'READY', processType: 'IN_HOUSE', workstationType: 'Packing', plannedHours: 2, defaultRate: 8, qualityCheckpoint: false },
+      { id: 'OP-PACKING', name: 'Pressing & Packing', stage: 'PACKING', processType: 'IN_HOUSE', workstationType: 'Packing', plannedHours: 2, defaultRate: 8, qualityCheckpoint: false },
     ]
   },
   {
@@ -33,8 +35,8 @@ const DEFAULT_ROUTE_OPTIONS = [
     name: 'Saree Standard Route',
     operations: [
       { id: 'OP-SAREE-WEAVING', name: 'Weaving & Border', stage: 'CUTTING', processType: 'IN_HOUSE', workstationType: 'Loom', plannedHours: 12, defaultRate: 80, qualityCheckpoint: true },
-      { id: 'OP-SAREE-DYEING', name: 'Dyeing & Washing', stage: 'JOBWORK', processType: 'JOB_WORK', workstationType: 'Dyeing Vendor', plannedHours: 48, defaultRate: 50, qualityCheckpoint: true },
-      { id: 'OP-SAREE-FINISHING', name: 'Zari Finishing & Packing', stage: 'FINISHING', processType: 'IN_HOUSE', workstationType: 'Finishing Table', plannedHours: 6, defaultRate: 25, qualityCheckpoint: true },
+      { id: 'OP-SAREE-DYEING', name: 'Dyeing', stage: 'DYEING', processType: 'JOB_WORK', workstationType: 'Dyeing Vendor', plannedHours: 48, defaultRate: 50, qualityCheckpoint: true },
+      { id: 'OP-SAREE-FINISHING', name: 'Zari Finishing', stage: 'FINISHING', processType: 'IN_HOUSE', workstationType: 'Finishing Table', plannedHours: 6, defaultRate: 25, qualityCheckpoint: true },
     ]
   }
 ];
@@ -101,7 +103,7 @@ const GenerateJobSlip: React.FC<JobCardProps> = ({
       setCustomPieceRate(op.defaultRate || 0);
       
       // Attempt to auto-prefill matching workstation
-      const matchingWs = workstations.find(w => w.type.toLowerCase() === op.stage.toLowerCase() || w.name.toLowerCase().includes(op.workstationType?.toLowerCase() || ''));
+      const matchingWs = workstations.find(w => w.type.toLowerCase() === op.stage.toLowerCase() || w.name?.toLowerCase()?.includes(op.workstationType?.toLowerCase() || ''));
       if (matchingWs) {
         setSelectedWorkstationId(matchingWs.id);
       } else {

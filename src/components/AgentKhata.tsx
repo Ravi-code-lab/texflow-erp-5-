@@ -31,8 +31,8 @@ const AgentKhata: React.FC<AgentKhataProps> = ({ agents, onUpdateAgent, currency
   const filteredAgents = useMemo(() => {
     const q = filter.toLowerCase();
     return agents.filter(a => 
-      a.name.toLowerCase().includes(q) || 
-      a.area.toLowerCase().includes(q)
+      a.name?.toLowerCase()?.includes(q) || 
+      a.area?.toLowerCase()?.includes(q)
     );
   }, [agents, filter]);
 

@@ -56,11 +56,11 @@ const Customers: React.FC<CustomersProps> = ({
   const filteredCustomers = useMemo(() => {
     const q = filter.toLowerCase();
     return customers.filter(c =>
-      c.name?.toLowerCase().includes(q) ||
-      c.contactPerson?.toLowerCase().includes(q) ||
-      c.gstin?.toLowerCase().includes(q) ||
+      c.name?.toLowerCase()?.includes(q) ||
+      c.contactPerson?.toLowerCase()?.includes(q) ||
+      c.gstin?.toLowerCase()?.includes(q) ||
       c.phone?.includes(q) ||
-      c.billingCity?.toLowerCase().includes(q)
+      c.billingCity?.toLowerCase()?.includes(q)
     );
   }, [customers, filter]);
 

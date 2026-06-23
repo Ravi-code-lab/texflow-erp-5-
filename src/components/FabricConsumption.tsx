@@ -76,7 +76,7 @@ const FabricConsumption: React.FC<FabricConsumptionProps> = ({
     [inventory]);
 
   const filteredFabrics = useMemo(() =>
-    fabrics.filter(f => !search || f.name.toLowerCase().includes(search.toLowerCase()) || (f.batchNumber || '').toLowerCase().includes(search.toLowerCase())),
+    fabrics.filter(f => !search || f.name?.toLowerCase()?.includes(search.toLowerCase()) || (f.batchNumber || '').toLowerCase().includes(search.toLowerCase())),
     [fabrics, search]);
 
   // Per-fabric stats from entries

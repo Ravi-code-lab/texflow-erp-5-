@@ -478,7 +478,7 @@ export default function RoleAccessManager({
   const filteredModules = useMemo(() => {
     return ALL_MODULES.filter(m => {
       if (filterGroup !== "ALL" && m.group !== filterGroup) return false;
-      if (searchQ && !m.label.toLowerCase().includes(searchQ.toLowerCase()) && !m.id.toLowerCase().includes(searchQ.toLowerCase())) return false;
+      if (searchQ && !m.label?.toLowerCase()?.includes(searchQ.toLowerCase()) && !m.id?.toLowerCase()?.includes(searchQ.toLowerCase())) return false;
       return true;
     });
   }, [filterGroup, searchQ]);

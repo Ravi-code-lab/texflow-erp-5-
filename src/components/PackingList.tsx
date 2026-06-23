@@ -35,9 +35,9 @@ const PackingList: React.FC<PackingSlipProps> = ({
   const filteredSlips = useMemo(() => {
     const q = filter.toLowerCase();
     return slips.filter(c => 
-        c.customerName?.toLowerCase().includes(q) || 
-        c.id?.toLowerCase().includes(q) ||
-        c.deliveryNoteId?.toLowerCase().includes(q)
+        c.customerName?.toLowerCase()?.includes(q) || 
+        c.id?.toLowerCase()?.includes(q) ||
+        c.deliveryNoteId?.toLowerCase()?.includes(q)
     );
   }, [slips, filter]);
 

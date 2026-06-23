@@ -138,7 +138,7 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
 
   const filteredDesigns = useMemo(() => {
     return designs.filter(d => {
-      const matchSearch = d.name.toLowerCase().includes(filter.toLowerCase()) || 
+      const matchSearch = d.name?.toLowerCase()?.includes(filter.toLowerCase()) || 
                           (d.sku || '').toLowerCase().includes(filter.toLowerCase());
       if (categoryFilter === 'ALL') return matchSearch;
       return matchSearch && d.category === categoryFilter;

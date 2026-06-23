@@ -341,7 +341,7 @@ const ChartOfAccounts: React.FC = () => {
     const q = searchQuery.toLowerCase();
     const matched = new Set<string>();
     accounts.forEach(a => {
-      if (a.name.toLowerCase().includes(q) || a.code.includes(q) || a.accountType.toLowerCase().includes(q) || a.rootType.toLowerCase().includes(q)) {
+      if (a.name?.toLowerCase()?.includes(q) || a.code.includes(q) || a.accountType?.toLowerCase()?.includes(q) || a.rootType?.toLowerCase()?.includes(q)) {
         matched.add(a.id);
         let parent = accounts.find(p => p.id === a.parentId);
         while (parent) { matched.add(parent.id); parent = accounts.find(p => p.id === parent?.parentId); }
@@ -472,7 +472,7 @@ const ChartOfAccounts: React.FC = () => {
     const isExpanded = !!expandedNodes[nodeId];
     const isSelected = selectedId === nodeId;
     const isHighlighted = matchedIds ? matchedIds.has(nodeId) : true;
-    const isExactMatch = searchQuery && (node.name.toLowerCase().includes(searchQuery.toLowerCase()) || node.code.includes(searchQuery));
+    const isExactMatch = searchQuery && (node.name?.toLowerCase()?.includes(searchQuery.toLowerCase()) || node.code.includes(searchQuery));
 
     if (!isHighlighted) return null;
 

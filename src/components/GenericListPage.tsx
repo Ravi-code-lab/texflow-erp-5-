@@ -152,16 +152,16 @@ export function GenericListPage<T extends Record<string, any> & { id: string; st
   const [deleting, setDeleting] = useState(false);
 
   // ── Build filters for the query ──
-  const queryFilters = useMemo<QueryFilter<T>[]>(() => {
-    const f: QueryFilter<T>[] = [];
+  const queryFilters = useMemo<QueryFilter[]>(() => {
+    const f: QueryFilter[] = [];
     if (statusFilter) {
-      f.push({ field: 'status' as keyof T, op: 'eq', value: statusFilter });
+      f.push({ field: 'status', operator: '==', value: statusFilter });
     }
     // Search: filter on id or any 'name'/'customerName'/'supplierName' field
     if (searchText.trim()) {
       f.push({
-        field: 'id' as keyof T,
-        op: 'contains',
+        field: 'id',
+        operator: 'contains',
         value: searchText.trim(),
       });
     }
@@ -172,7 +172,7 @@ export function GenericListPage<T extends Record<string, any> & { id: string; st
   const { data, total, page, pageCount, loading, error, refetch, setPage, setFilters } =
     useCollection<T>(collectionKey, {
       filters: queryFilters,
-      sortField: sortField as keyof T,
+      sortField: sortField as string,
       sortDir,
       pageSize,
     });

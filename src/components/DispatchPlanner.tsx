@@ -53,10 +53,10 @@ export const DispatchPlanner: React.FC<DispatchPlannerProps> = ({
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
       const q = searchQuery.toLowerCase();
-      return e.dispatchNumber?.toLowerCase().includes(q) || 
-             e.mode?.toLowerCase().includes(q) ||
-             e.status?.toLowerCase().includes(q) ||
-             e.carrierName?.toLowerCase().includes(q);
+      return e.dispatchNumber?.toLowerCase()?.includes(q) || 
+             e.mode?.toLowerCase()?.includes(q) ||
+             e.status?.toLowerCase()?.includes(q) ||
+             e.carrierName?.toLowerCase()?.includes(q);
     });
   }, [entries, searchQuery]);
 

@@ -62,12 +62,14 @@ const DEFAULT_ROUTING_TEMPLATES: GarmentRoutingTemplate[] = [
     name: 'Kurti Standard Route',
     category: 'Kurti',
     operations: [
-      { id: 'OP-FABRIC-ISSUE', name: 'Fabric Issue', stage: 'CUTTING', processType: 'IN_HOUSE', workstationType: 'Store', plannedHours: 1, qualityCheckpoint: false },
+      // NOTE: `stage` must be a valid GARMENT_PIPELINE StageId (pipelineWiring.ts)
+      // — see RoutingMaster.tsx for the same fix and full explanation.
+      { id: 'OP-FABRIC-ISSUE', name: 'Fabric Issue', stage: 'FABRIC_INSPECTION', processType: 'IN_HOUSE', workstationType: 'Store', plannedHours: 1, qualityCheckpoint: false },
       { id: 'OP-CUTTING', name: 'Panel Cutting', stage: 'CUTTING', processType: 'IN_HOUSE', workstationType: 'Cutting Table', plannedHours: 4, qualityCheckpoint: true },
-      { id: 'OP-EMBROIDERY', name: 'Embroidery / Print', stage: 'JOBWORK', processType: 'JOB_WORK', workstationType: 'Vendor', plannedHours: 24, qualityCheckpoint: true },
+      { id: 'OP-EMBROIDERY', name: 'Embroidery / Print', stage: 'EMBROIDERY_GARMENT', processType: 'JOB_WORK', workstationType: 'Vendor', plannedHours: 24, qualityCheckpoint: true },
       { id: 'OP-STITCHING', name: 'Stitching', stage: 'STITCHING', processType: 'IN_HOUSE', workstationType: 'Stitching Line', plannedHours: 8, qualityCheckpoint: true },
       { id: 'OP-FINISHING', name: 'Thread Cutting & Finishing', stage: 'FINISHING', processType: 'IN_HOUSE', workstationType: 'Finishing Table', plannedHours: 3, qualityCheckpoint: true },
-      { id: 'OP-PACKING', name: 'Pressing & Packing', stage: 'READY', processType: 'IN_HOUSE', workstationType: 'Packing', plannedHours: 2, qualityCheckpoint: false },
+      { id: 'OP-PACKING', name: 'Pressing & Packing', stage: 'PACKING', processType: 'IN_HOUSE', workstationType: 'Packing', plannedHours: 2, qualityCheckpoint: false },
     ],
   },
   {
@@ -75,10 +77,10 @@ const DEFAULT_ROUTING_TEMPLATES: GarmentRoutingTemplate[] = [
     name: 'Fabric Processing Route',
     category: 'FABRIC',
     operations: [
-      { id: 'OP-GREY-ISSUE', name: 'Grey Fabric Issue', stage: 'CUTTING', processType: 'IN_HOUSE', workstationType: 'Store', plannedHours: 1, qualityCheckpoint: false },
-      { id: 'OP-DYEING', name: 'Dyeing / Washing', stage: 'JOBWORK', processType: 'JOB_WORK', workstationType: 'Dyeing Vendor', plannedHours: 48, qualityCheckpoint: true },
-      { id: 'OP-PRINTING', name: 'Printing', stage: 'JOBWORK', processType: 'JOB_WORK', workstationType: 'Printing Vendor', plannedHours: 24, qualityCheckpoint: true },
-      { id: 'OP-FABRIC-QC', name: 'Fabric QC & Folding', stage: 'FINISHING', processType: 'IN_HOUSE', workstationType: 'Inspection Table', plannedHours: 4, qualityCheckpoint: true },
+      { id: 'OP-GREY-ISSUE', name: 'Grey Fabric Issue', stage: 'FABRIC_INSPECTION', processType: 'IN_HOUSE', workstationType: 'Store', plannedHours: 1, qualityCheckpoint: false },
+      { id: 'OP-DYEING', name: 'Dyeing', stage: 'DYEING', processType: 'JOB_WORK', workstationType: 'Dyeing Vendor', plannedHours: 48, qualityCheckpoint: true },
+      { id: 'OP-PRINTING', name: 'Printing', stage: 'FABRIC_PRINTING', processType: 'JOB_WORK', workstationType: 'Printing Vendor', plannedHours: 24, qualityCheckpoint: true },
+      { id: 'OP-FABRIC-QC', name: 'Fabric QC & Folding', stage: 'FABRIC_INSPECTION', processType: 'IN_HOUSE', workstationType: 'Inspection Table', plannedHours: 4, qualityCheckpoint: true },
     ],
   },
 ];
@@ -256,8 +258,8 @@ const Production: React.FC<ProductionProps> = ({
 
   const filteredJobs = useMemo(() => {
     return jobs.filter(j => 
-      j.productName.toLowerCase().includes(filter.toLowerCase()) || 
-      j.id.toLowerCase().includes(filter.toLowerCase())
+      (j.productName || '').toLowerCase().includes(filter.toLowerCase()) || 
+      (j.id || '').toLowerCase().includes(filter.toLowerCase())
     );
   }, [jobs, filter]);
 

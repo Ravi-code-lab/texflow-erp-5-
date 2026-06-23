@@ -191,7 +191,7 @@ export const RolePermissionManager: React.FC<RolePermissionManagerProps> = ({
   const dirtyCount = Object.keys(dirty).filter(k => k.startsWith(activeRole + '::')).length;
   const filteredGroups = MODULE_GROUPS.map(g => ({
     ...g,
-    modules: g.modules.filter(m => !search || m.label.toLowerCase().includes(search.toLowerCase()) || m.id.toLowerCase().includes(search.toLowerCase())),
+    modules: g.modules.filter(m => !search || m.label?.toLowerCase()?.includes(search.toLowerCase()) || m.id?.toLowerCase()?.includes(search.toLowerCase())),
   })).filter(g => g.modules.length > 0);
 
   const PermCell = ({ module, pkey }: { module: string; pkey: PermKey }) => {

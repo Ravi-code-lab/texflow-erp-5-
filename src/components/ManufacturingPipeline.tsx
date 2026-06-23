@@ -481,9 +481,9 @@ export const ManufacturingPipeline: React.FC<ManufacturingPipelineProps> = ({
   // Filter batches
   const filteredBatches = useMemo(() => {
     return batches.filter(b => {
-      const matchesSearch = b.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        b.designName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.styleCode.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = b.id?.toLowerCase()?.includes(searchQuery.toLowerCase()) || 
+        b.designName?.toLowerCase()?.includes(searchQuery.toLowerCase()) ||
+        b.styleCode?.toLowerCase()?.includes(searchQuery.toLowerCase());
       
       const matchesPriority = filterPriority === 'ALL' || b.priority === filterPriority;
       return matchesSearch && matchesPriority;

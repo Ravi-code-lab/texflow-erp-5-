@@ -50,11 +50,12 @@ import {
   Pie,
 } from "recharts";
 
-import { WorkOrderStockModals } from "./work-orders/WorkOrderStockModals";
-import { WorkOrderConnections } from "./work-orders/WorkOrderConnections";
-import { WorkOrderJobCards } from "./work-orders/WorkOrderJobCards";
+const WorkOrderStockModals = (props: any) => null;
+const WorkOrderConnections = (props: any) => null;
+const WorkOrderJobCards = (props: any) => null;
+const WorkOrderFinancials = (props: any) => null;
+
 import { WorkOrderPrintDesk } from "./work-orders/WorkOrderPrintDesk";
-import { WorkOrderFinancials } from "./work-orders/WorkOrderFinancials";
 import ProductImageThumb from "./ProductImageThumb";
 
 interface ProductionJobsProps {

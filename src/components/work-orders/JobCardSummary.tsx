@@ -54,10 +54,10 @@ export default function JobCardSummary({ production, designs = [] }: Props) {
 
   const fabricMetersPerPiece = (wo: WorkOrder) => {
     const design =
-      (wo.styleCode && designByKey.get(wo.styleCode.toLowerCase())) ||
-      (wo.productName && designByKey.get(wo.productName.toLowerCase()));
-    if (!design?.recipe) return 0;
-    return design.recipe.reduce((sum, item) => {
+      (wo.styleCode ? designByKey.get(wo.styleCode.toLowerCase()) : null) ||
+      (wo.productName ? designByKey.get(wo.productName.toLowerCase()) : null);
+    if (!design || !design.recipe) return 0;
+    return design.recipe.reduce((sum: number, item: any) => {
       const u = (item.unit || "").toString().toUpperCase();
       if (u.includes("METER") || u === "MTR" || u === "M") return sum + (Number(item.quantity) || 0);
       return sum;
@@ -77,8 +77,8 @@ export default function JobCardSummary({ production, designs = [] }: Props) {
       const totalFabricMeters = perPieceMeters * (wo.quantity || 0);
 
       return (wo.operations || []).map((op, idx) => {
-        const isFabricStage = FABRIC_STAGES.has((op.stage || "").toUpperCase()) || op.rateUnit === "PER_METER";
-        const useFabricQty = isFabricStage && totalFabricMeters > 0;
+        const isFabricStage = FABRIC_STAGES.has((op.stage || "").toUpperCase()) || op.rateUnit === "PER_METER" || op.name?.toLowerCase()?.includes("fabric printing") || op.name?.toLowerCase()?.includes("fabric inspection") || op.name?.toLowerCase()?.includes("dyeing");
+        const useFabricQty = isFabricStage;
         return {
           ...op,
           woId: wo.id,
@@ -86,11 +86,12 @@ export default function JobCardSummary({ production, designs = [] }: Props) {
           woQty: wo.quantity,
           qtyValue: useFabricQty ? totalFabricMeters : wo.quantity,
           qtyUnit: useFabricQty ? "Mtr" : "pcs",
+          missingBom: useFabricQty && totalFabricMeters === 0,
           woStatus: wo.status,
           opIndex: idx,
           isReady: idx <= activeIdx,
           taskCategory: TASK_NAMES.find((t) =>
-            op.name?.toLowerCase().includes(t.toLowerCase())
+            op.name?.toLowerCase()?.includes(t.toLowerCase())
           ) || "Other",
         };
       }).filter(op => op.isReady);
@@ -127,7 +128,7 @@ export default function JobCardSummary({ production, designs = [] }: Props) {
       }
       if (search) {
         const q = search.toLowerCase();
-        if (!j.woId?.toLowerCase().includes(q) && !j.woProduct?.toLowerCase().includes(q) && !j.name?.toLowerCase().includes(q)) return false;
+        if (!j.woId?.toLowerCase()?.includes(q) && !j.woProduct?.toLowerCase()?.includes(q) && !j.name?.toLowerCase()?.includes(q)) return false;
       }
       return true;
     });
@@ -310,8 +311,14 @@ export default function JobCardSummary({ production, designs = [] }: Props) {
                       </td>
                       <td className="py-3 px-4 border-l border-slate-100 text-xs text-slate-500 font-semibold">{j.workstationType || "—"}</td>
                       <td className="py-3 px-4 border-l border-slate-100 text-xs font-bold text-slate-700 tabular-nums">
-                        <div>{j.qtyUnit === "Mtr" ? j.qtyValue.toFixed(1) : j.qtyValue} {j.qtyUnit}</div>
-                        {j.completedQuantity ? <div className="text-emerald-600">{j.completedQuantity} done</div> : null}
+                        {j.missingBom ? (
+                          <div className="text-[10px] text-amber-600 font-semibold leading-tight">
+                            ? Mtr<br/><span className="text-slate-400 font-normal">({j.woQty} pcs req. BOM)</span>
+                          </div>
+                        ) : (
+                          <div>{j.qtyUnit === "Mtr" ? j.qtyValue.toFixed(1) : j.qtyValue} {j.qtyUnit}</div>
+                        )}
+                        {j.completedQuantity ? <div className="text-emerald-600 mt-0.5 text-[10px]">{j.completedQuantity} {j.qtyUnit === "Mtr" ? "mtr" : "pcs"} done</div> : null}
                       </td>
                       <td className="py-3 px-4 border-l border-slate-100 text-xs text-slate-500">{j.assignedTo || <span className="italic text-slate-300">Unassigned</span>}</td>
                       <td className="py-3 px-4 border-l border-slate-100">

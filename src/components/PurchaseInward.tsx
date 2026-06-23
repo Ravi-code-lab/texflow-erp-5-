@@ -64,8 +64,8 @@ const PurchaseInward: React.FC<PurchaseInwardProps> = ({
   const filteredReceipts = useMemo(() => {
     const q = filter.toLowerCase();
     return receipts.filter(r => 
-        r.supplierName.toLowerCase().includes(q) || 
-        r.id.toLowerCase().includes(q)
+        r.supplierName?.toLowerCase()?.includes(q) || 
+        r.id?.toLowerCase()?.includes(q)
     );
   }, [receipts, filter]);
 

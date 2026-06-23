@@ -621,7 +621,11 @@ function SMVPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Karigar[]
                   const avgSmvPerJob = k.jobs > 0 ? (k.smv / k.jobs).toFixed(1) : "—";
                   // OEE ≈ actual / (target × available shift hrs)
                   const shiftHrs = 8;
-                  const theoreticalOutput = k.targetHr * shiftHrs;
+                  // FIX: theoreticalOutput was a single shift's capacity regardless of how
+                  // many job cards (≈ shifts) actualOutput was summed across. That pegged
+                  // OEE at 100% for anyone with >1 completed job and unfairly tanked it for
+                  // anyone with exactly 1. Scale capacity by job count as a shift-count proxy.
+                  const theoreticalOutput = k.targetHr * shiftHrs * k.jobs;
                   const oee = theoreticalOutput > 0 ? Math.min(100, Math.round((k.actualOutput / theoreticalOutput) * 100)) : 0;
                   return (
                     <tr key={k.name} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
@@ -714,7 +718,9 @@ function ReworkPage({ ops, accent, meta }: { ops: DeptOp[]; accent: string; meta
 
   const totalRej = ops.reduce((s, o) => s + (o.rejectedQuantity || 0), 0);
   const totalDone = ops.reduce((s, o) => s + (o.completedQuantity || 0), 0);
-  const rejRate = totalDone > 0 ? ((totalRej / totalDone) * 100).toFixed(1) : "0";
+  // FIX: rejection rate is rejected ÷ total inspected (done+rejected), not rejected ÷ done.
+  // The old formula overstated the rate (e.g. 50 done + 50 rejected showed as 100%, not 50%).
+  const rejRate = (totalDone + totalRej) > 0 ? ((totalRej / (totalDone + totalRej)) * 100).toFixed(1) : "0";
 
   // Alteration tracking (Finishing dept)
   const alterationOps = ops.filter(o => (o.customData?.alterationQty || 0) > 0);
@@ -818,7 +824,12 @@ function WIPPage({ ops, accent, taskName, production }: { ops: DeptOp[]; accent:
   const WO_WIP = useMemo(() => {
     const map: Record<string, { product: string; total: number; done: number; wip: number; pending: number }> = {};
     for (const op of ops) {
-      if (!map[op.woId]) map[op.woId] = { product: op.woProduct, total: op.woQty, done: 0, wip: 0, pending: 0 };
+      if (!map[op.woId]) map[op.woId] = { product: op.woProduct, total: 0, done: 0, wip: 0, pending: 0 };
+      // FIX: accumulate total per-op (same convention as done/wip/pending) instead of
+      // setting it once from op.woQty. A WO with multiple piece-tagged ops in this dept
+      // (e.g. Kurti+Pant+Dupatta set, all under one woId) was overflowing done+wip+pending
+      // past a fixed single-op total, producing >100% progress and mismatched counts.
+      map[op.woId].total += op.woQty || 0;
       const s = norm(op);
       if (s === "COMPLETED") map[op.woId].done += op.completedQuantity || 0;
       else if (s === "IN_PROGRESS") map[op.woId].wip += op.woQty || 0;
@@ -960,8 +971,9 @@ function AnalyticsPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Kar
   const donePcs = ops.reduce((s, o) => s + (o.completedQuantity || 0), 0);
   const rejPcs = ops.reduce((s, o) => s + (o.rejectedQuantity || 0), 0);
   const totalPcs = ops.reduce((s, o) => s + (o.woQty || 0), 0);
-  const rejRate = donePcs > 0 ? Math.round((rejPcs / donePcs) * 100) : 0;
-  const efficiency = totalPcs > 0 ? Math.round((donePcs / totalPcs) * 100) : 0;
+  // FIX: denominator should be total inspected (done+rejected), not done alone.
+  const rejRate = (donePcs + rejPcs) > 0 ? Math.round((rejPcs / (donePcs + rejPcs)) * 100) : 0;
+  const efficiency = total > 0 ? Math.round((done / total) * 100) : 0;
 
   const karigarStats = useMemo(() => {
     const map: Record<string, { name: string; done: number; rejected: number; jobs: number }> = {};
@@ -991,8 +1003,8 @@ function AnalyticsPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Kar
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Total Jobs", value: total, sub: `${pending} pending`, icon: Layers, color: "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700" },
-          { label: "Efficiency", value: `${efficiency}%`, sub: `${donePcs.toLocaleString()} / ${totalPcs.toLocaleString()} pcs`, icon: Target, color: `${ac(accent, "bg")} ${ac(accent, "border")}` },
-          { label: "Rejection Rate", value: `${rejRate}%`, sub: `${rejPcs} pieces rejected`, icon: XCircle, color: rejRate > 5 ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800" : "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800" },
+          { label: "Efficiency", value: `${efficiency}%`, sub: `${done} / ${total} jobs done`, icon: Target, color: `${ac(accent, "bg")} ${ac(accent, "border")}` },
+          { label: "Rejection Rate", value: `${rejRate}%`, sub: `${rejPcs} items rejected`, icon: XCircle, color: rejRate > 5 ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800" : "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800" },
           { label: "Completed", value: done, sub: `${wip} in progress`, icon: CheckCircle2, color: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800" },
         ].map(card => (
           <div key={card.label} className={`rounded-2xl border p-4 ${card.color}`}>
@@ -1043,9 +1055,9 @@ function AnalyticsPage({ ops, karigars, accent }: { ops: DeptOp[]; karigars: Kar
             style={{ width: `${efficiency}%` }}
           />
         </div>
-        <div className="flex justify-between text-xs text-slate-500 font-semibold">
-          <span>{donePcs.toLocaleString()} done</span>
-          <span>{rejPcs > 0 && <span className="text-rose-500 mr-2">{rejPcs} rejected</span>}{totalPcs.toLocaleString()} total</span>
+        <div className="flex justify-between text-xs text-slate-500 font-semibold mt-1">
+          <span>{done} jobs complete</span>
+          <span>{total} total jobs</span>
         </div>
       </div>
 
@@ -1268,14 +1280,17 @@ function QualityPage({ ops, accent }: { ops: DeptOp[]; accent: string }) {
   const completed = ops.filter(o => norm(o) === "COMPLETED");
   const totalDone = completed.reduce((s, o) => s + (o.completedQuantity || 0), 0);
   const totalRej  = completed.reduce((s, o) => s + (o.rejectedQuantity  || 0), 0);
-  const rejRate   = totalDone > 0 ? ((totalRej / totalDone) * 100).toFixed(1) : "0";
+  // FIX: "Total Inspected" was showing only good (completed) pieces, excluding rejects —
+  // and rejRate divided by that same incomplete total instead of total inspected.
+  const totalInspected = totalDone + totalRej;
+  const rejRate   = totalInspected > 0 ? ((totalRej / totalInspected) * 100).toFixed(1) : "0";
   const sorted = [...completed].sort((a, b) => (b.rejectedQuantity || 0) - (a.rejectedQuantity || 0));
 
   return (
     <div className="p-4 md:p-6 space-y-5">
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Total Inspected", value: totalDone.toLocaleString(), icon: ShieldCheck, color: "text-slate-600" },
+          { label: "Total Inspected", value: totalInspected.toLocaleString(), icon: ShieldCheck, color: "text-slate-600" },
           { label: "Rejected", value: totalRej.toLocaleString(), icon: XCircle, color: "text-rose-600" },
           { label: "Rejection Rate", value: `${rejRate}%`, icon: XOctagon, color: Number(rejRate) > 5 ? "text-rose-600" : "text-emerald-600" },
         ].map(c => (
@@ -1374,7 +1389,7 @@ function BulkPage({
     if (filterStatus !== "ALL" && s !== filterStatus) return false;
     if (searchQ) {
       const q = searchQ.toLowerCase();
-      return op.woId.toLowerCase().includes(q) || op.woProduct.toLowerCase().includes(q);
+      return op.woId?.toLowerCase()?.includes(q) || op.woProduct?.toLowerCase()?.includes(q);
     }
     return true;
   }), [ops, filterStatus, searchQ]);
@@ -1509,7 +1524,7 @@ function BulkPage({
                 <th className="px-4 py-3 w-10">
                   <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} className="rounded" />
                 </th>
-                {["Work Order", "Product", "Qty", "Status", "Assigned To"].map(h => (
+                {["Work Order", "Product", "Target (WO Pcs)", "Status", "Assigned To"].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">{h}</th>
                 ))}
               </tr>
@@ -1529,7 +1544,9 @@ function BulkPage({
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs text-slate-600 dark:text-slate-300">{op.woId}</td>
                     <td className="px-4 py-2.5 font-semibold text-slate-800 dark:text-slate-100 max-w-[140px] truncate">{op.woProduct}</td>
-                    <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{(op.woQty || 0).toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
+                      {(op.woQty || 0).toLocaleString()} <span className="text-[10px] text-slate-400">pcs (WO)</span>
+                    </td>
                     <td className="px-4 py-2.5">
                       <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${statusColors[op.status] ?? statusColors[norm(op)]}`}>
                         {op.status?.replace(/_/g, " ") ?? norm(op).replace("_", " ")}
@@ -1725,15 +1742,13 @@ export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, 
     return { pending, inProgress, completed, qcReview, onHold, rejected, blocked, total: deptOps.length, totalPcs, donePcs, rejPcs, unassigned };
   }, [deptOps]);
 
-  const rejRate = summary.donePcs > 0 ? Math.round((summary.rejPcs / summary.donePcs) * 100) : 0;
+  // FIX: denominator should be total inspected (done+rejected), not done alone — see
+  // ReworkPage/AnalyticsPage/QualityPage for the same fix.
+  const rejRate = (summary.donePcs + summary.rejPcs) > 0 ? Math.round((summary.rejPcs / (summary.donePcs + summary.rejPcs)) * 100) : 0;
 
-  // Build subpage list — context-aware: show SMV only for Stitching
+  // Build subpage list — context-aware
   const subPages: SubPageDef[] = ([
     { id: "job_board",  label: "Job Board",   icon: LayoutGrid, badge: (ops) => ops.filter(o => norm(o) === "IN_PROGRESS").length || null },
-    { id: "analytics",  label: "Analytics",   icon: BarChart2 },
-    { id: "targets",    label: "Targets",     icon: Target, badge: (ops) => { const b = ops.filter(o => { if (norm(o) !== "IN_PROGRESS" || !o.startedAt) return false; return (Date.now() - new Date(o.startedAt).getTime()) / 3600000 > meta.slaHours; }).length; return b > 0 ? b : null; } },
-    { id: "wip",        label: "WIP",         icon: Package },
-    { id: "timeline",   label: "Timeline",    icon: GitBranch },
     { id: "vendor",     label: "Vendors",     icon: Truck, hidden: !meta.hasVendor, badge: (ops) => {
         // Dyeing tracks meters; Hand Work / Embroidery / Printing track pieces
         const isDyeing = taskName.toLowerCase().includes("dyeing");
@@ -1742,9 +1757,7 @@ export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, 
           : ops.reduce((s,o)=>s+Math.max(0,Number(o.customData?.sentQty||0)-Number(o.customData?.receivedQty||0)),0);
         return v > 0 ? v : null;
       } },
-    { id: "quality",    label: "Quality",     icon: ShieldCheck, badge: (ops) => { const r = ops.reduce((s,o)=>s+(o.rejectedQuantity||0),0); return r > 0 ? r : null; } },
-    { id: "rework",     label: "Rework",      icon: RotateCcw, badge: (ops) => ops.filter(o => (o.customData?.alterationQty || 0) > 0).length || null },
-    { id: "smv",        label: "SMV",         icon: Gauge, hidden: !taskName.toLowerCase().includes("stitching") },
+    { id: "quality",    label: "Quality",     icon: ShieldCheck, hidden: ["Cutting", "Packing", "Dyeing", "Washing"].includes(meta.label), badge: (ops) => { const r = ops.reduce((s,o)=>s+(o.rejectedQuantity||0),0); return r > 0 ? r : null; } },
     { id: "bulk",       label: "Bulk Edit",   icon: Edit3 },
   ] as SubPageDef[]).filter(s => !s.hidden);
 
@@ -1779,11 +1792,10 @@ export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, 
           <StatPill label="In Progress" value={summary.inProgress} color="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300" />
           {summary.qcReview > 0 && <StatPill label="QC Review" value={summary.qcReview} color="bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300" />}
           <StatPill label="Completed"   value={summary.completed}  color="bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" />
-          <StatPill label="Done Pcs"    value={summary.donePcs.toLocaleString()} sub={`of ${summary.totalPcs.toLocaleString()}`} color="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200" />
+          <StatPill label={["Printing", "Dyeing", "Fabric Inspection", "Washing"].includes(taskName) ? "Processed Mtr" : "Done Pcs"} value={summary.donePcs.toLocaleString()} color="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200" />
           {summary.blocked > 0 && <StatPill label="Waiting" value={summary.blocked} color="bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400" />}
           {summary.onHold > 0 && <StatPill label="On Hold" value={summary.onHold} color="bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300" />}
           {summary.rejected > 0 && <StatPill label="Rejected" value={summary.rejected} color="bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300" />}
-          {summary.rejPcs > 0 && <StatPill label="Rej Pcs" value={summary.rejPcs} color="bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300" />}
         </div>
 
         {/* Dept KPIs */}

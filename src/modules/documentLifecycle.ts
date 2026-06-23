@@ -1,78 +1,37 @@
-import { AuditLog, BaseEntity } from '../types';
-
-/**
- * Stamps a new document with created-by metadata.
- */
-export function prepareDocumentCreate<T extends Record<string, any>>(
-  doc: T,
-  user: string = 'Administrator'
-): T {
-  const now = new Date().toISOString();
-  return {
-    ...doc,
-    createdAt: doc.createdAt || now,
-    updatedAt: now,
-    updatedBy: user,
-    version: 1,
-    docstatus: doc.docstatus ?? 0,
-    deleted: false,
-  };
+export function prepareDocumentCreate(item: any, user: string) {
+    const defaultItem = { 
+        ...item, 
+        createdAt: new Date().toISOString(), 
+        createdBy: user, 
+        id: item.id || Date.now().toString() 
+    };
+    return defaultItem;
 }
 
-/**
- * Stamps an existing document with updated-by metadata.
- */
-export function prepareDocumentUpdate<T extends Record<string, any>>(
-  doc: T,
-  _previous?: T,
-  user: string = 'Administrator'
-): T {
-  return {
-    ...doc,
-    updatedAt: new Date().toISOString(),
-    updatedBy: user,
-    version: (doc.version ?? 1) + 1,
-  };
+export function prepareDocumentUpdate(item: any, previous: any, user: string) {
+    return { ...item, updatedAt: new Date().toISOString(), updatedBy: user };
 }
 
-/**
- * Soft-deletes a document by setting the deleted flag.
- */
-export function prepareDocumentDelete<T extends Record<string, any>>(
-  doc: T,
-  user: string = 'Administrator'
-): T {
-  return {
-    ...doc,
-    deleted: true,
-    updatedAt: new Date().toISOString(),
-    updatedBy: user,
-    version: (doc.version ?? 1) + 1,
-  };
+export function prepareDocumentDelete(item: any, user?: string) {
+    return { ...item, deleted: true, deletedBy: user, deletedAt: new Date().toISOString() };
 }
 
-/**
- * Creates an audit log entry for a document action.
- */
 export function createAuditLog(
-  entityType: string,
-  entityId: string,
-  action: AuditLog['action'],
-  previousState?: any,
-  newState?: any,
-  user: string = 'Administrator'
-): AuditLog {
-  const now = new Date().toISOString();
-  return {
-    id: `AUDIT-${Date.now().toString(36).toUpperCase()}`,
-    entityType,
-    entityId,
-    action,
-    previousState,
-    newState,
-    timestamp: now,
-    createdAt: now,
-    updatedAt: now,
-    updatedBy: user,
-  };
+    entityType: string,
+    entityId: string,
+    action: string,
+    previousState: any,
+    newState: any,
+    user: string
+) {
+    return {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        entityType,
+        entityId,
+        action,
+        previousState,
+        newState,
+        user
+    };
 }

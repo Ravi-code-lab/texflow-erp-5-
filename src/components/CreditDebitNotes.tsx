@@ -41,7 +41,7 @@ const CreditDebitNotes: React.FC<CreditDebitNotesProps> = ({
     return transactions.filter(t => {
       if (t.subType !== subType) return false;
       
-      const matchSearch = t.description.toLowerCase().includes(searchLower) || 
+      const matchSearch = t.description?.toLowerCase()?.includes(searchLower) || 
                           (t.id || '').toLowerCase().includes(searchLower) ||
                           (t.referenceId || '').toLowerCase().includes(searchLower);
                           

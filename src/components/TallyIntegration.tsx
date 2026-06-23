@@ -533,9 +533,9 @@ export const TallyIntegration: React.FC<TallyIntegrationProps> = ({
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
-      item.name.toLowerCase().includes(q) ||
-      item.id.toLowerCase().includes(q) ||
-      item.type.toLowerCase().includes(q)
+      item.name?.toLowerCase()?.includes(q) ||
+      item.id?.toLowerCase()?.includes(q) ||
+      item.type?.toLowerCase()?.includes(q)
     );
   });
 

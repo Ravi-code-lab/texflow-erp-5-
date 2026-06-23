@@ -28,7 +28,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onNavi
     }
   }, [isOpen]);
 
-  const quickActions = filterViewsByRole(userRole, ERP_MODULE_ITEMS.filter((item) => item.id !== 'SETTINGS')).map((item) => ({
+  const quickActions = filterViewsByRole(ERP_MODULE_ITEMS.filter((item) => item.id !== 'SETTINGS'), userRole).map((item) => ({
     id: `nav-${item.id}`,
     label: `Go to ${item.label}`,
     icon: React.createElement(item.icon, { className: 'w-4 h-4' }),

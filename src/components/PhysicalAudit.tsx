@@ -31,9 +31,9 @@ const PhysicalAudit: React.FC<PhysicalAuditProps> = ({
   const filteredAudits = useMemo(() => {
     const q = filter.toLowerCase();
     return audits.filter(a => 
-        a.id.toLowerCase().includes(q) || 
-        a.godown.toLowerCase().includes(q) ||
-        a.performedBy.toLowerCase().includes(q)
+        a.id?.toLowerCase()?.includes(q) || 
+        a.godown?.toLowerCase()?.includes(q) ||
+        a.performedBy?.toLowerCase()?.includes(q)
     );
   }, [audits, filter]);
 

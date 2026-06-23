@@ -496,6 +496,7 @@ const DocTypeCenter: React.FC<DocTypeCenterProps> = ({ stats, userRole = 'ADMIN'
 
         <div className="flex items-center gap-3">
           <button onClick={() => setEditingSchema({
+              id: '',
               name: '',
               view: '' as any,
               module: 'Workspace',

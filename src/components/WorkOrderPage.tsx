@@ -770,8 +770,8 @@ export default function WorkOrderPage({
   // ── Filtered list
   const filtered = useMemo(() => jobs.filter(j => {
     const matchSearch =
-      j.productName.toLowerCase().includes(search.toLowerCase()) ||
-      j.id.toLowerCase().includes(search.toLowerCase()) ||
+      j.productName?.toLowerCase()?.includes(search.toLowerCase()) ||
+      j.id?.toLowerCase()?.includes(search.toLowerCase()) ||
       (j.styleCode || "").toLowerCase().includes(search.toLowerCase());
     const matchStage = filterStage === "ALL" || getActiveStageId(j.operations || []) === filterStage;
     return matchSearch && matchStage;

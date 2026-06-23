@@ -5,7 +5,7 @@
  * Includes: dept task pages + Operations Master + Routing Master sections.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import DeptTaskPage from "./DeptTaskPage";
 import OperationsMaster from "./OperationsMaster";
 import RoutingMaster from "./RoutingMaster";
@@ -58,6 +58,12 @@ const SECTION_LABELS: Record<string, string> = {
 
 export default function WorkOrderTaskHub({ production, onUpdateWorkOrder, karigars, initialTab, inventory = [], onUpdateInventory, onCreateGatePass }: Props) {
   const [activeTab, setActiveTab] = useState<string>(initialTab ?? TABS[0].id);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   const currentTab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 

@@ -128,9 +128,9 @@ export default function EmailHub({
   };
 
   const filteredEmails = emails.filter(e => 
-    e.subject.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    e.sender.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.preview.toLowerCase().includes(searchQuery.toLowerCase())
+    e.subject?.toLowerCase()?.includes(searchQuery.toLowerCase()) || 
+    e.sender?.toLowerCase()?.includes(searchQuery.toLowerCase()) ||
+    e.preview?.toLowerCase()?.includes(searchQuery.toLowerCase())
   );
 
   return (

@@ -49,9 +49,9 @@ const Sampling: React.FC<SamplingProps> = ({
   const filteredSamples = useMemo(() => {
     return samples.filter(s => {
       const searchLower = filter.toLowerCase();
-      const matchesSearch = s.designName.toLowerCase().includes(searchLower) || 
+      const matchesSearch = s.designName?.toLowerCase()?.includes(searchLower) || 
                           (s.customerName || '').toLowerCase().includes(searchLower) ||
-                          s.id.toLowerCase().includes(searchLower);
+                          s.id?.toLowerCase()?.includes(searchLower);
       const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
       return matchesSearch && matchesStatus;
     }).sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());

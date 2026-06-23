@@ -32,8 +32,8 @@ const KarigarKhata: React.FC<KarigarKhataProps> = ({ karigars, onUpdateKarigar, 
   const filteredKarigars = useMemo(() => {
     const q = filter.toLowerCase();
     return karigars.filter(k => 
-      k.name.toLowerCase().includes(q) || 
-      k.skill.toLowerCase().includes(q)
+      k.name?.toLowerCase()?.includes(q) || 
+      k.skill?.toLowerCase()?.includes(q)
     );
   }, [karigars, filter]);
 

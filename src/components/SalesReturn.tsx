@@ -55,7 +55,7 @@ const SalesReturn: React.FC<SalesReturnProps> = ({
 
   // Filtering returns (defined as orders starting with 'RET' or status is 'RETURNED')
   const returns = useMemo(() => {
-    return orders.filter(o => o.id.startsWith('RET') || o.status === 'RETURNED');
+    return orders.filter(o => o.id?.startsWith('RET') || o.status === 'RETURNED');
   }, [orders]);
 
   const filteredReturns = useMemo(() => {
@@ -84,7 +84,7 @@ const SalesReturn: React.FC<SalesReturnProps> = ({
   // Available invoices for the selected customer to allow linking
   const availableInvoices = useMemo(() => {
     if (!formData.customerName) return [];
-    return orders.filter(o => o.id.startsWith('INV') && o.customerName === formData.customerName);
+    return orders.filter(o => o.id?.startsWith('INV') && o.customerName === formData.customerName);
   }, [orders, formData.customerName]);
 
   const handleCreate = (e: React.FormEvent) => {

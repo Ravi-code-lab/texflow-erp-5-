@@ -68,8 +68,8 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
   const filteredChallans = useMemo(() => {
     const q = filter.toLowerCase();
     return challans.filter(c => 
-        c.customerName.toLowerCase().includes(q) || 
-        c.id.toLowerCase().includes(q) ||
+        c.customerName?.toLowerCase()?.includes(q) || 
+        c.id?.toLowerCase()?.includes(q) ||
         (c.transportName || '').toLowerCase().includes(q)
     );
   }, [challans, filter]);
@@ -360,7 +360,7 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
                                       className="w-full px-2.5 py-[6px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
                                     >
                                         <option value="">Select Order...</option>
-                                        {orders.filter(o => !o.id.startsWith('DC') && o.status !== 'DELIVERED').map(o => (
+                                        {orders.filter(o => !o.id?.startsWith('DC') && o.status !== 'DELIVERED').map(o => (
                                            <option key={o.id} value={o.id}>{o.id} - {o.customerName}</option>
                                         ))}
                                     </select>

@@ -144,13 +144,14 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
     }, 0);
     // Per-row printing cost: each fabric meter row has its own printingRate
     const printingCost = (form.recipe || []).reduce((acc: number, item: any) => {
-      const isMeter = item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR';
+      const isMeter = item.unit?.toUpperCase()?.includes('METER') || item.unit?.toUpperCase() === 'MTR';
       return acc + (isMeter ? (item.printingRate || 0) * (Number(item.quantity) || 0) : 0);
     }, 0);
     // Labor: sum all laborCosts numeric fields (excluding legacy/array keys)
+    const stitchingCost = ((form.laborCosts?.stitchingRows || []) as any[]).reduce((a: number, r: any) => a + (Number(r.rate) || 0), 0);
     const lab = Object.entries(form.laborCosts || {})
       .filter(([k]) => !['printingRate', 'printing', 'stitchingRows'].includes(k))
-      .reduce((a: number, [, b]: any) => a + (Number(b) || 0), 0) + printingCost;
+      .reduce((a: number, [, b]: any) => a + (Number(b) || 0), 0) + printingCost + stitchingCost;
     const sub = mat + lab;
     const loss = sub * ((form.processLossPercent || 0) / 100);
     const landed = sub + loss;
@@ -268,7 +269,8 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
       startY: y,
       head: [['Material', 'Used For', 'Qty/Unit', 'Wastage%', 'Unit Rate', 'Print/Mtr', 'Total']],
       body: bomRows.length ? bomRows : [['No BOM items added', '-', '-', '-', '-', '-', '-']],
-      styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [36, 144, 239] },
+      foot: [['Total Material Cost', '', '', '', '', '', `${currency}${cost.mat.toFixed(2)}`]],
+      styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [36, 144, 239] }, footStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: 'bold' },
       margin: { left: 15, right: 15 },
     });
     y = (doc as any).lastAutoTable.finalY + 8;
@@ -277,6 +279,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
     const stitchRows = ((form.laborCosts?.stitchingRows || []) as any[]).map(r => [
       r.piece || '-', r.desc || '-', `${currency}${(Number(r.rate) || 0).toFixed(2)}`,
     ]);
+    const stitchingTotal = ((form.laborCosts?.stitchingRows || []) as any[]).reduce((a: number, r: any) => a + (Number(r.rate) || 0), 0);
     if (stitchRows.length) {
       if (y > 250) { doc.addPage(); y = 18; }
       doc.setFontSize(11); doc.text('Stitching Rates (per piece)', 15, y); y += 4;
@@ -284,7 +287,8 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
         startY: y,
         head: [['Piece/Component', 'Description', 'Stitching Rate']],
         body: stitchRows,
-        styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [99, 102, 241] },
+        foot: [['Total', '', `${currency}${stitchingTotal.toFixed(2)}`]],
+        styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [99, 102, 241] }, footStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: 'bold' },
         margin: { left: 15, right: 15 },
       });
       y = (doc as any).lastAutoTable.finalY + 8;
@@ -297,6 +301,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
       ['Packing', form.laborCosts?.packing], ['Folding', form.laborCosts?.folding],
       ['Other', form.laborCosts?.other],
     ].filter(([, v]) => Number(v) > 0).map(([l, v]) => [l as string, `${currency}${Number(v).toFixed(2)}`]);
+    const flatLaborTotal = flatLabor.reduce((a, [, v]) => a + Number((v as string).replace(/[^0-9.-]+/g, '')), 0);
     if (flatLabor.length) {
       if (y > 250) { doc.addPage(); y = 18; }
       doc.setFontSize(11); doc.text('Other Process Costs', 15, y); y += 4;
@@ -304,7 +309,8 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
         startY: y,
         head: [['Process', 'Cost']],
         body: flatLabor,
-        styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [99, 102, 241] },
+        foot: [['Total Process Cost', `${currency}${flatLaborTotal.toFixed(2)}`]],
+        styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [99, 102, 241] }, footStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: 'bold' },
         margin: { left: 15, right: 15 }, tableWidth: 90,
       });
       y = (doc as any).lastAutoTable.finalY + 8;
@@ -312,8 +318,9 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
 
     // Printing calculation (auto, per fabric)
     const fabricRows = (form.recipe || []).filter((item: any) =>
-      item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR'
+      item.unit?.toUpperCase()?.includes('METER') || item.unit?.toUpperCase() === 'MTR'
     );
+    const printingTotal = fabricRows.reduce((a: number, item: any) => a + ((item.printingRate || 0) * (Number(item.quantity) || 0)), 0);
     if (fabricRows.length) {
       if (y > 240) { doc.addPage(); y = 18; }
       doc.setFontSize(11); doc.text('Printing Calculation (Auto — per fabric)', 15, y); y += 4;
@@ -326,7 +333,8 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
         startY: y,
         head: [['Fabric (Used For)', 'Qty', 'Print Rate/Mtr', 'Print Cost']],
         body: printRows,
-        styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [36, 144, 239] },
+        foot: [['Total Printing Cost', '', '', `${currency}${printingTotal.toFixed(2)}`]],
+        styles: { fontSize: 8, cellPadding: 2.5 }, headStyles: { fillColor: [36, 144, 239] }, footStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: 'bold' },
         margin: { left: 15, right: 15 },
       });
       y = (doc as any).lastAutoTable.finalY + 8;
@@ -875,7 +883,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
                   <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-widest mb-3">Printing Calculation (Auto — per fabric)</h4>
                   <div className="bg-[#f7f9fb] border border-[#e1e8ed] rounded-lg p-4 space-y-2 text-[12px]">
                     {(form.recipe || []).filter((item: any) =>
-                      item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR'
+                      item.unit?.toUpperCase()?.includes('METER') || item.unit?.toUpperCase() === 'MTR'
                     ).length === 0 ? (
                       <p className="text-[#8d99a6] italic">No fabric (meter) rows in BOM. Add fabric rows above to set per-fabric printing rates.</p>
                     ) : (
@@ -884,7 +892,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
                           <span>Fabric (Used For)</span><span className="text-right">Qty (Mtr)</span><span className="text-right">Print Rate/Mtr</span><span className="text-right">Print Cost</span>
                         </div>
                         {(form.recipe || []).filter((item: any) =>
-                          item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR'
+                          item.unit?.toUpperCase()?.includes('METER') || item.unit?.toUpperCase() === 'MTR'
                         ).map((item: any, idx: number) => {
                           const pCost = (item.printingRate || 0) * (Number(item.quantity) || 0);
                           return (
@@ -903,7 +911,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
                           <span className="col-span-3 font-bold text-[#1c2126] text-right">Total Printing Cost (Auto)</span>
                           <span className="text-right font-black text-[#1b6bf9] text-[13px]">
                             {currency}{(form.recipe || [])
-                              .filter((item: any) => item.unit?.toUpperCase().includes('METER') || item.unit?.toUpperCase() === 'MTR')
+                              .filter((item: any) => item.unit?.toUpperCase()?.includes('METER') || item.unit?.toUpperCase() === 'MTR')
                               .reduce((acc: number, item: any) => acc + (item.printingRate || 0) * (Number(item.quantity) || 0), 0)
                               .toFixed(2)}
                           </span>

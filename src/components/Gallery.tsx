@@ -108,11 +108,11 @@ const Gallery: React.FC<GalleryProps> = ({ items, onAdd, onDelete, onUpdate }) =
     .filter(item => {
       const q = filter.toLowerCase();
       const matchSearch = !q ||
-        item.title.toLowerCase().includes(q) ||
-        item.description?.toLowerCase().includes(q) ||
-        item.tags?.some(t => t.toLowerCase().includes(q)) ||
-        item.linkedName?.toLowerCase().includes(q) ||
-        item.uploadedBy?.toLowerCase().includes(q);
+        item.title?.toLowerCase()?.includes(q) ||
+        item.description?.toLowerCase()?.includes(q) ||
+        item.tags?.some(t => t?.toLowerCase()?.includes(q)) ||
+        item.linkedName?.toLowerCase()?.includes(q) ||
+        item.uploadedBy?.toLowerCase()?.includes(q);
       const matchCat = category === 'ALL' || item.category === category;
       const matchFolder = folder === 'ALL' || item.folder === folder;
       const matchFav = !filterFavorites || item.isFavorite;
