@@ -347,6 +347,7 @@ function norm(op: DeptOp | { status: string }): NormState {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
+  key?: React.Key;
   taskName: string;
   production: WorkOrder[];
   onUpdateWorkOrder: (w: WorkOrder) => void;
@@ -904,9 +905,9 @@ function WIPPage({ ops, accent, taskName, production }: { ops: DeptOp[]; accent:
               return (
                 <WORouteSummary
                   key={woId}
-                  woId={wo.id}
-                  productName={wo.productName}
-                  quantity={wo.quantity}
+                  woId={String(wo.id)}
+                  productName={String(wo.productName ?? "")}
+                  quantity={Number(wo.quantity ?? 0)}
                   operations={wo.operations || []}
                   currentDept={taskName}
                 />
@@ -1636,7 +1637,15 @@ function DeadlinePanel({ production, taskName, accent }: { production: WorkOrder
     return production.filter(wo => {
       if (!wo.deadline) return false;
       const dl = new Date(wo.deadline);
-      const hasOp = (wo.operations || []).some(op => opBelongsToDeptLocal(op, taskName) && norm({ status: op.status } as DeptOp) !== "COMPLETED");
+      const allWoOps = wo.operations || [];
+      const hasOp = allWoOps.some((op, idx) => {
+        if (!opBelongsToDeptLocal(op, taskName)) return false;
+        if (norm({ status: op.status } as DeptOp) === "COMPLETED") return false;
+        // Skip if blocked by a predecessor not yet completed
+        const { blocked } = computeBlockState(allWoOps, idx);
+        if (blocked && norm({ status: op.status } as DeptOp) === "PENDING") return false;
+        return true;
+      });
       return hasOp && dl < today;
     }).sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()).slice(0, 5);
   }, [production, taskName]);
@@ -1647,7 +1656,14 @@ function DeadlinePanel({ production, taskName, accent }: { production: WorkOrder
     return production.filter(wo => {
       if (ids.has(wo.id) || !wo.deadline) return false;
       const dl = new Date(wo.deadline);
-      const hasOp = (wo.operations || []).some(op => opBelongsToDeptLocal(op, taskName) && norm({ status: op.status } as DeptOp) !== "COMPLETED");
+      const allWoOps2 = wo.operations || [];
+      const hasOp = allWoOps2.some((op, idx) => {
+        if (!opBelongsToDeptLocal(op, taskName)) return false;
+        if (norm({ status: op.status } as DeptOp) === "COMPLETED") return false;
+        const { blocked } = computeBlockState(allWoOps2, idx);
+        if (blocked && norm({ status: op.status } as DeptOp) === "PENDING") return false;
+        return true;
+      });
       return hasOp && dl >= today && dl <= soon;
     }).sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()).slice(0, 3);
   }, [production, taskName, overdue]);
@@ -1724,6 +1740,15 @@ export default function DeptTaskPage({ taskName, production, onUpdateWorkOrder, 
           const { blocked, blockedBy } = computeBlockState(allOps, op.opIndex);
           if (blocked) return { ...op, _blocked: true, _blockedBy: blockedBy ?? "Previous step" } as DeptOp;
           return op as DeptOp;
+        })
+        // KEY FIX: hide ops that are blocked AND not yet started.
+        // This ensures a WO only appears in the CURRENT active stage dept tab.
+        // If the op is already IN_PROGRESS or COMPLETED it stays visible regardless.
+        .filter(op => {
+          if (!(op as any)._blocked) return true;             // not blocked → show
+          const st = norm(op);
+          return st === "IN_PROGRESS" || st === "COMPLETED";  // blocked but already started → show
+          // blocked + PENDING → hide (predecessor not done, not this dept's turn yet)
         });
     }), [production, taskName]);
 

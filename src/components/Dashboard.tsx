@@ -18,6 +18,7 @@ import {
   BadgePercent, Coins, Fingerprint, MapPin, FlaskConical, BookMarked,
 } from 'lucide-react';
 import { InventoryItem, ProductionJob, Order, Machine, Karigar, ViewState } from '../types';
+import { formatINR } from '../utils/formatters';
 import { ERP_MODULE_GROUPS, MODULE_COLOR_MAP, ERPModuleGroupId } from '../modules/registry';
 
 interface DashboardProps {
@@ -310,7 +311,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               <>
                 {/* KPI Cards */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <StatCard label="Total Revenue" value={`${currency}${(totalRevenue/1000).toFixed(0)}K`} subValue={`${totalOrders} orders total`} icon={IndianRupee} color="emerald" trend="up" onClick={() => navigateTo('ORDERS')} />
+                  <StatCard label="Total Revenue" value={formatINR(totalRevenue, currency)} subValue={`${totalOrders} orders total`} icon={IndianRupee} color="emerald" trend="up" onClick={() => navigateTo('ORDERS')} />
                   <StatCard label="In Production" value={inProduction} subValue={`${production.length} work orders`} icon={Factory} color="indigo" trend="neutral" onClick={() => navigateTo('PRODUCTION')} />
                   <StatCard label="Pending Orders" value={pendingOrders} subValue={`${completedOrders} fulfilled`} icon={ShoppingCart} color="amber" trend={pendingOrders > 5 ? 'up' : 'neutral'} onClick={() => navigateTo('ORDERS')} />
                   <StatCard label="Low Stock Items" value={lowStock} subValue={`${inventory.length} total items`} icon={AlertTriangle} color={lowStock > 0 ? 'rose' : 'emerald'} trend={lowStock > 0 ? 'down' : 'neutral'} onClick={() => navigateTo('INVENTORY')} />

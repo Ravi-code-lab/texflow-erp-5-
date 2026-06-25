@@ -19,6 +19,7 @@ interface JobWorkProps {
   inventory?: InventoryItem[];
   onAdd: (job: JobWork) => void;
   onUpdate?: (job: JobWork) => void; 
+  onUpdateInventory?: (item: InventoryItem) => void;
   onDelete?: (id: string | any) => void;
   onAction?: (action: string, data: any) => void;
   currency?: string;
@@ -38,7 +39,7 @@ const PROCESS_NODES = [
 ];
 
 export default function JobWorkComp({ 
-  jobs = [], designs = [], inventory = [], onAdd, onUpdate, onDelete, onAction, currency = '₹', companyInfo 
+  jobs = [], designs = [], inventory = [], onAdd, onUpdate, onUpdateInventory, onDelete, onAction, currency = '₹', companyInfo 
 }: JobWorkProps) {
   const [activeTab, setActiveTab] = useState('ALL');
   const [selectedProcess, setSelectedProcess] = useState('ALL');
@@ -407,6 +408,36 @@ export default function JobWorkComp({
     };
 
     onUpdate?.(updatedDoc);
+
+    // Update inventory: credit received finished goods into stock
+    if (onUpdateInventory) {
+      updatedItems.forEach((item) => {
+        const received = Number(item.receivedQuantity || 0);
+        if (received <= 0) return;
+        const desc = item.description || '';
+        // Find existing inventory item by name match
+        const existing = inventory.find(
+          (inv) => inv.name.trim().toLowerCase() === desc.trim().toLowerCase()
+        );
+        if (existing) {
+          onUpdateInventory({ ...existing, quantity: (existing.quantity || 0) + received });
+        } else if (desc) {
+          // Create new inventory item for received FG
+          onUpdateInventory({
+            id: `INV-JW-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            name: desc,
+            type: 'FABRIC',
+            unit: item.unit || 'PIECE',
+            quantity: received,
+            minStockLevel: 0,
+            pricePerUnit: item.rate || 0,
+            location: 'Finished Goods',
+            doctype: 'INVENTORY',
+          } as any);
+        }
+      });
+    }
+
     setFormData(prev => ({
       ...prev,
       items: updatedItems,
@@ -577,7 +608,7 @@ export default function JobWorkComp({
               External sub-contract partners currently hold security materials valued at approx:
             </p>
             <div className="text-lg font-black text-slate-800 dark:text-indigo-400 tabular-nums">
-              {currency}{(stats.supplierFabricStock * 72).toLocaleString()}
+              {currency}{((stats.supplierFabricStock ?? 0) * 72).toLocaleString()}
             </div>
             <span className="text-[9px] bg-indigo-100 dark:bg-indigo-950/40 text-[#1b6bf9] p-1 px-2 rounded-full font-bold select-none">
               Physical Godown Locked
@@ -721,7 +752,7 @@ export default function JobWorkComp({
                           </div>
                         </td>
                         <td className="p-3 text-right font-black text-slate-700 dark:text-slate-300 tabular-nums">
-                          {currency}{job.totalCost.toLocaleString()}
+                          {currency}{(job.totalCost ?? 0).toLocaleString()}
                         </td>
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -825,7 +856,7 @@ export default function JobWorkComp({
                         </div>
                         <div className="text-right">
                           <span className="text-[8px] text-slate-400 font-bold uppercase block">Total Cost</span>
-                          <span className="font-black text-slate-800 dark:text-white text-xs">{currency}{job.totalCost.toLocaleString()}</span>
+                          <span className="font-black text-slate-800 dark:text-white text-xs">{currency}{(job.totalCost ?? 0).toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
@@ -927,7 +958,7 @@ export default function JobWorkComp({
                         <td className="p-2 text-right font-mono font-bold">{item.issuedQuantity}</td>
                         <td className="p-2 text-right font-mono font-bold text-emerald-600">{item.receivedQuantity}</td>
                         <td className="p-1 px-2 text-right font-mono">{currency}{item.rate}</td>
-                        <td className="p-2 text-right font-mono font-bold">{currency}{(item.issuedQuantity * item.rate).toLocaleString()}</td>
+                        <td className="p-2 text-right font-mono font-bold">{currency}{((item.issuedQuantity ?? 0) * (item.rate ?? 0)).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -967,7 +998,7 @@ export default function JobWorkComp({
                 <div className="text-right space-y-1 border-t pt-2">
                   <div className="flex justify-between font-bold">
                     <span>Aggregate Labor Cost:</span>
-                    <span>{currency}{formData.items?.reduce((s, i) => s + (i.issuedQuantity * i.rate), 0).toLocaleString()}</span>
+                    <span>{currency}{(formData.items?.reduce((s, i) => s + ((i.issuedQuantity ?? 0) * (i.rate ?? 0)), 0) ?? 0).toLocaleString()}</span>
                   </div>
                   {Number(formData.additionalCost) > 0 && (
                     <div className="flex justify-between text-slate-500">
@@ -977,7 +1008,7 @@ export default function JobWorkComp({
                   )}
                   <div className="flex justify-between font-black text-sm text-[#1b6bf9] border-t-2 pt-1 font-mono">
                     <span>Grand Ledger Total:</span>
-                    <span>{currency}{formData.totalCost?.toLocaleString()}</span>
+                    <span>{currency}{(formData.totalCost ?? 0).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -1340,11 +1371,11 @@ export default function JobWorkComp({
                               <p className="font-extrabold text-slate-800 dark:text-white uppercase text-xs">{item.description}</p>
                               {item.issuedLengthCm ? (
                                 <span className="text-[10px] font-semibold text-slate-500 block mt-0.5">
-                                  Length: <span className="text-slate-800 dark:text-slate-200">{item.issuedLengthCm} cm</span> | Unit Rate: {currency}{item.rate} • Subtotal: {currency}{amount.toLocaleString()}
+                                  Length: <span className="text-slate-800 dark:text-slate-200">{item.issuedLengthCm} cm</span> | Unit Rate: {currency}{item.rate} • Subtotal: {currency}{(amount ?? 0).toLocaleString()}
                                 </span>
                               ) : (
                                 <span className="text-[10px] font-semibold text-slate-500 block uppercase mt-0.5">
-                                  Unit Rate: {currency}{item.rate} • Subtotal: {currency}{amount.toLocaleString()}
+                                  Unit Rate: {currency}{item.rate} • Subtotal: {currency}{(amount ?? 0).toLocaleString()}
                                 </span>
                               )}
                             </div>
@@ -1525,7 +1556,7 @@ export default function JobWorkComp({
                       <span className="font-black text-indigo-400 uppercase tracking-wider text-[10px]">Grand Net Payable</span>
                       <span className="text-base font-black text-white tabular-nums leading-none">
                         {currency}{(
-                          (formData.items?.reduce((s, i) => s + (i.issuedQuantity * i.rate), 0) || 0) + 
+                          (formData.items?.reduce((s, i) => s + ((i.issuedQuantity ?? 0) * (i.rate ?? 0)), 0) || 0) + 
                           (Number(formData.additionalCost) || 0)
                         ).toLocaleString()}
                       </span>

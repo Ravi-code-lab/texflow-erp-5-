@@ -114,11 +114,29 @@ const GSTSuite: React.FC<GSTSuiteProps> = ({
         outIGST += inv.igst || 0;
       });
     });
-    // Input credit: from purchase transactions in period
-    const inTaxable = outTaxable * 0.65; // Estimate from COGS ratio — replace with real purchase data
-    const inCGST = outCGST * 0.6;
-    const inSGST = outSGST * 0.6;
-    const inIGST = outIGST * 0.6;
+    // Input credit: from purchase transactions in period (EXPENSE / PURCHASE_RETURN / PURCHASE type)
+    let inTaxable = 0, inCGST = 0, inSGST = 0, inIGST = 0;
+    transactions.forEach(txn => {
+      const txnDate = new Date(txn.date || '');
+      if (txnDate.getFullYear() !== period.year || txnDate.getMonth() !== period.month) return;
+      // Only purchase-side transactions carry ITC
+      const isPurchase = txn.type === 'EXPENSE' || txn.category === 'PURCHASE' ||
+        txn.subType === 'PURCHASE_INVOICE' || txn.subType === 'DEBIT_NOTE' ||
+        txn.category === 'PURCHASE_RETURN';
+      if (!isPurchase) return;
+      const amount = Number(txn.amount || 0);
+      const taxRate: number = (txn as any).taxRate || 5;
+      const taxable = amount / (1 + taxRate / 100);
+      const tax = amount - taxable;
+      const interstate: boolean = (txn as any).interstate || false;
+      inTaxable += taxable;
+      if (interstate) {
+        inIGST += tax;
+      } else {
+        inCGST += tax / 2;
+        inSGST += tax / 2;
+      }
+    });
     const netCGST = Math.max(0, outCGST - inCGST);
     const netSGST = Math.max(0, outSGST - inSGST);
     const netIGST = Math.max(0, outIGST - inIGST);

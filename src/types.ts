@@ -48,6 +48,7 @@ export type BrokerageLog = any;
 export type MarginCosting = any;
 export type ShopifyConfig = any;
 export type InvoiceConfig = any;
+export type { NumberingSeriesConfig, SeriesRule, YearFormat } from './modules/numberingSeries';
 export type SecurityConfig = any;
 export type CommunicationConfig = any;
 export type AdvancedConfig = any;

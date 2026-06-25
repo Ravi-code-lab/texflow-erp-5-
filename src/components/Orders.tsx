@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import OrderDetailsModal from './OrderDetailsModal';
 import ListPage, { ColumnDef, TagFilter, BulkAction, StatusBadge } from './ListPage';
+import { resolveProductImage } from './ProductImageThumb';
 
 interface OrdersProps {
   orders: Order[];
@@ -34,6 +35,8 @@ const Orders: React.FC<OrdersProps> = ({
   const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>('LIST');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showSizeModal, setShowSizeModal] = useState(false);
+  const [showItemPicker, setShowItemPicker] = useState(false);
+  const [itemPickerSearch, setItemPickerSearch] = useState('');
   const [activeTab, setActiveTab] = useState<FormTab>('details');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showCommissionBar, setShowCommissionBar] = useState(false);
@@ -375,14 +378,27 @@ const Orders: React.FC<OrdersProps> = ({
                   <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Order Items</h4>
 
                   {/* Add item row */}
-                  <div className="flex gap-2 mb-4 flex-wrap">
-                    <input list="prod-list" className={inputCls + " flex-1 min-w-[160px]"}
-                      placeholder="Select Product…" value={newItem.productName || ''}
-                      onChange={e => {
-                        const d = designs.find(des => des.name === e.target.value) || inventory.find(i => i.name === e.target.value);
-                        setNewItem({...newItem, productName: e.target.value, unitPrice: (d as any)?.processCostPerPiece ? (d as any).processCostPerPiece * 1.5 : (d as any)?.pricePerUnit || 0});
-                      }} />
-                    <datalist id="prod-list">{[...designs,...inventory].map(x => <option key={x.id} value={x.name}/>)}</datalist>
+                  <div className="flex gap-2 mb-4 flex-wrap items-center">
+                    {/* Product selector with image preview */}
+                    <div className="flex items-center gap-2 flex-1 min-w-[220px] border border-[#d1d8dd] rounded bg-[#fdfdfd] px-2 py-1 cursor-pointer hover:border-[#2490ef] transition-colors"
+                      onClick={() => { setItemPickerSearch(''); setShowItemPicker(true); }}>
+                      {newItem.productName ? (
+                        <>
+                          {(() => {
+                            const img = resolveProductImage(newItem.productName, designs, inventory);
+                            return img
+                              ? <img src={img} alt="" className="w-7 h-7 rounded object-cover shrink-0 border border-[#d1d8dd]" />
+                              : <div className="w-7 h-7 rounded bg-[#f4f5f6] border border-[#d1d8dd] flex items-center justify-center shrink-0"><Package className="w-3.5 h-3.5 text-[#8d99a6]" /></div>;
+                          })()}
+                          <span className="text-[13px] text-[#1c2126] font-medium truncate flex-1">{newItem.productName}</span>
+                          <button type="button" className="text-[#8d99a6] hover:text-[#ef4444] shrink-0" onClick={e => { e.stopPropagation(); setNewItem({...newItem, productName: '', unitPrice: 0}); }}>
+                            <X className="w-3 h-3" />
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-[13px] text-[#8d99a6] flex-1 select-none">Select Product…</span>
+                      )}
+                    </div>
                     <input type="number" className={inputCls + " w-20"} placeholder="Qty" value={newItem.quantity || ''} readOnly />
                     <input type="number" className={inputCls + " w-24"} placeholder="Rate" value={newItem.unitPrice || ''}
                       onChange={e => setNewItem({...newItem, unitPrice: Number(e.target.value)})} />
@@ -399,12 +415,75 @@ const Orders: React.FC<OrdersProps> = ({
                     </button>
                   </div>
 
+                  {/* ── Product Picker Modal ── */}
+                  {showItemPicker && (() => {
+                    const allItems = [...designs, ...inventory];
+                    const q = itemPickerSearch.trim().toLowerCase();
+                    const filtered = q
+                      ? allItems.filter(x => x.name.toLowerCase().includes(q) || (x.sku || '').toLowerCase().includes(q) || ((x as any).category || '').toLowerCase().includes(q))
+                      : allItems;
+                    return (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]" onClick={() => setShowItemPicker(false)}>
+                        <div className="bg-white rounded-xl shadow-2xl border border-[#d1d8dd] w-[560px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                          {/* Header */}
+                          <div className="flex items-center justify-between px-4 py-3 border-b border-[#d1d8dd]">
+                            <h3 className="font-semibold text-[14px] text-[#1c2126]">Select Product</h3>
+                            <button onClick={() => setShowItemPicker(false)} className="text-[#525c66] hover:text-[#1c2126]"><X className="w-4 h-4" /></button>
+                          </div>
+                          {/* Search */}
+                          <div className="px-4 py-2.5 border-b border-[#d1d8dd]">
+                            <input autoFocus className={inputCls} placeholder="Search by name, SKU, category…"
+                              value={itemPickerSearch} onChange={e => setItemPickerSearch(e.target.value)} />
+                          </div>
+                          {/* Grid */}
+                          <div className="flex-1 overflow-y-auto p-3">
+                            {filtered.length === 0 ? (
+                              <div className="py-12 text-center text-[#8d99a6] text-sm">No products found</div>
+                            ) : (
+                              <div className="grid grid-cols-3 gap-2.5">
+                                {filtered.map(item => {
+                                  const img = resolveProductImage(item.name, designs, inventory, item.sku);
+                                  const rate = (item as any).processCostPerPiece
+                                    ? (item as any).processCostPerPiece * 1.5
+                                    : (item as any).pricePerUnit || 0;
+                                  return (
+                                    <button key={item.id} type="button"
+                                      onClick={() => {
+                                        setNewItem({ ...newItem, productName: item.name, unitPrice: rate });
+                                        setShowItemPicker(false);
+                                      }}
+                                      className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg border border-[#d1d8dd] hover:border-[#2490ef] hover:bg-[#eff6ff]/40 transition-all text-left group">
+                                      {/* Image */}
+                                      <div className="w-full aspect-square rounded-md overflow-hidden bg-[#f4f5f6] border border-[#e8ebee] flex items-center justify-center">
+                                        {img
+                                          ? <img src={img} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                                          : <Package className="w-7 h-7 text-[#c0c7cf]" />
+                                        }
+                                      </div>
+                                      {/* Info */}
+                                      <div className="w-full">
+                                        <p className="text-[12px] font-semibold text-[#1c2126] truncate leading-tight">{item.name}</p>
+                                        <p className="text-[10px] text-[#8d99a6] truncate">{item.sku || (item as any).category || ''}</p>
+                                        {rate > 0 && <p className="text-[11px] text-[#2490ef] font-medium mt-0.5">₹{rate.toLocaleString()}</p>}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Items table */}
                   {(formData.items || []).length > 0 && (
                     <table className="w-full mt-4 text-left border-collapse">
                       <thead>
                         <tr className="bg-[#f4f5f6] text-xs text-[#525c66] border-y border-[#d1d8dd]">
-                          <th className="py-2 pl-3 font-medium">Item</th>
+                          <th className="py-2 pl-3 font-medium w-8"></th>
+                          <th className="py-2 pl-2 font-medium">Item</th>
                           <th className="py-2 px-3 font-medium text-[10px] text-[#8d99a6] italic">Description</th>
                           <th className="py-2 px-3 font-medium text-right">Qty</th>
                           <th className="py-2 px-3 font-medium text-right">Rate</th>
@@ -418,7 +497,15 @@ const Orders: React.FC<OrdersProps> = ({
                           const discountedAmt = item.quantity * item.unitPrice * (1 - ((item as any).discount || 0) / 100);
                           return (
                             <tr key={(item as any).id || `item-${idx}`} className="border-b border-[#d1d8dd]/50 hover:bg-[#f4f5f6]/50">
-                              <td className="py-2 pl-3 font-semibold text-[#1c2126]">{item.productName}</td>
+                              <td className="py-2 pl-3">
+                                {(() => {
+                                  const img = resolveProductImage(item.productName, designs, inventory);
+                                  return img
+                                    ? <img src={img} alt="" className="w-7 h-7 rounded object-cover border border-[#d1d8dd]" />
+                                    : <div className="w-7 h-7 rounded bg-[#f4f5f6] border border-[#d1d8dd] flex items-center justify-center"><Package className="w-3.5 h-3.5 text-[#c0c7cf]" /></div>;
+                                })()}
+                              </td>
+                              <td className="py-2 pl-2 font-semibold text-[#1c2126]">{item.productName}</td>
                               <td className="py-2 px-3">
                                 <input className="w-full text-[11px] text-[#8d99a6] bg-transparent border-0 outline-none focus:bg-white focus:border focus:border-[#d1d8dd] focus:rounded px-1 transition-all"
                                   placeholder="Add description…" value={(item as any).description || ''}

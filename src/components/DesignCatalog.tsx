@@ -8,11 +8,13 @@ import {
   Tag, Copy, Eye, DollarSign, Package,
   AlertTriangle, CheckCircle2, SlidersHorizontal,
   Grid, List, MoreVertical, Info, History,
-  ChevronDown, Truck, RefreshCcw, FileText, Printer
+  ChevronDown, Truck, RefreshCcw, FileText, Printer, Wrench
 } from 'lucide-react';
 import { commitImage } from '../utils/imageUtils';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { ROUTING_STORAGE_KEY, RoutingTemplate, RoutingOperation } from './work-orders/RoutingMaster';
+import { OPERATIONS_STORAGE_KEY, Operation as MasterOperation } from './work-orders/OperationsMaster';
 
 interface DesignCatalogProps {
   designs: Design[];
@@ -23,7 +25,7 @@ interface DesignCatalogProps {
   currency?: string;
 }
 
-type TabId = 'DETAILS' | 'INVENTORY' | 'BOM' | 'PRICING' | 'VARIANTS' | 'QUALITY' | 'SUPPLIERS' | 'SETTINGS' | 'ACTIVITY';
+type TabId = 'DETAILS' | 'INVENTORY' | 'BOM' | 'PRICING' | 'VARIANTS' | 'QUALITY' | 'SUPPLIERS' | 'SETTINGS' | 'ACTIVITY' | 'OPERATIONS';
 type ViewLayoutMode = 'LIST' | 'GRID';
 type SortField = 'name' | 'sku' | 'category' | 'status' | 'processCostPerPiece';
 
@@ -114,6 +116,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
     sellingPrice: 0, mrp: 0, wholesalePrice: 0, discountPercent: 0,
     supplierList: [], qualitySpecs: [], internalNote: '',
     countryOfOrigin: 'India', warrantyMonths: 0,
+    operationRows: [] as Array<{ operationId: string; smv: number; unit: string; ratePerUnit: number }>,
   };
   const [form, setForm] = useState<any>(defForm);
   const set = (patch: any) => setForm((p: any) => ({ ...p, ...patch }));
@@ -374,6 +377,7 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
     { id: 'SUPPLIERS', label: 'Suppliers',      icon: <Truck className="w-3.5 h-3.5" /> },
     { id: 'SETTINGS',  label: 'Settings',       icon: <Settings className="w-3.5 h-3.5" /> },
     { id: 'ACTIVITY',  label: 'Activity',       icon: <History className="w-3.5 h-3.5" /> },
+    { id: 'OPERATIONS', label: 'Operations',     icon: <Wrench className="w-3.5 h-3.5" /> },
   ];
 
   // ─── LIST VIEW ───────────────────────────────────────────────────────────────
@@ -1123,6 +1127,176 @@ const DesignCatalog: React.FC<DesignCatalogProps> = ({ designs, inventory, onAdd
           </>)}
 
           {/* ── ACTIVITY ── */}
+
+          {/* ── OPERATIONS ── */}
+          {activeTab === 'OPERATIONS' && (() => {
+            // Load routing templates and master operations from localStorage
+            let routingTemplates: RoutingTemplate[] = [];
+            let masterOps: MasterOperation[] = [];
+            try {
+              const rt = localStorage.getItem(ROUTING_STORAGE_KEY);
+              if (rt) routingTemplates = JSON.parse(rt);
+            } catch {}
+            try {
+              const mo = localStorage.getItem(OPERATIONS_STORAGE_KEY);
+              if (mo) masterOps = JSON.parse(mo);
+            } catch {}
+
+            // Get current operationRows
+            const opRows: Array<{ operationId: string; smv: number; unit: string; ratePerUnit: number }> =
+              form.operationRows || [];
+
+            // Find selected routing template ops as base
+            const selectedRouteId: string = form.routingTemplateId || '';
+            const selectedRoute = routingTemplates.find(r => r.id === selectedRouteId);
+            const routeOps: RoutingOperation[] = selectedRoute?.operations || [];
+
+            // All candidate operations: from route if selected, else from master
+            const candidateOps: Array<{ id: string; name: string; stage: string; processType: string }> =
+              routeOps.length > 0
+                ? routeOps.map(o => ({ id: o.id, name: o.name, stage: o.stage, processType: o.processType }))
+                : masterOps.filter(o => o.isActive).map(o => ({ id: o.id, name: o.name, stage: o.stage, processType: o.processType }));
+
+            function getRow(opId: string) {
+              return opRows.find(r => r.operationId === opId) || { operationId: opId, smv: 0, unit: 'PCS', ratePerUnit: 0 };
+            }
+
+            function updateRow(opId: string, patch: Partial<{ smv: number; unit: string; ratePerUnit: number }>) {
+              const existing = opRows.find(r => r.operationId === opId);
+              let next: typeof opRows;
+              if (existing) {
+                next = opRows.map(r => r.operationId === opId ? { ...r, ...patch } : r);
+              } else {
+                next = [...opRows, { operationId: opId, smv: 0, unit: 'PCS', ratePerUnit: 0, ...patch }];
+              }
+              set({ operationRows: next });
+            }
+
+            const totalSMV = candidateOps.reduce((s, op) => s + (getRow(op.id).smv || 0), 0);
+            const totalRate = candidateOps.reduce((s, op) => s + (getRow(op.id).ratePerUnit || 0), 0);
+
+            const STAGE_COLORS: Record<string, string> = {
+              CUTTING: 'bg-blue-100 text-blue-700', STITCHING: 'bg-indigo-100 text-indigo-700',
+              EMBROIDERY_GARMENT: 'bg-pink-100 text-pink-700', EMBROIDERY_FABRIC: 'bg-pink-100 text-pink-700',
+              FINISHING: 'bg-teal-100 text-teal-700', WASHING: 'bg-cyan-100 text-cyan-700',
+              PACKING: 'bg-violet-100 text-violet-700', QC_CHECK: 'bg-green-100 text-green-700',
+              FINAL_QC: 'bg-green-100 text-green-700', INLINE_QC: 'bg-green-100 text-green-700',
+              FABRIC_INSPECTION: 'bg-amber-100 text-amber-700', DYEING: 'bg-purple-100 text-purple-700',
+              HAND_WORK: 'bg-rose-100 text-rose-700',
+            };
+
+            return (
+              <div className="space-y-4">
+                {/* Routing template selector */}
+                <Card title="Style Operations" sub={`SMV and rate per operation for this style/design — style-specific, not generic`}>
+                  <div className="mb-4 flex items-center gap-3">
+                    <label className="text-[12px] text-[#525c66] font-medium whitespace-nowrap">Routing Template</label>
+                    <div className="relative flex-1 max-w-xs">
+                      <select
+                        value={form.routingTemplateId || ''}
+                        onChange={e => set({ routingTemplateId: e.target.value, operationRows: [] })}
+                        className={sel}
+                      >
+                        <option value="">— Use All Master Operations —</option>
+                        {routingTemplates.map(r => (
+                          <option key={r.id} value={r.id}>{r.name} ({r.category})</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8d99a6] pointer-events-none" />
+                    </div>
+                    {candidateOps.length === 0 && (
+                      <span className="text-[12px] text-amber-600">⚠ No operations found. Add in Operations Master or create a Routing Template first.</span>
+                    )}
+                  </div>
+
+                  {candidateOps.length > 0 && (
+                    <>
+                      {/* Summary bar */}
+                      <div className="flex gap-6 mb-3 px-3 py-2 bg-[#f4f5f7] rounded text-[12px]">
+                        <span>Total SMV: <strong className="text-[#1c2126]">{totalSMV.toFixed(1)} min</strong></span>
+                        <span>Total Rate: <strong className="text-[#1c2126]">₹{totalRate.toFixed(2)}/pc</strong></span>
+                        <span className="text-[#8d99a6]">{candidateOps.length} operations</span>
+                      </div>
+
+                      <div className="overflow-hidden border border-[#e1e8ed] rounded-lg">
+                        <table className="w-full text-[12px]">
+                          <thead>
+                            <tr className="bg-[#f4f5f7] border-b border-[#d1d8dd]">
+                              <th className="text-left px-3 py-2 text-[#525c66] font-semibold">#</th>
+                              <th className="text-left px-3 py-2 text-[#525c66] font-semibold">Operation</th>
+                              <th className="text-left px-3 py-2 text-[#525c66] font-semibold">Stage</th>
+                              <th className="text-left px-3 py-2 text-[#525c66] font-semibold">Type</th>
+                              <th className="text-right px-3 py-2 text-[#525c66] font-semibold">SMV (min)</th>
+                              <th className="text-left px-3 py-2 text-[#525c66] font-semibold">Unit</th>
+                              <th className="text-right px-3 py-2 text-[#525c66] font-semibold">Rate (₹/unit)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#f0f1f3]">
+                            {candidateOps.map((op, idx) => {
+                              const row = getRow(op.id);
+                              const sc = STAGE_COLORS[op.stage] || 'bg-slate-100 text-slate-600';
+                              return (
+                                <tr key={op.id} className="hover:bg-[#fafbfc]">
+                                  <td className="px-3 py-2 text-[#8d99a6]">{idx + 1}</td>
+                                  <td className="px-3 py-2 font-medium text-[#1c2126]">{op.name}</td>
+                                  <td className="px-3 py-2">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${sc}`}>{op.stage}</span>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${op.processType === 'IN_HOUSE' ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700'}`}>
+                                      {op.processType === 'IN_HOUSE' ? 'In-House' : 'Job Work'}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <input
+                                      type="number" min="0" step="0.5"
+                                      value={row.smv || ''}
+                                      onChange={e => updateRow(op.id, { smv: Number(e.target.value) })}
+                                      placeholder="0"
+                                      className="w-20 px-2 py-1 border border-[#d1d8dd] rounded text-right text-[12px] focus:outline-none focus:border-[#2490ef] bg-white"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <select
+                                      value={row.unit || 'PCS'}
+                                      onChange={e => updateRow(op.id, { unit: e.target.value })}
+                                      className="px-2 py-1 border border-[#d1d8dd] rounded text-[12px] focus:outline-none focus:border-[#2490ef] bg-white"
+                                    >
+                                      <option value="PCS">PCS</option>
+                                      <option value="MTR">MTR</option>
+                                      <option value="KG">KG</option>
+                                      <option value="SET">SET</option>
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <input
+                                      type="number" min="0" step="0.5"
+                                      value={row.ratePerUnit || ''}
+                                      onChange={e => updateRow(op.id, { ratePerUnit: Number(e.target.value) })}
+                                      placeholder="0"
+                                      className="w-24 px-2 py-1 border border-[#d1d8dd] rounded text-right text-[12px] focus:outline-none focus:border-[#2490ef] bg-white"
+                                    />
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot>
+                            <tr className="bg-[#f4f5f7] border-t-2 border-[#d1d8dd] font-semibold">
+                              <td colSpan={4} className="px-3 py-2 text-[#525c66]">TOTAL</td>
+                              <td className="px-3 py-2 text-right text-[#1c2126]">{totalSMV.toFixed(1)}</td>
+                              <td></td>
+                              <td className="px-3 py-2 text-right text-[#1c2126]">₹{totalRate.toFixed(2)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </Card>
+              </div>
+            );
+          })()}
           {activeTab === 'ACTIVITY' && (
             <Card title="Item Timeline" sub="Recent activity and change history">
               {form.id ? (

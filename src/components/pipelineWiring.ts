@@ -1043,8 +1043,12 @@ function isOpCompleted(op: any): boolean {
  * Given a WO's operations array, determines if the operation at `opIndex`
  * is blocked by an upstream incomplete operation.
  *
- * Uses pipeline DAG: all predecessor stages defined in GARMENT_PIPELINE must
- * be Completed before this op can start.
+ * Uses the WO's OWN sequential operation order as the route — NOT the global
+ * pipeline DAG. This correctly handles style-wise dynamic routing where each
+ * style has its own custom sequence (e.g. Embroidery before Stitching for
+ * kurtis, but Dyeing before Printing for fabric).
+ *
+ * Rule: op[N] is blocked if ANY op[0..N-1] is not completed/skipped.
  *
  * Returns: { blocked: boolean; blockedBy: string | null }
  */
@@ -1052,62 +1056,33 @@ export function computeBlockState(
   operations: any[],
   opIndex: number
 ): { blocked: boolean; blockedBy: string | null } {
+  if (!operations || opIndex <= 0) return { blocked: false, blockedBy: null };
   const op = operations[opIndex];
   if (!op) return { blocked: false, blockedBy: null };
 
-  const thisStageId = getOpStageId(op);
-  if (!thisStageId) {
-    // Fallback: simple sequential — only block if a previous op in the array
-    // is not done AND that previous op maps to a real pipeline stage that
-    // should precede this one. If we can't determine stages, don't block at all
-    // to avoid false positives on unlabelled ops.
+  // Already started or done — never treat as blocked
+  const opStatus = (op.status || "PENDING").toUpperCase();
+  if (
+    opStatus === "COMPLETED" ||
+    opStatus === "IN_PROGRESS" ||
+    opStatus === "WORK IN PROGRESS" ||
+    op.workflowState === "Completed"
+  ) {
     return { blocked: false, blockedBy: null };
   }
 
-  const stage = STAGE_MAP.get(thisStageId);
-  if (!stage || stage.predecessors.length === 0) {
-    return { blocked: false, blockedBy: null };
-  }
-
-  // ── KEY FIX ──────────────────────────────────────────────────────────────
-  // Build the WO's actual ordered route from its operations array.
-  // A predecessor only blocks if it:
-  //   1. Is present in this WO's operations (otherwise skip — not in route)
-  //   2. Appears BEFORE the current op in the WO's own route order
-  //      (i.e. its pipeline position is lower than this op's position)
-  //
-  // This prevents the DAG from blocking a stage that is intentionally the
-  // FIRST step of a particular WO's route (e.g. a WO that starts at
-  // Fabric Printing before Fabric Inspection, by design).
-  // ─────────────────────────────────────────────────────────────────────────
-  const pipelineOrder = GARMENT_PIPELINE.map(s => s.id);
-  const thisPosition = pipelineOrder.indexOf(thisStageId);
-
-  for (const predId of stage.predecessors) {
-    // Skip predecessors that come AFTER this stage in global pipeline order
-    // (can happen in some multi-path DAGs — they are not real blockers)
-    const predPosition = pipelineOrder.indexOf(predId);
-    if (predPosition >= thisPosition) continue;
-
-    // Find op(s) in this WO that correspond to the predecessor stage
-    const predOps = operations.filter(o => getOpStageId(o) === predId);
-    if (predOps.length === 0) continue; // predecessor not in this WO's route — not a blocker
-
-    // ── ROUTE ORDER CHECK ─────────────────────────────────────────────────
-    // Verify the predecessor op actually appears before this op in the
-    // operations array (i.e. it is upstream in THIS WO's intended route).
-    // If for some reason it appears after, it is not a blocker.
-    const predOpIndices = predOps.map(po => operations.indexOf(po));
-    const anyPredBefore = predOpIndices.some(pi => pi < opIndex);
-    if (!anyPredBefore) continue;
-
-    const allPredDone = predOps.every(isOpCompleted);
-    if (!allPredDone) {
-      const predStage = STAGE_MAP.get(predId);
-      return {
-        blocked: true,
-        blockedBy: predStage?.label || predId,
-      };
+  // Walk predecessors in WO route order — every prior op must be done/skipped
+  for (let i = 0; i < opIndex; i++) {
+    const prev = operations[i];
+    if (!prev) continue;
+    const prevStatus = (prev.status || "PENDING").toUpperCase();
+    const isDone =
+      prevStatus === "COMPLETED" ||
+      prevStatus === "SKIPPED" ||
+      prev.workflowState === "Completed";
+    if (!isDone) {
+      const label = prev.name || prev.stage || `Step ${i + 1}`;
+      return { blocked: true, blockedBy: label };
     }
   }
 
@@ -1153,37 +1128,25 @@ export function computePipelineProgress(operations: any[]): PipelineProgress {
  */
 export function getUnlockedDepts(operations: any[], justCompletedOpIndex: number): string[] {
   if (!operations?.length) return [];
-  const justCompletedOp = operations[justCompletedOpIndex];
-  if (!justCompletedOp) return [];
 
-  const justCompletedStageId = getOpStageId(justCompletedOp);
   const unlocked: string[] = [];
 
-  for (let i = 0; i < operations.length; i++) {
+  // Sequential route: the op immediately after justCompletedOpIndex is now unblocked
+  // (if all ops before it are completed). Use WO's own order, not global DAG.
+  for (let i = justCompletedOpIndex + 1; i < operations.length; i++) {
     const op = operations[i];
-    if (i === justCompletedOpIndex) continue;
+    if (!op) continue;
     if (isOpCompleted(op)) continue;
 
-    const stageId = getOpStageId(op);
-    if (!stageId) continue;
-    const stage = STAGE_MAP.get(stageId);
-    if (!stage) continue;
-
-    // This op lists the just-completed stage as a predecessor
-    if (!stage.predecessors.includes(justCompletedStageId as StageId)) continue;
-
-    // Check if it was blocked before (all preds done except justCompleted)
-    const wasPreviouslyBlocked = stage.predecessors.some(predId => {
-      if (predId === justCompletedStageId) return false; // we just did this one
-      const predOps = operations.filter(o => getOpStageId(o) === predId);
-      if (predOps.length === 0) return false;
-      return !predOps.every(isOpCompleted);
-    });
-
-    // Now check if it's unblocked
-    const { blocked: stillBlocked } = computeBlockState(operations, i);
-    if (!stillBlocked && !wasPreviouslyBlocked) {
-      unlocked.push(stage.dept);
+    const { blocked } = computeBlockState(operations, i);
+    if (!blocked) {
+      // This op is now unblocked — find its dept label
+      const stageId = getOpStageId(op);
+      const stage = stageId ? STAGE_MAP.get(stageId) : null;
+      const deptLabel = stage?.dept || op.name || op.stage || "Next Step";
+      unlocked.push(deptLabel);
+      // Only surface the immediately-next unblocked step, not all downstream
+      break;
     }
   }
 

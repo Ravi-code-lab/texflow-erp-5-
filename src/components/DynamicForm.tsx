@@ -59,9 +59,10 @@ const readonlyBase =
   'w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400 cursor-not-allowed';
 
 interface FieldProps {
+  key?: React.Key;
   field: DocField;
   value: any;
-  onChange: (val: any) => void;
+  onChange: (val: any) => any;
   collections?: DynamicFormProps<any>['collections'];
   error?: string;
   readOnly?: boolean;
@@ -553,7 +554,7 @@ export function DynamicForm<T extends Record<string, any>>({
                 key={field.fieldname}
                 field={field}
                 value={values[field.fieldname]}
-                onChange={v => setValue(field.fieldname, v)}
+                onChange={(v: any) => setValue(field.fieldname, v)}
                 readOnly={readOnly}
               />
             ))}

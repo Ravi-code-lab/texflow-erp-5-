@@ -178,6 +178,7 @@ function CompactPipelineStrip({
 // ─── WO Route card (used in DeptTaskPage WIP view) ────────────────────────────
 
 interface WORouteSummaryProps {
+  key?: React.Key;
   woId: string;
   productName: string;
   quantity: number;

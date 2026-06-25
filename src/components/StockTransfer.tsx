@@ -8,10 +8,11 @@ interface StockTransferProps {
   warehouses?: any[];
   onAdd: (transfer: any) => void;
   onUpdate: (transfer: any) => void;
+  onUpdateInventory?: (item: any) => void;
   onDelete: (transfer: any) => void;
 }
 
-export default function StockTransfer({ inventory, transfers, warehouses = [], onAdd, onDelete }: StockTransferProps) {
+export default function StockTransfer({ inventory, transfers, warehouses = [], onAdd, onDelete, onUpdateInventory }: StockTransferProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [material, setMaterial] = useState('');
   const [qty, setQty] = useState(0);
@@ -24,15 +25,36 @@ export default function StockTransfer({ inventory, transfers, warehouses = [], o
     e.preventDefault();
     if (!material || qty <= 0) return;
 
+    const qtyNum = Number(qty);
     onAdd({
       id: `TRF-${uuidShort(12)}`,
       materialName: material,
-      quantity: Number(qty),
+      quantity: qtyNum,
       sourceWarehouse: source,
       destinationWarehouse: dest,
       transferDate: new Date().toISOString().split('T')[0],
       status: 'COMPLETED'
     });
+
+    // Update inventory: deduct from source, credit to destination (by location field)
+    if (onUpdateInventory) {
+      const nameLower = material.toLowerCase();
+      const srcItem = inventory.find(
+        i => i.name.toLowerCase() === nameLower && (i.location || '').toLowerCase() === source.toLowerCase()
+      ) || inventory.find(i => i.name.toLowerCase() === nameLower);
+      if (srcItem) {
+        onUpdateInventory({ ...srcItem, quantity: Math.max(0, srcItem.quantity - qtyNum), location: source });
+        // Credit destination — find existing or clone with new location
+        const dstItem = inventory.find(
+          i => i.name.toLowerCase() === nameLower && (i.location || '').toLowerCase() === dest.toLowerCase()
+        );
+        if (dstItem) {
+          onUpdateInventory({ ...dstItem, quantity: dstItem.quantity + qtyNum, location: dest });
+        } else {
+          onUpdateInventory({ ...srcItem, id: `INV-${Date.now()}`, quantity: qtyNum, location: dest });
+        }
+      }
+    }
     setIsOpen(false);
     setMaterial('');
     setQty(0);

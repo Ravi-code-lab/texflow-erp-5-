@@ -56,6 +56,7 @@ import {
   TeamMember, UIPreferences, CompanyInfo, 
   InvoiceConfig, ShopifyConfig, SecurityConfig, CommunicationConfig, AdvancedConfig, RolePermission, UserRole
 } from '../types';
+import { NumberingSeriesConfig, SeriesRule, YearFormat, DEFAULT_NUMBERING_CONFIG, previewId } from '../modules/numberingSeries';
 import { ERP_MODULE_GROUPS } from '../modules/registry';
 import { toast, useConfirm } from "../utils/toast";
 
@@ -65,6 +66,8 @@ const ipc = isElectron ? (window as any).require('electron').ipcRenderer : null;
 interface SettingsProps {
   invoiceConfig?: InvoiceConfig;
   onUpdateInvoiceConfig?: (config: InvoiceConfig) => void;
+  numberingConfig?: NumberingSeriesConfig;
+  onUpdateNumberingConfig?: (config: NumberingSeriesConfig) => void;
   features?: Record<string, boolean>;
   onUpdateFeatures?: (features: Record<string, boolean>) => void;
   shopifyConfig?: ShopifyConfig;
@@ -87,9 +90,150 @@ interface SettingsProps {
   onDeleteRolePermission?: (id: string) => void;
 }
 
+// ── Numbering Series Panel ────────────────────────────────────────────────────
+const YEAR_FORMAT_OPTIONS: { value: YearFormat; label: string }[] = [
+  { value: 'FY-SHORT', label: 'FY Short  (25-26)' },
+  { value: 'FY-LONG',  label: 'FY Long   (2025-26)' },
+  { value: 'YYYY',     label: 'Year      (2026)' },
+  { value: 'YY',       label: 'Year 2-digit (26)' },
+  { value: 'NONE',     label: 'No Year' },
+];
+
+const inp = 'border border-slate-200 dark:border-slate-700 rounded px-2.5 py-1.5 text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500';
+const sel = inp;
+
+function NumberingSeriesPanel({ config, onSave }: { config: NumberingSeriesConfig; onSave: (c: NumberingSeriesConfig) => void }) {
+  const [local, setLocal] = React.useState<NumberingSeriesConfig>(() => ({ ...DEFAULT_NUMBERING_CONFIG, ...config }));
+  const [dirty, setDirty] = React.useState(false);
+
+  const update = (doctype: string, patch: Partial<SeriesRule>) => {
+    setLocal(prev => ({ ...prev, [doctype]: { ...prev[doctype], ...patch } }));
+    setDirty(true);
+  };
+
+  const rules = Object.values(local) as SeriesRule[];
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-bold text-slate-800 dark:text-white">Document Numbering Series</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Configure auto-generated IDs for each document type. Changes apply to new documents only.</p>
+        </div>
+        <button
+          onClick={() => { onSave(local); setDirty(false); }}
+          disabled={!dirty}
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+        >
+          <Save className="w-3.5 h-3.5" /> Save Series
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+              <th className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-500 w-44">Document Type</th>
+              <th className="text-left px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-500 w-24">Prefix</th>
+              <th className="text-left px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-500 w-20">Sep</th>
+              <th className="text-left px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-500 w-44">Year Format</th>
+              <th className="text-left px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-500 w-20">Padding</th>
+              <th className="text-left px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-500 w-28">Current #</th>
+              <th className="text-left px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-500">Preview</th>
+              <th className="text-center px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-500 w-16">Active</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {rules.map((rule) => {
+              const preview = previewId(rule);
+              return (
+                <tr key={rule.doctype} className={`transition-colors ${rule.enabled ? '' : 'opacity-40'}`}>
+                  {/* Label */}
+                  <td className="px-4 py-2">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs">{rule.label}</span>
+                    <span className="block text-[10px] text-slate-400 font-mono mt-0.5">{rule.doctype}</span>
+                  </td>
+                  {/* Prefix */}
+                  <td className="px-3 py-2">
+                    <input
+                      className={`${inp} w-20 font-mono font-bold uppercase`}
+                      value={rule.prefix}
+                      maxLength={8}
+                      onChange={e => update(rule.doctype, { prefix: e.target.value.toUpperCase() })}
+                    />
+                  </td>
+                  {/* Separator */}
+                  <td className="px-3 py-2">
+                    <select className={`${sel} w-16`} value={rule.separator} onChange={e => update(rule.doctype, { separator: e.target.value })}>
+                      <option value="-">-</option>
+                      <option value="/">/</option>
+                      <option value=".">.</option>
+                      <option value="">none</option>
+                    </select>
+                  </td>
+                  {/* Year Format */}
+                  <td className="px-3 py-2">
+                    <select className={`${sel} w-40`} value={rule.yearFormat} onChange={e => update(rule.doctype, { yearFormat: e.target.value as YearFormat })}>
+                      {YEAR_FORMAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </td>
+                  {/* Padding */}
+                  <td className="px-3 py-2">
+                    <select className={`${sel} w-16`} value={rule.padding} onChange={e => update(rule.doctype, { padding: Number(e.target.value) })}>
+                      {[2,3,4,5,6].map(n => <option key={n} value={n}>{n} digits</option>)}
+                    </select>
+                  </td>
+                  {/* Current # */}
+                  <td className="px-3 py-2">
+                    <input
+                      type="number"
+                      min={0}
+                      className={`${inp} w-24 font-mono`}
+                      value={rule.currentNumber}
+                      onChange={e => update(rule.doctype, { currentNumber: Math.max(0, Number(e.target.value)) })}
+                    />
+                  </td>
+                  {/* Preview */}
+                  <td className="px-3 py-2">
+                    <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-900">
+                      {preview}
+                    </span>
+                  </td>
+                  {/* Toggle */}
+                  <td className="px-3 py-2 text-center">
+                    <button
+                      onClick={() => update(rule.doctype, { enabled: !rule.enabled })}
+                      className={`w-8 h-4 rounded-full transition-colors relative ${rule.enabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                    >
+                      <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-all ${rule.enabled ? 'left-4' : 'left-0.5'}`} />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Info box */}
+      <div className="flex gap-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg px-4 py-3">
+        <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+        <div className="text-xs text-amber-800 dark:text-amber-300 space-y-1">
+          <p><strong>Current #</strong> is the last used number. Next document gets Current&nbsp;#+1. Set to 0 to start from 1.</p>
+          <p><strong>FY Short</strong> uses Indian fiscal year Apr–Mar. In June 2026 it shows <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">26-27</code>.</p>
+          <p>If a doctype series is <strong>disabled</strong>, a short random ID is used instead.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const Settings: React.FC<SettingsProps> = ({ 
   uiPrefs, onUpdateUiPrefs, companyInfo, onUpdateCompanyInfo, 
   features = {}, onUpdateFeatures, invoiceConfig, onUpdateInvoiceConfig,
+  numberingConfig, onUpdateNumberingConfig,
   shopifyConfig, onUpdateShopifyConfig,
   securityConfig, onUpdateSecurityConfig,
   communicationConfig, onUpdateCommunicationConfig,
@@ -101,7 +245,7 @@ const Settings: React.FC<SettingsProps> = ({
   onDeleteRolePermission
 }) => {
   const { confirm, ConfirmModal } = useConfirm();
-  const [activeTab, setActiveTab] = useState<'COMPANY' | 'BILLING' | 'MODULES' | 'CUSTOMIZER' | 'THEME' | 'STORAGE' | 'INTEGRATIONS' | 'SECURITY' | 'RBAC' | 'SERVER' | 'COMMUNICATION' | 'ADVANCED'>('COMPANY');
+  const [activeTab, setActiveTab] = useState<'COMPANY' | 'BILLING' | 'MODULES' | 'CUSTOMIZER' | 'THEME' | 'STORAGE' | 'INTEGRATIONS' | 'SECURITY' | 'RBAC' | 'SERVER' | 'COMMUNICATION' | 'ADVANCED' | 'NUMBERING'>('COMPANY');
   const [isSaving, setIsSaving] = useState(false);
   const [vaultStatus, setVaultStatus] = useState<any>(null);
   
@@ -308,6 +452,7 @@ const Settings: React.FC<SettingsProps> = ({
                 { id: 'MODULES', label: 'Modules', icon: LayoutGrid },
                 { id: 'CUSTOMIZER', label: 'DocType', icon: Settings2 },
                 { id: 'INTEGRATIONS', label: 'Integrations', icon: Store },
+                { id: 'NUMBERING', label: 'Doc Series', icon: FileDigit },
                 { id: 'RBAC', label: 'Roles (RBAC)', icon: Fingerprint },
                 { id: 'SECURITY', label: 'Security', icon: ShieldCheck },
                 { id: 'SERVER', label: 'LAN Server', icon: Server },
@@ -337,6 +482,7 @@ const Settings: React.FC<SettingsProps> = ({
                     { id: 'MODULES', label: 'Module Control', icon: LayoutGrid },
                     { id: 'CUSTOMIZER', label: 'DocType Customizer', icon: Settings2 },
                     { id: 'INTEGRATIONS', label: 'Integrations', icon: Store },
+                    { id: 'NUMBERING', label: 'Doc Series', icon: FileDigit },
                     { id: 'RBAC', label: 'Roles (RBAC)', icon: Fingerprint },
                     { id: 'SECURITY', label: 'Security & Auth', icon: ShieldCheck },
                     { id: 'SERVER', label: 'LAN Server', icon: Server },
@@ -713,6 +859,13 @@ const Settings: React.FC<SettingsProps> = ({
                            </p>
                         </div>
                     </div>
+                  )}
+
+                  {activeTab === 'NUMBERING' && (
+                    <NumberingSeriesPanel
+                      config={numberingConfig || DEFAULT_NUMBERING_CONFIG}
+                      onSave={(cfg) => { onUpdateNumberingConfig?.(cfg); toast.success('Numbering series saved'); }}
+                    />
                   )}
 
                   {activeTab === 'RBAC' && (

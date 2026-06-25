@@ -194,7 +194,7 @@ export const RolePermissionManager: React.FC<RolePermissionManagerProps> = ({
     modules: g.modules.filter(m => !search || m.label?.toLowerCase()?.includes(search.toLowerCase()) || m.id?.toLowerCase()?.includes(search.toLowerCase())),
   })).filter(g => g.modules.length > 0);
 
-  const PermCell = ({ module, pkey }: { module: string; pkey: PermKey }) => {
+  const PermCell = ({ module, pkey }: { key?: React.Key; module: string; pkey: PermKey }) => {
     const perm = effectivePerms[module];
     const val = perm?.[pkey] ?? false;
     const isAdmin = activeRole === 'ADMIN';
@@ -322,7 +322,7 @@ export const RolePermissionManager: React.FC<RolePermissionManagerProps> = ({
                               </div>
                             </td>
                             {(['canRead','canCreate','canUpdate','canDelete'] as PermKey[]).map(k => (
-                              <PermCell key={k} module={id} pkey={k} />
+                              <PermCell key={k} module={id} pkey={k as PermKey} />
                             ))}
                             <td className="px-3 py-2.5 text-center">
                               <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${

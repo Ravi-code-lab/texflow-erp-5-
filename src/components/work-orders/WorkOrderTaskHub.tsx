@@ -10,7 +10,7 @@ import DeptTaskPage from "./DeptTaskPage";
 import OperationsMaster from "./OperationsMaster";
 import RoutingMaster from "./RoutingMaster";
 import type { ProductionJob as WorkOrder, Karigar } from "../../types";
-import { opBelongsToDept as pipelineOpBelongsToDept } from "../pipelineWiring";
+import { opBelongsToDept as pipelineOpBelongsToDept, computeBlockState } from "../pipelineWiring";
 
 interface Props {
   production: WorkOrder[];
@@ -69,13 +69,18 @@ export default function WorkOrderTaskHub({ production, onUpdateWorkOrder, kariga
 
   const pendingCount = (taskName: string): number =>
     production.reduce((total, wo) => {
-      const ops = (wo.operations || []).filter(
-        (op: any) =>
-          pipelineOpBelongsToDept(op, taskName) &&
-          (op.status || "PENDING").toUpperCase() !== "COMPLETED" &&
-          (op.workflowState || "").toLowerCase() !== "completed"
-      );
-      return total + ops.length;
+      const allOps = wo.operations || [];
+      const count = allOps.filter((op: any, idx: number) => {
+        if (!pipelineOpBelongsToDept(op, taskName)) return false;
+        const status = (op.status || "PENDING").toUpperCase();
+        if (status === "COMPLETED" || op.workflowState === "Completed") return false;
+        // Use the same computeBlockState used by DeptTaskPage — WO sequential order
+        const { blocked } = computeBlockState(allOps, idx);
+        // Blocked + not started = not this dept's turn yet → don't count
+        if (blocked && status !== "IN_PROGRESS" && status !== "WORK IN PROGRESS") return false;
+        return true;
+      }).length;
+      return total + count;
     }, 0);
 
   // Group tabs by section for rendering dividers

@@ -228,12 +228,14 @@ const Login: React.FC<LoginProps> = ({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Mode-select is only needed in Electron (server PC).
-    // Any browser access (via IP or localhost) → straight to client login.
-    if (isLanClientMode() || !(window as any).process?.type) {
+    // If already detected as LAN client (browser opened via server IP),
+    // skip mode-select and go straight to login.
+    if (isLanClientMode()) {
       setMode("client");
       setStep("login");
     }
+    // Note: Electron (window.process.type exists) stays on mode-select.
+    // Localhost browser (dev) also stays on mode-select.
   }, []);
 
   const handleSelectServer = () => {
@@ -249,13 +251,8 @@ const Login: React.FC<LoginProps> = ({
 
   const handleBack = () => {
     if (mode === "client") clearServerUrl();
-    if (!(window as any).process?.type) {
-      setMode("server");
-      setStep("login");
-    } else {
-      setMode(null);
-      setStep("mode-select");
-    }
+    setMode(null);
+    setStep("mode-select");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

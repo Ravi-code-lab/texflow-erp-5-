@@ -96,11 +96,12 @@ export function StatusBadge({ status, label }: { status: string; label?: string 
 // ── Stat Cards ───────────────────────────────────────────────────────────────
 
 interface StatCardProps {
+  key?: React.Key;
   label: string;
   value: number | string;
   color?: string;
   active?: boolean;
-  onClick?: () => void;
+  onClick?: () => any;
 }
 
 function StatCard({ label, value, color = '#2490ef', active, onClick }: StatCardProps) {
@@ -245,14 +246,14 @@ function ListPage<T extends { id: string }>({
     if (allPageChecked) pageRows.forEach(r => next.delete(r.id));
     else pageRows.forEach(r => next.add(r.id));
     setCheckedIds(next);
-    onSelectionChange?.([...next]);
+    onSelectionChange?.([...next] as string[]);
   };
 
   const toggleRow = useCallback((id: string) => {
     setCheckedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
-      onSelectionChange?.([...next]);
+      onSelectionChange?.([...next] as string[]);
       return next;
     });
   }, [onSelectionChange]);
@@ -360,10 +361,10 @@ function ListPage<T extends { id: string }>({
           {statCards.map(card => (
             <StatCard
               key={card.key}
-              label={card.label}
-              value={card.count}
+              label={String(card.label)}
+              value={card.count as number}
               active={activeStatFilter === card.key}
-              onClick={() => setActiveStatFilter(prev => prev === card.key ? null : card.key)}
+              onClick={() => setActiveStatFilter((prev: string | null) => prev === card.key ? null : card.key)}
             />
           ))}
         </div>

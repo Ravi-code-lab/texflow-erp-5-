@@ -1100,6 +1100,15 @@ const DesignRecipe: React.FC<DesignRecipeProps> = ({
                     >
                       Cancel Matrix
                     </button>
+                    {formData.id && onAction && (
+                      <button
+                        type="button"
+                        onClick={() => onAction('CONVERT_TO_WORK_ORDER_FROM_RECIPE', formData)}
+                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 border border-transparent text-white rounded text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
+                      >
+                        Create Work Order
+                      </button>
+                    )}
                     <button 
                       type="submit" 
                       className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 border border-transparent text-white rounded text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"

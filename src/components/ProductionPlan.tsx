@@ -15,20 +15,7 @@ interface ProductionPlanProps {
   onAction?: (action: string, data: any) => void;
 }
 
-// Simulated current raw material physical stock in godown storage
-// Allows calculating real-time material shortages on the fly
-const SIMULATED_MATERIAL_STOCK: Record<string, { stock: number; unit: string; ratePerUnit: number }> = {
-  'Rayon Liva (140 GSM)': { stock: 1250, unit: 'Meters', ratePerUnit: 85 },
-  'Cotton Cambric (80 GSM)': { stock: 3400, unit: 'Meters', ratePerUnit: 65 },
-  'Premium Slub-Cotton': { stock: 680, unit: 'Meters', ratePerUnit: 110 },
-  'Indigo Block dye paste': { stock: 25, unit: 'KG', ratePerUnit: 240 },
-  'Standard polyester threads': { stock: 180, unit: 'Cones', ratePerUnit: 40 },
-  'Zari Gold thread lace': { stock: 310, unit: 'Meters', ratePerUnit: 18 },
-  'Designer Kurti neck buttons': { stock: 5000, unit: 'Pcs', ratePerUnit: 2 },
-  'Summer Print Rayon Kurti (A-Line)': { stock: 200, unit: 'Meters', ratePerUnit: 85 },
-  'Teal Neck Floral print': { stock: 1500, unit: 'Meters', ratePerUnit: 5 },
-  'Ivory Cambric Office Shirt': { stock: 300, unit: 'Meters', ratePerUnit: 65 }
-};
+// Material stock is derived live from the inventory prop (see handleCreatePlan → liveStock)
 
 export default function ProductionPlan({ orders, designs, jobs, inventory = [], onAction }: ProductionPlanProps) {
   const [activePlan, setActivePlan] = useState<any | null>(null);
@@ -490,7 +477,7 @@ export default function ProductionPlan({ orders, designs, jobs, inventory = [], 
              <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/20 space-y-4">
                 <div className="flex items-center gap-2 border-b pb-2">
                   <Calendar className="w-4 h-4 text-indigo-500" />
-                  <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider">Simulated Gantt Route Milestones</h4>
+                  <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider">Gantt Route Milestones</h4>
                 </div>
                 
                 <div className="space-y-3.5">

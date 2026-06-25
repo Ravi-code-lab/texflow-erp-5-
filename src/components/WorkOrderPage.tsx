@@ -12,7 +12,7 @@ import {
   Plus, Search, ChevronRight, Package, Calendar, Hash,
   Layers, CheckCircle2, Clock, AlertCircle, PlayCircle,
   Edit2, Trash2, X, Save, ArrowLeft, Settings2, Lock,
-  ArrowRight, CheckCheck, RefreshCw
+  ArrowRight, CheckCheck, RefreshCw, GitBranch, Wrench, ShoppingCart
 } from "lucide-react";
 import type { ProductionJob, Karigar, Design, Order, InventoryItem, Machine, SampleRequest, GarmentRoutingTemplate, GarmentWorkOrderOperation } from "../types";
 import { DEFAULT_ROUTING_TEMPLATES, getProcessMeta, ROUTING_STORAGE_KEY } from "./work-orders/RoutingMaster";
@@ -609,7 +609,7 @@ function StepAdvanceModal({
                       <span className="text-[9px] font-black bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono">
                         ₹{op.ratePerPiece}{op.rateUnit === "PER_HOUR" ? "/hr" : op.rateUnit === "PER_METER" ? "/mtr" : "/pc"}
                         {op.rateUnit === "PER_PIECE" && job.quantity > 0 && (
-                          <span className="opacity-60 ml-1">= ₹{((op.ratePerPiece || 0) * job.quantity).toLocaleString()} total</span>
+                          <span className="opacity-60 ml-1">= ₹{((op.ratePerPiece || 0) * (Number(job.quantity) || 0)).toLocaleString()} total</span>
                         )}
                       </span>
                     )}
@@ -656,7 +656,7 @@ function StepAdvanceModal({
                   <div key={o.id} className="flex items-center gap-1.5 text-[11px]">
                     <span className="text-slate-500">{o.name}:</span>
                     <span className="font-black text-indigo-700 font-mono">
-                      ₹{((o.ratePerPiece || 0) * (o.rateUnit === "PER_PIECE" ? job.quantity : 1)).toLocaleString()}
+                      ₹{((o.ratePerPiece || 0) * (o.rateUnit === "PER_PIECE" ? (Number(job.quantity) || 0) : 1)).toLocaleString()}
                     </span>
                   </div>
                 ))}
@@ -664,7 +664,7 @@ function StepAdvanceModal({
               <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-indigo-200">
                 <span className="text-[11px] font-black text-slate-700">Total Operation Cost</span>
                 <span className="text-sm font-black text-emerald-700 font-mono">
-                  ₹{localOps.reduce((s, o) => s + (o.ratePerPiece || 0) * (o.rateUnit === "PER_PIECE" ? job.quantity : 1), 0).toLocaleString()}
+                  ₹{localOps.reduce((s, o) => s + (o.ratePerPiece || 0) * (o.rateUnit === "PER_PIECE" ? (Number(job.quantity) || 0) : 1), 0).toLocaleString()}
                 </span>
               </div>
             </div>
@@ -790,9 +790,8 @@ export default function WorkOrderPage({
   if (view === "form" && editing !== null) {
     return (
       <WorkOrderForm
-        key={editing?.id || 'new'}
-        initial={editing} designs={designs} orders={orders} samples={samples}
-        templates={templates} onSave={handleSave}
+        initial={editing as any} designs={designs} orders={orders} samples={samples}
+        templates={templates as GarmentRoutingTemplate[]} onSave={handleSave}
         onCancel={() => { setView("list"); setEditing(null); }}
         currency={currency}
       />
@@ -906,7 +905,7 @@ export default function WorkOrderPage({
                           <AlertCircle className="w-3 h-3" /> OVERDUE
                         </span>
                       )}
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${PRIORITY_STYLE[job.priority]}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${PRIORITY_STYLE[job.priority] || PRIORITY_STYLE['NORMAL']}`}>
                         {job.priority}
                       </span>
                     </div>
@@ -914,7 +913,7 @@ export default function WorkOrderPage({
                     <p className="text-base font-black text-slate-800 dark:text-slate-100 truncate">{job.productName}</p>
 
                     <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-slate-500">
-                      <span className="flex items-center gap-1"><Layers className="w-3 h-3" />{job.quantity} pcs</span>
+                      <span className="flex items-center gap-1"><Layers className="w-3 h-3" />{Number(job.quantity) || 0} pcs</span>
                       {job.styleCode && <span>Style: {job.styleCode}</span>}
                       {job.deadline && (
                         <span className={`flex items-center gap-1 ${overdueFlag ? "text-red-500 font-bold" : ""}`}>
@@ -923,7 +922,7 @@ export default function WorkOrderPage({
                       )}
                       {ops.some(o => (o.ratePerPiece || 0) > 0) && (
                         <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-black">
-                          ₹{ops.reduce((s, o) => s + (o.ratePerPiece || 0) * (o.rateUnit === "PER_PIECE" ? job.quantity : 1), 0).toLocaleString()} ops cost
+                          ₹{ops.reduce((s, o) => s + (o.ratePerPiece || 0) * (o.rateUnit === "PER_PIECE" ? (Number(job.quantity) || 0) : 1), 0).toLocaleString()} ops cost
                         </span>
                       )}
                     </div>
@@ -954,7 +953,7 @@ export default function WorkOrderPage({
                       {isReady ? "✅ Ready" : `${activeMeta.icon} ${currentStage}`}
                     </span>
 
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1">
                       {/* Advance steps */}
                       {ops.length > 0 && (
                         <button
@@ -968,10 +967,35 @@ export default function WorkOrderPage({
                       <button
                         onClick={() => handleEdit(job)}
                         className="p-1.5 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors"
-                        title="Edit"
+                        title="Edit Work Order"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
+                      {onAction && (
+                        <>
+                          <button
+                            onClick={() => onAction('CONVERT_TO_MATERIAL_REQUEST', job)}
+                            className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 transition-colors"
+                            title="Create Material Request"
+                          >
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => onAction('CONVERT_TO_SUBCONTRACTING_FROM_ROUTE', job)}
+                            className="p-1.5 rounded-lg hover:bg-purple-50 text-slate-400 hover:text-purple-600 transition-colors"
+                            title="Send to Subcontracting"
+                          >
+                            <GitBranch className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => onAction('CONVERT_TO_JOB_CARD', job)}
+                            className="p-1.5 rounded-lg hover:bg-teal-50 text-slate-400 hover:text-teal-600 transition-colors"
+                            title="Create Job Card"
+                          >
+                            <Wrench className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
                         className="p-1.5 rounded-lg hover:bg-teal-50 text-slate-400 hover:text-teal-600 transition-colors"

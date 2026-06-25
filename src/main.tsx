@@ -2,15 +2,19 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
-  constructor(props: any) { super(props); this.state = { hasError: false, error: null }; }
-  static getDerivedStateFromError(error: any) { return { hasError: true, error }; }
+interface EBState { hasError: boolean; error: any; }
+interface EBProps { children: React.ReactNode; }
+
+class ErrorBoundary extends React.Component<EBProps, EBState> {
+  declare props: EBProps;
+  state: EBState = { hasError: false, error: null };
+  static getDerivedStateFromError(error: any): EBState { return { hasError: true, error }; }
   render() {
     if (this.state.hasError) {
       return (
         <div style={{ padding: 20, color: 'red' }}>
           <h1>Something went wrong.</h1>
-          <pre>{this.state.error?.stack || this.state.error?.message}</pre>
+          <pre>{(this.state.error as any)?.stack || (this.state.error as any)?.message}</pre>
         </div>
       );
     }

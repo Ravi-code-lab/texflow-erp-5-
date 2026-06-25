@@ -194,7 +194,9 @@ import {
   prepareDocumentCreate,
   prepareDocumentDelete,
   prepareDocumentUpdate,
+  setNumberingConfig,
 } from "./modules/documentLifecycle";
+import { DEFAULT_NUMBERING_CONFIG, NumberingSeriesConfig } from "./modules/numberingSeries";
 import { ToastContainer, ConfirmRoot } from "./utils/toast";
 import OrderReminderSettings from "./components/OrderReminderSettings";
 import { startReminderScheduler } from "./services/orderReminderService";
@@ -501,6 +503,7 @@ const App: React.FC = () => {
     footerText: "",
     showLogo: true,
   });
+  const [numberingConfig, setNumberingConfig_] = useState<NumberingSeriesConfig>(DEFAULT_NUMBERING_CONFIG);
 
   // Data States
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -585,6 +588,17 @@ const App: React.FC = () => {
       setInvoiceConfig(
         await g<InvoiceConfig>("texflow_invoice_config", invoiceConfig),
       );
+      const loadedNumberingConfig = await g<NumberingSeriesConfig>("texflow_numbering_config", DEFAULT_NUMBERING_CONFIG);
+      // Merge loaded with defaults so new doctypes appear automatically
+      const mergedNumberingConfig = { ...DEFAULT_NUMBERING_CONFIG, ...loadedNumberingConfig };
+      setNumberingConfig_(mergedNumberingConfig);
+      setNumberingConfig(mergedNumberingConfig, (doctype, nextNumber) => {
+        setNumberingConfig_(prev => {
+          const updated = { ...prev, [doctype]: { ...prev[doctype], currentNumber: nextNumber } };
+          setItem("texflow_numbering_config", updated).catch(console.error);
+          return updated;
+        });
+      });
       setShopifyConfig(
         await g<ShopifyConfig>("texflow_shopify_config", shopifyConfig),
       );
@@ -1532,6 +1546,18 @@ const App: React.FC = () => {
     setItem("texflow_invoice_config", config);
   };
 
+  const handleUpdateNumberingConfig = (config: NumberingSeriesConfig) => {
+    setNumberingConfig_(config);
+    setItem("texflow_numbering_config", config).catch(console.error);
+    setNumberingConfig(config, (doctype, nextNumber) => {
+      setNumberingConfig_(prev => {
+        const updated = { ...prev, [doctype]: { ...prev[doctype], currentNumber: nextNumber } };
+        setItem("texflow_numbering_config", updated).catch(console.error);
+        return updated;
+      });
+    });
+  };
+
   const handleLogout = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -1604,9 +1630,10 @@ const App: React.FC = () => {
         });
         ordMgr.add(newSalesOrder);
         // Mark source quotation as CONVERTED to prevent duplicate conversion
-        const sourceQuotation = orders.find((o: any) => o.id === data.id);
+        // Mark source quotation CONVERTED (quotations live in their own collection)
+        const sourceQuotation = quotations.find((o: any) => o.id === data.id);
         if (sourceQuotation) {
-          ordMgr.update({ ...sourceQuotation, status: "CONVERTED" });
+          quotationMgr.update({ ...sourceQuotation, status: "CONVERTED" });
         }
         setCurrentView("ORDERS");
         break;
@@ -1616,10 +1643,18 @@ const App: React.FC = () => {
         setPendingDeliveryOrderId(data?.id || undefined);
         setCurrentView("DELIVERY_CHALLAN");
         break;
-      case "CONVERT_TO_INVOICE":
-        setPendingInvoiceOrderId(data?.id || undefined);
+      case "CONVERT_TO_INVOICE": {
+        const invoiceSrcId = data?.sourceOrderId || data?.id;
+        if (invoiceSrcId) {
+          const invoiceSrcOrder = orders.find((o: any) => o.id === invoiceSrcId);
+          if (invoiceSrcOrder && invoiceSrcOrder.status !== "INVOICED") {
+            ordMgr.update({ ...invoiceSrcOrder, status: "INVOICED", invoicedAt: new Date().toISOString() });
+          }
+        }
+        setPendingInvoiceOrderId(invoiceSrcId || undefined);
         setCurrentView("TAX_INVOICE");
         break;
+      }
       case "CONVERT_TO_WORK_ORDER_FROM_SAMPLE": {
         const productionFromSample = createERPDocument("PRODUCTION", {
           productName: data.designName || "Custom Product",
@@ -1649,9 +1684,18 @@ const App: React.FC = () => {
         break;
       }
       case "CONVERT_TO_WORK_ORDER": {
+        // Look up design to carry routing template + operations
+        const firstItem = data.items?.[0];
+        const linkedDesign = firstItem
+          ? designs.find((d: any) =>
+              d.id === firstItem.designId ||
+              d.name?.toLowerCase() === firstItem.productName?.toLowerCase()
+            )
+          : null;
+
         const productionBase = createERPDocument("PRODUCTION", {
-          productName: data.items?.[0]?.productName || "Custom Product",
-          quantity: data.items?.[0]?.quantity || 1,
+          productName: firstItem?.productName || "Custom Product",
+          quantity: firstItem?.quantity || 1,
           status: "PLANNED",
           startDate: new Date().toISOString().split("T")[0],
           deadline: data.dueDate || new Date().toISOString().split("T")[0],
@@ -1660,11 +1704,13 @@ const App: React.FC = () => {
           priority: data.priority || "NORMAL",
           progress: 0,
           sourceOrderId: data.id,
+          // Carry design info for routing template auto-load
+          designId: linkedDesign?.id,
+          routingTemplateId: linkedDesign?.routingTemplateId,
+          styleCode: linkedDesign?.sku || firstItem?.styleCode,
+          imageUrl: linkedDesign?.imageUrl,
         });
         prodMgr.add(productionBase);
-        // BUG FIX: mark source Sales Order as CONVERTED so it can't be
-        // converted to a second Work Order (same omission that was already
-        // fixed for CONVERT_TO_SALES_ORDER → Quotation).
         const sourceOrder = orders.find((o: any) => o.id === data.id);
         if (sourceOrder) ordMgr.update({ ...sourceOrder, status: "CONVERTED" });
         setCurrentView("PRODUCTION");
@@ -1763,31 +1809,44 @@ const App: React.FC = () => {
         }
         setCurrentView("JOB_WORK");
         break;
-      case "CONVERT_TO_MATERIAL_REQUEST":
+      case "CONVERT_TO_MATERIAL_REQUEST": {
+        // Resolve BOM: WO may carry data.materials, or we can look it up from the Design Catalog
+        const linkedDesignForMR = data.designId
+          ? designs.find((d: any) => d.id === data.designId)
+          : designs.find((d: any) => d.name?.trim().toLowerCase() === data.productName?.trim().toLowerCase());
+        const bomItems = data.materials?.length
+          ? data.materials
+          : linkedDesignForMR?.recipe || [];
+        const mrItems = bomItems.map((i: any) => ({
+          productName: i.materialName || i.productName || "Raw Material",
+          quantity: (i.totalRequired || i.quantity || 1) * (data.quantity || 1),
+          unit: i.unit || "PIECE",
+          purpose: `For Work Order: ${data.id || data.productName}`,
+        }));
+        if (!mrItems.length) {
+          mrItems.push({
+            productName: data.productName ? `Materials for ${data.productName}` : "Raw Material",
+            quantity: data.quantity || 1,
+            unit: "PIECE",
+            purpose: `For Work Order: ${data.id}`,
+          });
+        }
         const mrBase = createERPDocument("MATERIAL_REQUEST", {
           status: "PENDING",
           date: new Date().toISOString().split("T")[0],
           requestedBy: currentUser?.name || "Administrator",
-          items: (data.recipe || data.materials || []).map((i: any) => ({
-            productName: i.materialName || i.productName || "Raw Material",
-            quantity: i.totalRequired || i.quantity || 1,
-            unit: i.unit || "PIECE",
-            purpose: data.id
-              ? `For Work Order: ${data.id}`
-              : "Production Purpose",
-          })),
+          sourceWorkOrderId: data.id,
+          items: mrItems,
         });
-        if (!mrBase.items.length) {
-          mrBase.items.push({
-            productName: "Raw Material",
-            quantity: 1,
-            unit: "PIECE",
-            purpose: "Production Purpose",
-          });
-        }
         materialReqMgr.add(mrBase as any);
+        handleAddNotification({
+          title: "Material Request Created",
+          message: `MR created for Work Order ${data.id} (${mrItems.length} items).`,
+          type: "SUCCESS",
+        });
         setCurrentView("MATERIAL_REQUEST");
         break;
+      }
       case "CONVERT_TO_WORK_ORDER_FROM_RECIPE": {
         const productionBaseRec = createERPDocument("PRODUCTION", {
           productName: data.name || "Custom Product",
@@ -1809,11 +1868,13 @@ const App: React.FC = () => {
         setCurrentView("PRODUCTION");
         break;
       }
-      case "CONVERT_TO_PO":
+      case "CONVERT_TO_PO": {
         const poBase = createERPDocument("PURCHASE_ORDER", {
           ...data,
           status: "DRAFT",
           date: new Date().toISOString().split("T")[0],
+          sourceMRId: data.doctype === "MATERIAL_REQUEST" ? data.id : undefined,
+          sourceSQId: data.doctype === "SUPPLIER_QUOTATION" ? data.id : undefined,
           items: (data.items || []).map((i: any) => ({
             ...i,
             received: 0,
@@ -1821,8 +1882,22 @@ const App: React.FC = () => {
           })),
         });
         poMgr.add(poBase);
+        // Mark source MR or SQ as CONVERTED
+        if (data.doctype === "MATERIAL_REQUEST") {
+          const sourceMR = materialRequests.find((m: any) => m.id === data.id);
+          if (sourceMR) materialReqMgr.update({ ...sourceMR, status: "CONVERTED" });
+        } else if (data.doctype === "SUPPLIER_QUOTATION") {
+          const sourceSQ = supplierQuotations.find((s: any) => s.id === data.id);
+          if (sourceSQ) supplierQuotationsMgr.update({ ...sourceSQ, status: "CONVERTED" });
+        }
+        handleAddNotification({
+          title: "Purchase Order Created",
+          message: `PO created from ${data.doctype === "MATERIAL_REQUEST" ? "Material Request" : "Supplier Quotation"} ${data.id}.`,
+          type: "SUCCESS",
+        });
         setCurrentView("PURCHASE_ORDER");
         break;
+      }
       case "CONVERT_TO_PURCHASE_RECEIPT":
         setPendingPurchaseInwardId(data?.id || undefined);
         setCurrentView("PURCHASE_INWARD");
@@ -2948,6 +3023,7 @@ const App: React.FC = () => {
                     initialOrderId={pendingDeliveryOrderId}
                     onAddChallan={(c) => { ordMgr.add(c); setPendingDeliveryOrderId(undefined); }}
                     onUpdateChallan={(c) => { ordMgr.update(c); setPendingDeliveryOrderId(undefined); }}
+                    onUpdateOrder={ordMgr.update}
                     onAction={handleAction}
                     currency={currencySymbol}
                     companyInfo={companyInfo}
@@ -3143,6 +3219,7 @@ const App: React.FC = () => {
                     inventory={active(inventory)}
                     onAdd={jobWorkMgr.add}
                     onUpdate={jobWorkMgr.update}
+                    onUpdateInventory={handleInventoryUpdate}
                     onDelete={jobWorkMgr.remove}
                     onAction={handleAction}
                     companyInfo={companyInfo}
@@ -3157,6 +3234,7 @@ const App: React.FC = () => {
                     onAdd={transferMgr.add}
                     onUpdate={transferMgr.update}
                     onDelete={transferMgr.remove}
+                    onUpdateInventory={handleInventoryUpdate}
                   />
                 )}
                 {currentView === "GATE_PASS" && (
@@ -3350,7 +3428,8 @@ const App: React.FC = () => {
                           date: new Date().toISOString().split("T")[0],
                           description: `Purchase Return: ${resolvedSupplierName} - ${reason}`,
                           amount: po.totalAmount,
-                          type: "EXPENSE",
+                          // INCOME: purchase return is money coming BACK from supplier
+                          type: "INCOME",
                           category: "PURCHASE_RETURN",
                           paymentMethod: "ADJUSTMENT",
                           subType: "DEBIT_NOTE",
@@ -3601,6 +3680,8 @@ const App: React.FC = () => {
                     onUpdateAdvancedConfig={handleUpdateAdvancedConfig}
                     invoiceConfig={invoiceConfig}
                     onUpdateInvoiceConfig={handleUpdateInvoiceConfig}
+                    numberingConfig={numberingConfig}
+                    onUpdateNumberingConfig={handleUpdateNumberingConfig}
                     team={active(team)}
                     lastSync={lastSync}
                     rolePermissions={rolePermissions}

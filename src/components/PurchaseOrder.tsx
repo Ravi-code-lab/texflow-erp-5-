@@ -187,7 +187,7 @@ const PurchaseOrderComp: React.FC<PurchaseOrderProps> = ({
                      {formData.id && getStatusBadge(formData.status || 'DRAFT')}
                   </div>
                   <div className="flex items-center gap-2">
-                     {formData.id && onAction && formData.status !== 'CANCELLED' && (
+                     {formData.id && onAction && formData.status !== 'CANCELLED' && formData.status !== 'RECEIVED' && (
                        <>
                          <button type="button" onClick={() => onAction('CONVERT_TO_PURCHASE_RECEIPT', formData)} className="h-7 px-3 flex items-center gap-1.5 bg-[#f4f5f6] hover:bg-[#e2e6ea] border border-[#d1d8dd] text-[#1c2126] rounded text-[13px] font-medium shadow-sm transition-all focus:ring-2 focus:ring-[#2490ef]/50">
                             Create Receipt

@@ -1326,8 +1326,8 @@ function Toolbar({
 // ─── Sub-task row (inside list view expand) ───────────────────────────────────
 
 function SubTaskRow({ sub, karigars, accentHex, onUpdate, onDelete }: {
-  sub: SubTask; karigars: Karigar[]; accentHex: string;
-  onUpdate: (s: SubTask) => void; onDelete: (id: string) => void;
+  key?: React.Key; sub: SubTask; karigars: Karigar[]; accentHex: string;
+  onUpdate: (s: SubTask) => any; onDelete: (id: string) => any;
 }) {
   const st = sub.status;
   const stColor = st === "Done" ? "text-emerald-600" : st === "In Progress" ? "text-amber-600" : st === "Blocked" ? "text-rose-600" : "text-slate-400";
@@ -1532,7 +1532,7 @@ function ListView({ tasks, dept, karigars, selectedIds, onToggleSelect, onSelect
               <div className="px-4 pb-3 space-y-1.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 pt-2 mb-1.5">Sub-tasks ({task.subTasks.length})</p>
                 {task.subTasks.map(sub => (
-                  <SubTaskRow key={sub.id} sub={sub} karigars={karigars} accentHex={dept.accentHex}
+                  <SubTaskRow key={sub.id} sub={sub} karigars={karigars as Karigar[]} accentHex={String(dept.accentHex)}
                     onUpdate={(updated: SubTask) => onUpdateSubTask(task, task.subTasks.map((s: SubTask) => s.id === updated.id ? updated : s))}
                     onDelete={(id: string) => onUpdateSubTask(task, task.subTasks.filter((s: SubTask) => s.id !== id))} />
                 ))}
@@ -1953,9 +1953,9 @@ function CommentsFeed({ comments, setComments, stateHistory }: {
 
 // ─── Detail Form ──────────────────────────────────────────────────────────────
 
-function DetailForm({ task, dept, karigars, production, taskName, onSave, onCancel, onDelete }: {
+function DetailForm({ task, dept, karigars, production, taskName, inventory = [], onSave, onCancel, onDelete }: {
   task: EnrichedTask; dept: DeptConfig; karigars: Karigar[];
-  production: WorkOrder[]; taskName: string;
+  production: WorkOrder[]; taskName: string; inventory?: any[];
   onSave: (t: EnrichedTask) => void; onCancel: () => void; onDelete: (t: EnrichedTask) => void;
 }) {
   const [form, setForm] = useState<EnrichedTask>(task);
@@ -2119,7 +2119,16 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
     });
   };
 
-  const pct = form.woQty > 0 ? Math.min(100, Math.round((form.completedQuantity || 0) / form.woQty * 100)) : 0;
+  const isMeterDept = ["Fabric Inspection", "Dyeing", "Printing", "Washing"].includes(dept.label);
+  const pct = form.workflowState === "Completed"
+    ? 100
+    : isMeterDept
+      ? (() => {
+          const total = Number(form.customData?.totalMeters || 0);
+          const accepted = Number(form.customData?.acceptedMeters || form.completedQuantity || 0);
+          return total > 0 ? Math.min(100, Math.round(accepted / total * 100)) : 0;
+        })()
+      : (form.woQty > 0 ? Math.min(100, Math.round((form.completedQuantity || 0) / form.woQty * 100)) : 0);
   const wf = WORKFLOW[form.workflowState];
   const validNextStates = wf.nextStates;
 
@@ -2449,7 +2458,46 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                       </button>
                     </div>
 
-                    {matRows.map((row: any, idx: number) => (
+                    {matRows.map((row: any, idx: number) => {
+                      const isCutting = dept.label === "Cutting";
+                      const isPrinting = dept.label === "Printing";
+                      const usesStockPicker = isCutting || isPrinting;
+                      // Cutting issues from Printed Fabric rolls; Printing issues from Grey Fabric rolls.
+                      // Grey fabric may be stored as "GREY_FABRIC" (auto-created) or "FABRIC" (manually added opening stock)
+                      const GREY_TYPES = ["GREY_FABRIC", "FABRIC"];
+                      const stockType = isCutting ? "PRINTED_FABRIC" : "GREY_FABRIC";
+                      const stockLabel = isCutting ? "printed fabric" : "grey fabric";
+                      // Rolls available for THIS product only, with qty remaining
+                      // Match by productName (auto-added rolls) OR by item name containing the product name (manually added opening stock)
+                      const matchesProduct = (i: any) => {
+                        // Grey fabric is a raw material — not product-specific.
+                        // Only Printed Fabric rolls are linked to a specific product.
+                        if (!isCutting) return true;
+                        if (!form.woProduct) return true;
+                        if (i.productName === form.woProduct) return true;
+                        const nameLower = (i.name || "").toLowerCase();
+                        const productLower = form.woProduct.toLowerCase();
+                        return nameLower.includes(productLower);
+                      };
+                      const matchesType = (i: any) => isCutting
+                        ? i.type === "PRINTED_FABRIC"
+                        : GREY_TYPES.includes(i.type);
+                      // Raw Materials items have no stored status field (computed in UI as IN_STOCK/LOW_STOCK)
+                      // Opening Stock / auto-created rolls store status: "AVAILABLE" | "DEPLETED"
+                      // Accept either: explicit AVAILABLE, or no status field but qty > 0 (Raw Materials)
+                      const isAvailable = (i: any) =>
+                        i.status === "AVAILABLE" || (!i.status && (i.quantity || 0) > 0) || i.status === "IN_STOCK" || i.status === "LOW_STOCK";
+                      const availableRolls = usesStockPicker
+                        ? inventory.filter((i: any) => matchesType(i) && isAvailable(i) && (i.quantity || 0) > 0 && matchesProduct(i))
+                        : [];
+                      const selectedRoll = usesStockPicker ? inventory.find((i: any) => i.lotNumber === row.stockIssueId) : null;
+                      const perPc = Number(row.perPcConsumption || 0);
+                      const estPcsFromRoll = selectedRoll && perPc > 0 && isCutting ? Math.floor((selectedRoll.quantity || 0) / perPc) : null;
+                      const targetQty = form.completedQuantity || form.woQty || 0;
+                      const requiredMeters = targetQty && perPc ? targetQty * perPc : 0;
+                      const rollShort = selectedRoll && requiredMeters > 0 ? (selectedRoll.quantity || 0) < requiredMeters : false;
+
+                      return (
                       <div key={row.id} className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 relative">
                         {matRows.length > 1 && (
                           <button type="button" onClick={() => {
@@ -2466,8 +2514,47 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                             </div>
                             <div className="w-2/3">
                               <FieldLabel>Stock Issue / Than / Roll No.</FieldLabel>
-                              <input type="text" className="erp-input w-full"
-                                value={row.stockIssueId || ""} onChange={e => updateMat(idx, { stockIssueId: e.target.value })} placeholder="e.g. ROLL-502 or THAAN-12" />
+                              {usesStockPicker ? (
+                                <select className="erp-input w-full"
+                                  value={row.stockIssueId || ""} onChange={e => updateMat(idx, { stockIssueId: e.target.value })}>
+                                  <option value="">— Select roll from stock —</option>
+                                  {availableRolls.map((r: any) => (
+                                    <option key={r.lotNumber || r.id} value={r.lotNumber || r.id}>
+                                      {r.lotNumber || r.id} — {(r.quantity || 0).toFixed(1)} m available
+                                    </option>
+                                  ))}
+                                  {selectedRoll === null && row.stockIssueId && (
+                                    <option value={row.stockIssueId}>{row.stockIssueId} (not in stock)</option>
+                                  )}
+                                </select>
+                              ) : (
+                                <input type="text" className="erp-input w-full"
+                                  value={row.stockIssueId || ""} onChange={e => updateMat(idx, { stockIssueId: e.target.value })} placeholder="e.g. ROLL-502 or THAAN-12" />
+                              )}
+                              {usesStockPicker && availableRolls.length === 0 && (
+                                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1 font-semibold">⚠️ No {stockLabel} in stock for "{form.woProduct || 'this product'}" yet</p>
+                              )}
+                              {usesStockPicker && selectedRoll && (() => {
+                                const rollQty = Number(selectedRoll.quantity || 0);
+                                // If fabricLength entered (actual meters laid incl. wastage), use it.
+                                // Else theoretical = perPcCons × completedQty (or woQty as estimate).
+                                const theoretical = Number(row.perPcConsumption || 0) * Number(form.completedQuantity || form.woQty || 0);
+                                const issueQty = isPrinting
+                                  ? Number(row.fabricLength || 0)
+                                  : Number(row.fabricLength || 0) > 0
+                                    ? Number(row.fabricLength)
+                                    : theoretical;
+                                const afterIssue = rollQty - issueQty;
+                                return (
+                                  <p className={`text-[9px] mt-1 font-semibold ${afterIssue < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                                    {issueQty > 0
+                                      ? (afterIssue >= 0
+                                          ? `✓ ${rollQty.toFixed(1)}m available → ${afterIssue.toFixed(1)}m left after issue`
+                                          : `⚠️ Short by ${Math.abs(afterIssue).toFixed(1)}m (only ${rollQty.toFixed(1)}m in stock)`)
+                                      : `${rollQty.toFixed(1)}m available`}
+                                  </p>
+                                );
+                              })()}
                             </div>
                           </div>
                           <div>
@@ -2491,10 +2578,23 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                             <input type="number" className="erp-input w-full"
                               value={row.fabricWidth || ""} onChange={e => updateMat(idx, { fabricWidth: e.target.value })} placeholder="e.g. 44" />
                           </div>
+                          {usesStockPicker && selectedRoll && (
+                            <div className="col-span-2 flex items-center justify-between px-3 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800">
+                              <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                                📦 Roll balance: <span className="font-black">{(selectedRoll.quantity || 0).toFixed(1)} m</span>
+                                {estPcsFromRoll !== null && <span className="ml-2">· ≈ <span className="font-black">{estPcsFromRoll} pcs</span> possible</span>}
+                              </span>
+                              {rollShort && (
+                                <span className="text-[10px] font-black text-amber-600 dark:text-amber-400">⚠️ Roll short by {(requiredMeters - (selectedRoll.quantity || 0)).toFixed(1)} m for full WO qty</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
+
                 );
               })()}
               <div className="grid grid-cols-3 gap-3 mb-3">
@@ -2506,14 +2606,44 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                       const totalPerPc = mats.reduce((s: number, r: any) => s + Number(r.perPcConsumption || 0), 0);
                       const totalM = totalPerPc > 0 && form.woQty ? (form.woQty * totalPerPc).toFixed(1) : null;
                       return <><span className="font-black text-slate-600">{totalM ? `${totalM} Mtr` : `? Mtr`}</span> <span className="text-[10px] ml-1">({form.woQty} pcs)</span></>;
-                    })() : (
-                      <>{form.woQty || 0} pcs
-                      {["Cutting"].includes(dept.label) ? (() => {
-                        const mats = form.customData?.materialConsumptions || [{ perPcConsumption: form.customData?.perPcConsumption || 0 }];
-                        const totalPerPc = mats.reduce((s: number, r: any) => s + Number(r.perPcConsumption || 0), 0);
-                        return totalPerPc > 0 && form.woQty ? ` (${(form.woQty * totalPerPc).toFixed(1)} m)` : "";
-                      })() : ""}</>
-                    )}
+                    })() : (() => {
+                      // Dynamic style-driven pipeline: target = previous op in THIS WO's operations array
+                      const isMeterBaseDept = ["Printing", "Dyeing", "Fabric Inspection"].includes(dept.label);
+                      if (!isMeterBaseDept && form.opIndex > 0) {
+                        const wo = production.find((w: any) => w.id === form.woId);
+                        const ops = wo?.operations || [];
+                        // Walk backwards from opIndex-1 to find nearest op with completedQuantity > 0
+                        let inputQty = 0;
+                        let inputName = "";
+                        for (let i = form.opIndex - 1; i >= 0; i--) {
+                          const prevOp = ops[i];
+                          if (prevOp && Number(prevOp.completedQuantity || 0) > 0) {
+                            inputQty = Number(prevOp.completedQuantity);
+                            inputName = prevOp.name || `Step ${i + 1}`;
+                            break;
+                          }
+                        }
+                        return (
+                          <>
+                            <span className="font-black text-slate-700">{inputQty > 0 ? `${inputQty} pcs` : `${form.woQty || 0} pcs`}</span>
+                            {inputQty > 0 && inputQty !== form.woQty && (
+                              <span className="text-[9px] ml-1 text-amber-600" title={`From: ${inputName}`}>(WO: {form.woQty})</span>
+                            )}
+                            {inputQty === 0 && form.opIndex > 0 && (
+                              <span className="text-[9px] ml-1 text-slate-400">(prev. stage pending)</span>
+                            )}
+                          </>
+                        );
+                      }
+                      return (
+                        <>{form.woQty || 0} pcs
+                        {["Cutting"].includes(dept.label) ? (() => {
+                          const mats = form.customData?.materialConsumptions || [{ perPcConsumption: form.customData?.perPcConsumption || 0 }];
+                          const totalPerPc = mats.reduce((s: number, r: any) => s + Number(r.perPcConsumption || 0), 0);
+                          return totalPerPc > 0 && form.woQty ? ` (${(form.woQty * totalPerPc).toFixed(1)} m)` : "";
+                        })() : ""}</>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div>
@@ -2582,6 +2712,47 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                         })()}
                       </div>
                     </div>
+                    {/* Fabric Utilisation & Wastage % — auto from completedQty × perPcCons vs total fabric issued */}
+                    {(() => {
+                      const mats = form.customData?.materialConsumptions || [];
+                      const cutQty = Number(form.completedQuantity || 0);
+                      // Total fabric actually issued = sum of each row's fabricLength (entered by user)
+                      // Fall back to roll quantity if fabricLength not entered
+                      const totalIssued = mats.reduce((s: number, r: any) => {
+                        const rl = Number(r.fabricLength || 0);
+                        if (rl > 0) return s + rl;
+                        // fallback: use the roll's current + consumed quantity (initial qty before deduction)
+                        const roll = inventory.find((i: any) => i.id === r.stockIssueId || i.lotNumber === r.stockIssueId);
+                        if (roll) {
+                          // initialQuantity if available, else current quantity (pre-deduction approximation)
+                          return s + Number(roll.initialQuantity || roll.quantity || 0);
+                        }
+                        return s;
+                      }, 0);
+                      const totalUsed = mats.reduce((s: number, r: any) => s + Number(r.perPcConsumption || 0), 0) * cutQty;
+                      if (totalIssued <= 0 || totalUsed <= 0) return null;
+                      const utilPct = Math.min(100, (totalUsed / totalIssued) * 100);
+                      const wastePct = 100 - utilPct;
+                      const wastedM = totalIssued - totalUsed;
+                      return (
+                        <div className="col-span-2 mt-1 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 grid grid-cols-3 gap-2">
+                          <div className="text-center">
+                            <p className="text-[9px] font-black uppercase tracking-wider text-amber-600 mb-0.5">Fabric Used</p>
+                            <p className="text-sm font-black text-slate-700">{totalUsed.toFixed(1)} m</p>
+                            <p className="text-[9px] text-slate-400">of {totalIssued.toFixed(1)} m issued</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[9px] font-black uppercase tracking-wider text-emerald-600 mb-0.5">Utilisation</p>
+                            <p className={`text-sm font-black ${utilPct >= 90 ? "text-emerald-600" : utilPct >= 80 ? "text-amber-600" : "text-rose-600"}`}>{utilPct.toFixed(1)}%</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[9px] font-black uppercase tracking-wider text-rose-500 mb-0.5">Wastage</p>
+                            <p className={`text-sm font-black ${wastePct <= 5 ? "text-emerald-600" : wastePct <= 10 ? "text-amber-600" : "text-rose-600"}`}>{wastePct.toFixed(1)}%</p>
+                            <p className="text-[9px] text-slate-400">{wastedM.toFixed(1)} m wasted</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -2833,10 +3004,43 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
               )}
 
               {/* ── Dyeing: Vendor Return & Store Receipt panel ── */}
-              {dept.label === "Dyeing" && (
+              {dept.label === "Dyeing" && (() => {
+                const greyRolls = inventory.filter((i: any) => {
+                  if (!["GREY_FABRIC", "FABRIC"].includes(i.type)) return false;
+                  if ((i.quantity || 0) <= 0) return false;
+                  // Accept AVAILABLE (stored), IN_STOCK/LOW_STOCK (computed), or no status (Raw Materials)
+                  const ok = i.status === "AVAILABLE" || i.status === "IN_STOCK" || i.status === "LOW_STOCK" || !i.status;
+                  if (!ok) return false;
+                  if (!form.woProduct) return true;
+                  if (i.productName === form.woProduct) return true;
+                  return (i.name || "").toLowerCase().includes(form.woProduct.toLowerCase());
+                });
+                const selectedGreyRoll = inventory.find((i: any) => i.lotNumber === form.customData?.greyStockIssueId);
+                const sentM = Number(form.customData?.sentMeters || 0);
+                const greyRollShort = selectedGreyRoll && sentM > 0 ? (selectedGreyRoll.quantity || 0) < sentM : false;
+                return (
                 <div className="mb-4 mt-2 p-3 bg-pink-50/60 dark:bg-pink-900/20 rounded-xl border border-pink-200 dark:border-pink-800 space-y-3">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-pink-700 dark:text-pink-400">🎨 Dyeing Job Return (Vendor Receipt)</h4>
                   <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <FieldLabel>Grey Fabric Roll (Issue to Dyer)</FieldLabel>
+                      <select className="erp-input w-full"
+                        value={form.customData?.greyStockIssueId || ""}
+                        onChange={e => set({ customData: { ...form.customData, greyStockIssueId: e.target.value } })}>
+                        <option value="">— Select roll from stock —</option>
+                        {greyRolls.map((r: any) => (
+                          <option key={r.lotNumber || r.id} value={r.lotNumber || r.id}>
+                            {r.lotNumber || r.id} — {(r.quantity || 0).toFixed(1)} m available
+                          </option>
+                        ))}
+                        {selectedGreyRoll === null && form.customData?.greyStockIssueId && (
+                          <option value={form.customData.greyStockIssueId}>{form.customData.greyStockIssueId} (not in stock)</option>
+                        )}
+                      </select>
+                      {greyRolls.length === 0 && (
+                        <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1 font-semibold">⚠️ No grey fabric in stock for "{form.woProduct || 'this product'}" yet</p>
+                      )}
+                    </div>
                     <div>
                       <FieldLabel>Sent to Vendor (Meters)</FieldLabel>
                       <input type="number" step="0.1" className="erp-input w-full"
@@ -2886,6 +3090,16 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                         onChange={e => set({ customData: { ...form.customData, batchNo: e.target.value } })}
                         placeholder="BATCH-24-08A" />
                     </div>
+                    {selectedGreyRoll && (
+                      <div className="col-span-2 flex items-center justify-between px-3 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800">
+                        <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                          📦 Roll balance: <span className="font-black">{(selectedGreyRoll.quantity || 0).toFixed(1)} m</span>
+                        </span>
+                        {greyRollShort && (
+                          <span className="text-[10px] font-black text-amber-600 dark:text-amber-400">⚠️ Roll short by {(sentM - (selectedGreyRoll.quantity || 0)).toFixed(1)} m</span>
+                        )}
+                      </div>
+                    )}
                     <div className="col-span-2 flex items-center justify-between p-2 mt-1 bg-white dark:bg-slate-900 rounded-lg border border-pink-200 dark:border-pink-800">
                       <div className="flex-1 pr-4">
                         <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Add to Dyed Fabric Store on Completion?</p>
@@ -2900,7 +3114,8 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                     </div>
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* ── QC Check: pass/fail summary ── */}
               {dept.label === "QC Check" && (
@@ -3222,6 +3437,10 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                     </div>
                     <div>
                       <FieldLabel>Challan No.</FieldLabel>
+                      <input type="text" className="erp-input w-full"
+                        value={form.customData?.challanNo || ""}
+                        onChange={e => set({ customData: { ...form.customData, challanNo: e.target.value } })}
+                        placeholder="CH-WASH-2024-055" />
                     </div>
                     <div>
                       <FieldLabel>Shade OK? ✅</FieldLabel>
@@ -3397,7 +3616,13 @@ function DetailForm({ task, dept, karigars, production, taskName, onSave, onCanc
                     <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: dept.accentHex }} />
                   </div>
                   <p className="mt-1.5 text-[10px] text-slate-400">
-                    {form.completedQuantity || 0} completed · {form.rejectedQuantity || 0} rejected · {Math.max(0, (form.woQty || 0) - (form.completedQuantity || 0) - (form.rejectedQuantity || 0))} remaining
+                    {isMeterDept ? (() => {
+                      const total = Number(form.customData?.totalMeters || 0);
+                      const accepted = Number(form.customData?.acceptedMeters || form.completedQuantity || 0);
+                      const defect = Number(form.customData?.defectMeters || form.rejectedQuantity || 0);
+                      const remaining = Math.max(0, total - accepted - defect);
+                      return `${accepted} m accepted · ${defect} m defect · ${remaining} m remaining`;
+                    })() : `${form.completedQuantity || 0} completed · ${form.rejectedQuantity || 0} rejected · ${Math.max(0, (form.woQty || 0) - (form.completedQuantity || 0) - (form.rejectedQuantity || 0))} remaining`}
                   </p>
                 </>
               )}
@@ -3878,22 +4103,28 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
       const recMeters = Number(updatedTask.customData?.receivedFabricMeters || 0);
       if (recMeters > 0 && typeof onUpdateInventory === 'function') {
         const itemName = `Printed Fabric (${wo.productName || 'Unknown'})`;
-        const existingCode = inventory.find(i => i.name === itemName || i.id === updatedTask.customData?.stockIssueId);
+        // Each Printing GRN creates its OWN roll/lot entry (rather than merging into one
+        // blob item) so Cutting can pick a specific roll and track its remaining balance.
+        const lotNumber = updatedTask.customData?.printLotNumber || `PF-${wo.id}-${Date.now().toString().slice(-6)}`;
         onUpdateInventory({
-           id: existingCode?.id || `INV-${Date.now()}`,
-           name: existingCode?.name || itemName,
-           type: existingCode?.type || "PRINTED_FABRIC",
+           id: `INV-${Date.now()}`,
+           name: itemName,
+           type: "PRINTED_FABRIC",
            doctype: "READY_STOCK",
-           unit: existingCode?.unit || "METER",
-           quantity: (existingCode?.quantity || 0) + recMeters,
-           minStockLevel: existingCode?.minStockLevel || 10,
-           pricePerUnit: existingCode?.pricePerUnit || 150,
-           location: existingCode?.location || "Ready Fabric Godown",
+           unit: "METER",
+           quantity: recMeters,
+           initialQuantity: recMeters,
+           minStockLevel: 10,
+           pricePerUnit: 150,
+           location: "Ready Fabric Godown",
            status: "AVAILABLE",
+           lotNumber,
+           sourceWoId: wo.id,
+           productName: wo.productName || "Unknown",
            latestEntry: `From Job Card ${wo.id} - ${recMeters}M`
         });
         const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
-        if (opIdx >= 0) newOps[opIdx].customData = { ...newOps[opIdx].customData, addedToStock: true };
+        if (opIdx >= 0) newOps[opIdx].customData = { ...newOps[opIdx].customData, addedToStock: true, printLotNumber: lotNumber };
 
         // Shrinkage = (issued meters × fold) vs (received meters × received fold) — width excluded
         const mats = updatedTask.customData?.materialConsumptions || [{ fabricLength: updatedTask.customData?.fabricLength || 0, foldLength: updatedTask.customData?.foldLength || 0 }];
@@ -3907,7 +4138,40 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
         const recArea2 = recFold2 > 0 ? recMeters * recFold2 : recMeters;
         const shrinkPct = issuedArea > 0 && recArea2 > 0 ? ((issuedArea - recArea2) / issuedArea * 100).toFixed(1) : "–";
 
-        toast.success(`GRN Created — ${recMeters}m of ${itemName} → Ready Fabric Warehouse (shrinkage ${shrinkPct}%)`);
+        toast.success(`GRN Created — ${lotNumber} · ${recMeters}m of ${itemName} → Ready Fabric Warehouse (shrinkage ${shrinkPct}%)`);
+      }
+    }
+
+    // ── Printing → Deduct Grey Fabric from the selected roll(s) ───────────
+    // Printing's Material Consumption block now lets the user pick a specific
+    // Grey Fabric roll (Stock Issue / Than / Roll No.). Previously nothing ever
+    // deducted that roll — grey fabric stock just sat there unconsumed forever.
+    // Deducts by actual received/printed meters, not the full WO target.
+    if (updatedTask.workflowState === "Completed" && dept.label === "Printing" && !updatedTask.customData?.greyStockConsumed) {
+      const matRows = updatedTask.customData?.materialConsumptions || [];
+      const printedMeters = Number(updatedTask.customData?.receivedFabricMeters || 0);
+      if (matRows.length > 0 && printedMeters > 0 && typeof onUpdateInventory === "function") {
+        let consumedInfo = "";
+        matRows.forEach((row: any) => {
+          if (!row.stockIssueId) return;
+          const existing = inventory.find((i: any) => i.id === row.stockIssueId || i.lotNumber === row.stockIssueId);
+          if (existing) {
+            // Issued meters were already entered against this roll when the job was sent
+            // for printing (fabricLength); fall back to received meters if not set.
+            const qtyToConsume = Number(row.fabricLength || printedMeters);
+            const balance = Math.max(0, existing.quantity - qtyToConsume);
+            onUpdateInventory({
+              ...existing,
+              quantity: balance,
+              status: balance <= 0 ? "DEPLETED" : existing.status,
+              latestEntry: `Issued to Printing for WO ${wo.id} - ${qtyToConsume.toFixed(1)}M`
+            });
+            consumedInfo += `\n- ${existing.lotNumber || existing.name}: ${qtyToConsume.toFixed(1)}M used, ${balance.toFixed(1)}M left`;
+          }
+        });
+        const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
+        if (opIdx >= 0) newOps[opIdx].customData = { ...newOps[opIdx].customData, greyStockConsumed: true };
+        if (consumedInfo) toast.success(`Printing — grey fabric deducted from Godown:${consumedInfo}`);
       }
     }
 
@@ -3920,20 +4184,26 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
       if (metersToStore > 0 && typeof onUpdateInventory === "function") {
         const shadeRef = updatedTask.customData?.shadeNo ? ` [${updatedTask.customData.shadeNo}]` : "";
         const itemName = `Grey Fabric – ${wo.productName || "Unknown"}${shadeRef}`;
-        const existing = inventory.find((i: any) => i.name === itemName || i.lotNumber === updatedTask.customData?.grnNo);
+        // BUG FIX: previously matched by `name` first, which merged every roll of the
+        // same product/shade into one blob quantity and overwrote lotNumber each time —
+        // so only the latest GRN's roll number survived. Each GRN now creates its OWN
+        // roll/lot entry so Printing/Dyeing can pick a specific roll and track its balance.
         const grnNo = updatedTask.customData?.grnNo || `GRN-${Date.now()}`;
         onUpdateInventory({
-          id: existing?.id || `INV-${Date.now()}`,
-          name: existing?.name || itemName,
-          type: existing?.type || "GREY_FABRIC",
+          id: `INV-${Date.now()}`,
+          name: itemName,
+          type: "GREY_FABRIC",
           doctype: "READY_STOCK",
-          unit: existing?.unit || "METER",
-          quantity: (existing?.quantity || 0) + metersToStore,
-          minStockLevel: existing?.minStockLevel || 50,
-          pricePerUnit: existing?.pricePerUnit || 80,
+          unit: "METER",
+          quantity: metersToStore,
+          initialQuantity: metersToStore,
+          minStockLevel: 50,
+          pricePerUnit: 80,
           location: updatedTask.customData?.warehouseLocation || "Grey Fabric Godown",
           status: "AVAILABLE",
           lotNumber: grnNo,
+          sourceWoId: wo.id,
+          productName: wo.productName || "Unknown",
           latestEntry: `GRN ${grnNo} – Received ${metersToStore}M from ${updatedTask.customData?.supplierName || "Supplier"}`,
         });
         const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
@@ -3990,6 +4260,34 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
         const sentM = Number(updatedTask.customData?.sentMeters || 0);
         const shrink = sentM > 0 ? (((sentM - receivedMeters) / sentM) * 100).toFixed(1) : "–";
         toast.success(`Dyed Fabric — ${itemName}: ${receivedMeters}m received, shrinkage ${shrink}% (${updatedTask.customData?.vendor || '–'})`);
+      }
+    }
+
+    // ── Dyeing → Deduct Grey Fabric from stock when issued to dyer ──────────
+    // When Dyeing moves to In Progress (or Completed), deduct the sentMeters
+    // from the specific Grey Fabric roll selected in the form.
+    // BUG FIX: previously matched ANY inventory item with type === "GREY_FABRIC"
+    // (the `||` made the name checks pointless) — with multiple products/rolls in
+    // stock this could silently deduct the wrong roll. Now requires a roll to be
+    // explicitly selected (greyStockIssueId), matched by id or lot number.
+    if ((updatedTask.workflowState === "Work In Progress" || updatedTask.workflowState === "Completed")
+      && dept.label === "Dyeing" && !updatedTask.customData?.greyFabricDeducted) {
+      const sentM = Number(updatedTask.customData?.sentMeters || 0);
+      const rollId = updatedTask.customData?.greyStockIssueId;
+      if (sentM > 0 && rollId && typeof onUpdateInventory === "function") {
+        const greyItem = inventory.find((i: any) => i.id === rollId || i.lotNumber === rollId);
+        if (greyItem) {
+          const newQty = Math.max(0, (greyItem.quantity || 0) - sentM);
+          onUpdateInventory({
+            ...greyItem,
+            quantity: newQty,
+            status: newQty <= 0 ? "DEPLETED" : (newQty <= (greyItem.minStockLevel || 0) ? "LOW" : "AVAILABLE"),
+            latestEntry: `Issued ${sentM}M to Dyeing – WO ${wo.id}, ${newQty.toFixed(1)}M left`,
+          });
+          const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
+          if (opIdx >= 0) newOps[opIdx].customData = { ...newOps[opIdx].customData, greyFabricDeducted: true };
+          toast.info(`Grey Fabric ↓ ${greyItem.lotNumber || greyItem.name}: ${sentM}m deducted, ${newQty.toFixed(1)}m left`);
+        }
       }
     }
 
@@ -4056,25 +4354,77 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
     // Auto-consume fabric from inventory upon completion of Cutting
     if (updatedTask.workflowState === "Completed" && dept.label === "Cutting" && !updatedTask.customData?.stockConsumed) {
        const matRows = updatedTask.customData?.materialConsumptions || [];
-       if (matRows.length > 0 && typeof onUpdateInventory === "function") {
+       // BUG FIX: previously deducted (full WO qty × per-pc cons.), which over-deducted
+       // stock whenever actual cutting fell short of the WO target. Now deducts based on
+       // the actual completed (cut) quantity for this job.
+       const cutQty = Number(updatedTask.completedQuantity || 0);
+       if (matRows.length > 0 && cutQty > 0 && typeof onUpdateInventory === "function") {
          let consumedInfo = "";
          matRows.forEach((row: any) => {
             if (!row.stockIssueId) return;
             const existing = inventory.find((i: any) => i.id === row.stockIssueId || i.lotNumber === row.stockIssueId);
             if (existing) {
-               const qtyToConsume = (wo.quantity || 0) * Number(row.perPcConsumption || 0);
+               // Use actual fabricLength (meters physically issued/laid) if entered — includes wastage.
+               // Fall back to theoretical: cutQty × perPcConsumption (no wastage captured).
+               const theoretical = cutQty * Number(row.perPcConsumption || 0);
+               const qtyToConsume = Number(row.fabricLength || 0) > 0
+                 ? Number(row.fabricLength)
+                 : theoretical;
+               const balance = Math.max(0, existing.quantity - qtyToConsume);
+               const wastagePct = theoretical > 0 && qtyToConsume > theoretical
+                 ? (((qtyToConsume - theoretical) / qtyToConsume) * 100).toFixed(1)
+                 : null;
                onUpdateInventory({
                  ...existing,
-                 quantity: Math.max(0, existing.quantity - qtyToConsume),
-                 latestEntry: `Consumed for WO ${wo.id} - ${qtyToConsume.toFixed(1)}M`
+                 quantity: balance,
+                 status: balance <= 0 ? "DEPLETED" : existing.status,
+                 latestEntry: `Cutting WO ${wo.id} — ${qtyToConsume.toFixed(1)}M used (${cutQty} pcs)${wastagePct ? `, wastage ${wastagePct}%` : ""}, ${balance.toFixed(1)}M left`
                });
-               consumedInfo += `\n- ${qtyToConsume.toFixed(1)}M of ${existing.name}`;
+               consumedInfo += `\n- ${existing.lotNumber || existing.name}: ${qtyToConsume.toFixed(1)}M used${wastagePct ? ` (${wastagePct}% wastage)` : ""}, ${balance.toFixed(1)}M left`;
             }
          });
          const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
          if (opIdx >= 0) newOps[opIdx].customData = { ...newOps[opIdx].customData, stockConsumed: true };
          if (consumedInfo) toast.success(`Cutting — stock deducted from Godown:${consumedInfo}`);
        }
+    }
+
+    // ── Printing → Deduct Grey Fabric from stock when fabric is issued ────────
+    // Triggered on save (any state) once fabricIssuedMeters is filled and not yet deducted.
+    // Uses matRows[].stockIssueId (same roll picker as Cutting) and fabricIssuedMeters as qty.
+    if (dept.label === "Printing" && !updatedTask.customData?.printStockDeducted) {
+      const issuedM = Number(updatedTask.customData?.fabricIssuedMeters || 0);
+      const matRows = updatedTask.customData?.materialConsumptions || [];
+      if (issuedM > 0 && typeof onUpdateInventory === "function") {
+        let deductInfo = "";
+        // Deduct from each roll listed in material rows proportionally
+        // If multiple rows, split issued meters by each row's fabricLength ratio
+        const totalFabricLength = matRows.reduce((s: number, r: any) => s + Number(r.fabricLength || 0), 0);
+        matRows.forEach((row: any) => {
+          if (!row.stockIssueId) return;
+          const existing = inventory.find((i: any) => i.id === row.stockIssueId || i.lotNumber === row.stockIssueId);
+          if (!existing) return;
+          // If fabricLength on row, use its proportion; else treat full issuedM as this row's share
+          const rowShare = totalFabricLength > 0
+            ? (Number(row.fabricLength || 0) / totalFabricLength) * issuedM
+            : issuedM;
+          if (rowShare <= 0) return;
+          const balance = Math.max(0, (existing.quantity || 0) - rowShare);
+          onUpdateInventory({
+            ...existing,
+            quantity: balance,
+            status: balance <= 0 ? "DEPLETED" : existing.status,
+            latestEntry: `Issued to Printing WO ${wo.id} — ${rowShare.toFixed(1)}M, ${balance.toFixed(1)}M left`,
+          });
+          deductInfo += `
+- ${existing.lotNumber || existing.name}: ${rowShare.toFixed(1)}M issued, ${balance.toFixed(1)}M left`;
+        });
+        if (deductInfo) {
+          const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
+          if (opIdx >= 0) newOps[opIdx].customData = { ...newOps[opIdx].customData, printStockDeducted: true };
+          toast.success(`Printing — grey fabric deducted:${deductInfo}`);
+        }
+      }
     }
 
     // ── Stitching → Forward to Finishing ──────────────────────────────────
@@ -4162,6 +4512,43 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
           customData: { ...newOps[opIdx].customData, packingLogged: true },
         };
         toast.success(`Packing ✅ — ${packed} pcs in ${cartons} cartons | AQL: ${updatedTask.customData?.aqlResult || '–'} | PO: ${updatedTask.customData?.buyerPO || '–'}`);
+      }
+    }
+
+    // ── Packing → Add Finished Goods to Inventory ─────────────────────────
+    // When Packing completes, create/update a Finished Goods stock entry so
+    // packed pieces are visible in the Inventory module for dispatch planning.
+    if (updatedTask.workflowState === "Completed" && dept.label === "Packing" && !updatedTask.customData?.finishedGoodsAdded) {
+      const packed = Number(updatedTask.customData?.totalPacked || 0);
+      if (packed > 0 && typeof onUpdateInventory === "function") {
+        const itemName = `${wo.productName || "Garment"} – Finished`;
+        const stockNo = `FG-${wo.id}-${Date.now().toString().slice(-6)}`;
+        const cartons = Number(updatedTask.customData?.totalCartons || 0);
+        const pcsPerCarton = Number(updatedTask.customData?.pcsPerCarton || 0);
+        const sizeRatio = updatedTask.customData?.sizeRatio || "";
+        const aql = updatedTask.customData?.aqlResult || "";
+        // Each Packing completion creates its own FG lot so DispatchPlanner can
+        // pick specific batches and track which cartons belong to which WO/PO.
+        onUpdateInventory({
+          id: `INV-FG-${Date.now()}`,
+          name: itemName,
+          type: "FINISHED",
+          doctype: "READY_STOCK",
+          unit: "PCS",
+          quantity: packed,
+          initialQuantity: packed,
+          minStockLevel: 0,
+          pricePerUnit: 0,
+          location: "Finished Goods Godown",
+          status: "AVAILABLE",
+          lotNumber: stockNo,
+          sourceWoId: wo.id,
+          productName: wo.productName || "Unknown",
+          latestEntry: `Packing Complete — WO ${wo.id} · ${packed} pcs · ${cartons} cartons${pcsPerCarton ? ` · ${pcsPerCarton} pcs/ctn` : ""}${sizeRatio ? ` · Ratio ${sizeRatio}` : ""}${aql ? ` · AQL ${aql}` : ""}`,
+        });
+        const opIdx = newOps.findIndex(op => op.id === updatedTask.id);
+        if (opIdx >= 0) newOps[opIdx].customData = { ...newOps[opIdx].customData, finishedGoodsAdded: true, fgStockNo: stockNo };
+        toast.success(`Finished Goods ✅ — ${stockNo} · ${packed} pcs of ${itemName} → Finished Goods Godown`);
       }
     }
 
@@ -4368,6 +4755,7 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
         karigars={karigars} selectedIds={selectedIds}
         onBulkComplete={bulkComplete} onBulkHold={bulkHold}
         onClearSelect={() => setSelectedIds([])} onNewCard={openNew}
+        showBlocked={showBlocked} setShowBlocked={setShowBlocked}
       />
 
       {/* Views */}
@@ -4416,6 +4804,7 @@ export default function TaskBoard({ taskName: tn, production, onUpdateWorkOrder,
                 karigars={karigars}
                 production={production}
                 taskName={tn}
+                inventory={inventory}
                 onSave={saveTask}
                 onCancel={() => setEditingTask(null)}
                 onDelete={deleteTask}

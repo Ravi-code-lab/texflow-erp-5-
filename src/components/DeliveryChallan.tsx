@@ -17,13 +17,14 @@ interface DeliveryChallanProps {
   initialOrderId?: string;
   onAddChallan: (order: Order) => void;
   onUpdateChallan: (order: Order) => void;
+  onUpdateOrder?: (order: Order) => void;
   onAction?: (action: string, data: any) => void;
   currency?: string;
   companyInfo?: CompanyInfo;
 }
 
 const DeliveryChallan: React.FC<DeliveryChallanProps> = ({ 
-  orders, customers, designs = [], inventory = [], initialOrderId, onAddChallan, onUpdateChallan, onAction, currency = '₹', 
+  orders, customers, designs = [], inventory = [], initialOrderId, onAddChallan, onUpdateChallan, onUpdateOrder, onAction, currency = '₹', 
   companyInfo = { name: 'RAVI-TEXTILE', address: 'Surat, GJ', gstin: '', email: '', website: '', logoUrl: '' }
 }) => {
   const [viewMode, setViewMode] = useState<'LIST' | 'FORM'>('LIST');
@@ -87,6 +88,13 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
          totalAmount: 0,
          updatedAt: new Date().toISOString()
        } as Order);
+       // Mark source Sales Order as DISPATCHED
+       if (formData.sourceOrderId && onUpdateOrder) {
+         const sourceOrder = orders.find(o => o.id === formData.sourceOrderId);
+         if (sourceOrder && sourceOrder.status !== 'DISPATCHED' && sourceOrder.status !== 'DELIVERED') {
+           onUpdateOrder({ ...sourceOrder, status: 'DISPATCHED' } as Order);
+         }
+       }
     }
     setViewMode('LIST');
   };
@@ -442,9 +450,8 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
 
                      {activeTab === 'SHIPPING' && (
                      <div className="bg-white border border-[#d1d8dd] rounded shadow-sm p-6 text-[13px]">
-                         <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Transportation</h4>
-                         <div className="grid grid-cols-2 gap-x-16 gap-y-6">
-                            <div className="space-y-5">
+                         <h4 className="font-semibold text-sm mb-5 text-[#1c2126] border-b border-[#d1d8dd] pb-2">Transportation & E-Way Bill</h4>
+                         <div className="grid grid-cols-3 gap-x-8 gap-y-5">
                                 <div className="space-y-1.5 flex flex-col">
                                     <label className="text-xs text-[#525c66]">Transporter Name</label>
                                     <input 
@@ -457,23 +464,66 @@ const DeliveryChallan: React.FC<DeliveryChallanProps> = ({
                                     <label className="text-xs text-[#525c66]">Vehicle No</label>
                                     <input 
                                       value={formData.vehicleNo || ''} 
-                                      onChange={e => setFormData({...formData, vehicleNo: e.target.value})}
-                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                      onChange={e => setFormData({...formData, vehicleNo: e.target.value.toUpperCase()})}
+                                      placeholder="RJ14AB1234"
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126] uppercase font-mono"
                                     />
                                 </div>
-                            </div>
-                            <div className="space-y-5">
                                 <div className="space-y-1.5 flex flex-col">
-                                    <label className="text-xs text-[#525c66]">Shipping Address</label>
+                                    <label className="text-xs text-[#525c66]">Vehicle Type</label>
+                                    <select
+                                      value={formData.vehicleType || 'Regular'}
+                                      onChange={e => setFormData({...formData, vehicleType: e.target.value})}
+                                      className="w-full px-2.5 py-[5px] bg-white border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] transition-all text-[#1c2126]"
+                                    >
+                                      {['Regular','ODC','Over Dimensional Cargo'].map(v => <option key={v} value={v}>{v}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">LR / GR No</label>
+                                    <input 
+                                      value={formData.lrNo || ''} 
+                                      onChange={e => setFormData({...formData, lrNo: e.target.value})}
+                                      placeholder="Lorry receipt number"
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] transition-all text-[#1c2126]"
+                                    />
+                                </div>
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">E-Way Bill No</label>
+                                    <input 
+                                      value={formData.ewbNo || ''} 
+                                      onChange={e => setFormData({...formData, ewbNo: e.target.value})}
+                                      placeholder="12-digit EWB number"
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] transition-all text-[#1c2126] font-mono"
+                                    />
+                                </div>
+                                <div className="space-y-1.5 flex flex-col">
+                                    <label className="text-xs text-[#525c66]">Distance (km)</label>
+                                    <input 
+                                      type="number"
+                                      value={formData.distanceKm || ''} 
+                                      onChange={e => setFormData({...formData, distanceKm: Number(e.target.value)})}
+                                      placeholder="e.g. 250"
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] transition-all text-[#1c2126]"
+                                    />
+                                </div>
+                                <div className="space-y-1.5 flex flex-col col-span-3">
+                                    <label className="text-xs text-[#525c66]">Shipping / Delivery Address</label>
                                     <textarea 
                                       rows={2}
                                       value={formData.shippingAddress || ''} 
                                       onChange={e => setFormData({...formData, shippingAddress: e.target.value})}
-                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] focus:ring-[1px] focus:ring-[#2490ef] transition-all text-[#1c2126]"
+                                      className="w-full px-2.5 py-[5px] bg-[#fdfdfd] border border-[#d1d8dd] rounded focus:outline-none focus:border-[#2490ef] transition-all text-[#1c2126] resize-none"
                                     />
                                 </div>
-                            </div>
                          </div>
+                         {formData.ewbNo && (
+                           <div className="mt-4 px-3 py-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 flex items-center gap-2">
+                             <span className="font-bold">EWB:</span> {formData.ewbNo}
+                             {formData.distanceKm ? <span className="ml-2 text-blue-500">· {formData.distanceKm} km</span> : null}
+                             {formData.vehicleNo ? <span className="ml-2 text-blue-500">· {formData.vehicleNo}</span> : null}
+                           </div>
+                         )}
                      </div>
                      )}
 

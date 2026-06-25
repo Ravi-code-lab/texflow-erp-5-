@@ -123,7 +123,7 @@ function StockStatusBadge({ item }: { item: InventoryItem }) {
   );
 }
 
-function FieldRow({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function FieldRow({ label, required, children }: { key?: React.Key; label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
       <label className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">
@@ -871,7 +871,7 @@ const Inventory: React.FC<InventoryProps> = ({
                   <SectionCard title="Custom Fields" icon={Zap}>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-5">
                       {customFields.map((f: any) => (
-                        <FieldRow key={f.id} label={f.label} required={f.required}>
+                        <FieldRow key={f.id} label={String(f.label)} required={!!f.required}>
                           {f.type === 'select' ? (
                             <div className="relative">
                               <select className={selectCls}

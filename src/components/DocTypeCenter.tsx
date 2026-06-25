@@ -169,7 +169,7 @@ const DocTypeCenter: React.FC<DocTypeCenterProps> = ({ stats, userRole = 'ADMIN'
   const selectedSchema = DOCTYPE_SCHEMAS.find((schema) => schema.view === selectedView) || filteredSchemas[0] || DOCTYPE_SCHEMAS[0];
   const selectedStat = selectedSchema ? stats[selectedSchema.view] || emptyStat : emptyStat;
   const selectedWorkflow = selectedSchema ? getWorkflowForView(selectedSchema.view) : undefined;
-  const totalRecords = Object.values(stats).reduce((sum, item) => sum + (item?.total || 0), 0);
+  const totalRecords = Object.values(stats).reduce((sum, item) => sum + ((item as any)?.total || 0), 0);
   const schemaCoverage = ERP_MODULE_ITEMS.filter((item) => item.module !== 'core').length;
 
   const activePresets = useMemo(() => {

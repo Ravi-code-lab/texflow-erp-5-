@@ -748,6 +748,19 @@ const ReadyStock: React.FC<OpeningStockProps> = ({
                 />
               </LabelInput>
 
+              {/* Product / Work Order Link (for fabric types) */}
+              {['PRINTED_FABRIC', 'GREY_FABRIC', 'DYED_FABRIC'].includes(formData.type || '') && (
+                <LabelInput label="Linked Product / Design Name" colSpan={2}>
+                  <input
+                    className={inputCls}
+                    placeholder='e.g. Pink Kurti (must match Work Order product name exactly)'
+                    value={formData.productName || ''}
+                    onChange={e => setFormData({ ...formData, productName: e.target.value })}
+                  />
+                  <p className="text-[9px] text-amber-600 mt-1">⚠️ This links the roll to a specific product in Work Orders. Leave blank if not linked.</p>
+                </LabelInput>
+              )}
+
               {/* Category */}
               <LabelInput label="Category">
                 <select
