@@ -52,6 +52,7 @@ import {
   Monitor,
 } from "lucide-react";
 import { exportAllDataToZip, restoreDataFromZip, clearAllDataFlag } from '../utils/indexedDB';
+import { clearVault } from '../utils/networkClient';
 import { 
   TeamMember, UIPreferences, CompanyInfo, 
   InvoiceConfig, ShopifyConfig, SecurityConfig, CommunicationConfig, AdvancedConfig, RolePermission, UserRole
@@ -357,13 +358,20 @@ const Settings: React.FC<SettingsProps> = ({
     if (action === 'RESET') {
         const ok = await confirm({
             title: '⚠️ Reset workspace & clear all databases?',
-            message: 'This will purge all demo/transaction entries for a clean slate. This CANNOT be undone.',
+            message: 'This will purge ALL data for a clean slate. This CANNOT be undone.',
             confirmLabel: 'Yes, Reset Everything',
             confirmClass: 'px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg text-sm font-bold transition-colors'
         });
         if (ok) {
             try {
-                await clearAllDataFlag();
+                // BUG 7 FIX: actually wipe data instead of calling the no-op stub
+                if (isElectron && ipc) {
+                    // Electron: wipe vault JSON file on disk via new IPC handler
+                    await ipc.invoke('storage:reset');
+                } else {
+                    // Web / LAN client: clear localStorage (token + all cached keys)
+                    await clearVault();
+                }
                 toast.success("Database reset successfully! Reloading...");
                 setTimeout(() => window.location.reload(), 1200);
             } catch(e) {

@@ -1,114 +1,213 @@
 /**
- * networkClient.ts
+ * networkClient.ts — TexFlow ERP data transport layer
  *
- * Auto-detects LAN-client mode:
- *   - If the app is opened in a browser via a non-localhost IP/hostname,
- *     it is running as a LAN client served by the Electron server on port 3001.
- *     The server URL is derived from window.location.hostname automatically —
- *     no manual IP entry needed.
- *   - If a server URL was manually saved (via client-setup flow), that takes precedence.
- *   - In Electron (window.process.type exists) or localhost, runs in local mode.
+ * Three modes, auto-detected at runtime:
+ *
+ *  A) Electron (server PC)   window.process.type === 'renderer'
+ *     → reads/writes via IPC (db:save-shard / db:load-all) → texflow_vault.json
+ *     → login is done client-side (no JWT needed, data is local)
+ *
+ *  B) LAN Client             browser opened via non-localhost IP
+ *     → login hits POST /api/auth/login → receives JWT
+ *     → JWT stored in localStorage, injected as Bearer token on every request
+ *     → auto-revalidated via GET /api/auth/me on page reload
+ *
+ *  C) Dev / standalone       localhost browser
+ *     → localStorage only
  */
 
 const LAN_PORT = 3001;
-const LS_SERVER_URL_KEY = "ravi_erp_server_url";
+const LS_SERVER_URL_KEY = 'ravi_erp_server_url';
+const LS_TOKEN_KEY      = 'ravi_erp_jwt';
 
-// ── Auto-detect LAN client mode ───────────────────────────────────────────────
+// ── Force-logout event (fired when server returns 401 mid-session) ────────────
+type LogoutListener = () => void;
+const _logoutListeners: LogoutListener[] = [];
 
-function detectServerUrl(): string | null {
-  // 1. Manually saved URL takes priority (client-setup flow)
+export function onForceLogout(fn: LogoutListener): () => void {
+  _logoutListeners.push(fn);
+  return () => {
+    const idx = _logoutListeners.indexOf(fn);
+    if (idx >= 0) _logoutListeners.splice(idx, 1);
+  };
+}
+
+function _triggerForceLogout(): void {
+  clearToken();
+  _logoutListeners.forEach(fn => { try { fn(); } catch { /* ignore */ } });
+}
+
+// ── Mode detection ────────────────────────────────────────────────────────────
+
+function isElectron(): boolean {
+  return typeof window !== 'undefined' && !!(window as any).process?.type;
+}
+
+function getServerUrl(): string | null {
   try {
     const saved = localStorage.getItem(LS_SERVER_URL_KEY);
     if (saved) return saved;
   } catch { /* private browsing */ }
 
-  // 2. Auto-detect: if running in a browser (not Electron) on a non-localhost IP,
-  //    the Electron LAN server is serving us on port 3001 of that same host.
-  if (typeof window !== "undefined") {
-    const isElectron = !!(window as any).process?.type;
-    if (!isElectron) {
-      const host = window.location.hostname;
-      const isLocal =
-        host === "localhost" ||
-        host === "127.0.0.1" ||
-        host === "" ||
-        host === "::1";
-      if (!isLocal) {
-        // Auto-derive server URL from the host we were served from
-        return `http://${host}:${LAN_PORT}`;
-      }
-    }
+  if (typeof window !== 'undefined' && !isElectron()) {
+    const host = window.location.hostname;
+    const isLocal = !host || host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    if (!isLocal) return `http://${host}:${LAN_PORT}`;
   }
-
   return null;
 }
 
-function getBaseUrl(): string | null {
-  return detectServerUrl();
+export function isLanClientMode(): boolean {
+  return !isElectron() && Boolean(getServerUrl());
 }
 
+// ── Token management ──────────────────────────────────────────────────────────
+
+export function getToken(): string | null {
+  try { return localStorage.getItem(LS_TOKEN_KEY); } catch { return null; }
+}
+
+export function setToken(token: string): void {
+  try { localStorage.setItem(LS_TOKEN_KEY, token); } catch { /* private */ }
+}
+
+export function clearToken(): void {
+  try { localStorage.removeItem(LS_TOKEN_KEY); } catch { /* ignore */ }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+// ── IPC helpers (Electron server mode) ───────────────────────────────────────
+
+function ipc(): any {
+  return (window as any).require?.('electron')?.ipcRenderer;
+}
+
+let _vaultCache: Record<string, unknown> | null = null;
+
+async function ipcLoadAll(): Promise<Record<string, unknown>> {
+  if (_vaultCache) return _vaultCache;
+  try {
+    const result = await ipc()?.invoke('db:load-all');
+    if (result?.success && result.data) {
+      _vaultCache = result.data as Record<string, unknown>;
+      return _vaultCache;
+    }
+  } catch (e) { console.warn('[networkClient] IPC db:load-all failed:', e); }
+  return {};
+}
+
+async function ipcSaveShard(key: string, data: unknown): Promise<void> {
+  if (_vaultCache) _vaultCache[key] = data;
+  try {
+    await ipc()?.invoke('db:save-shard', { key, data });
+  } catch (e) {
+    console.warn('[networkClient] IPC db:save-shard failed:', e);
+    try { localStorage.setItem(key, JSON.stringify(data)); } catch { /* full */ }
+  }
+}
+
+// ── REST helpers ──────────────────────────────────────────────────────────────
+
 function buildUrl(path: string): string {
-  const base = getBaseUrl();
-  if (!base) throw new Error("No server URL configured");
+  const base = getServerUrl();
+  if (!base) throw new Error('No server URL configured');
   return `${base}${path}`;
+}
+
+async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const url = buildUrl(path);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...authHeaders(),
+    ...(init.headers as Record<string, string> || {}),
+  };
+  return fetch(url, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(10000) });
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function setServerUrl(ip: string): void {
-  const url = `http://${ip}:${LAN_PORT}`;
-  try {
-    localStorage.setItem(LS_SERVER_URL_KEY, url);
-  } catch { /* private browsing */ }
+  try { localStorage.setItem(LS_SERVER_URL_KEY, `http://${ip}:${LAN_PORT}`); } catch { /* private */ }
 }
 
 export function clearServerUrl(): void {
-  try {
-    localStorage.removeItem(LS_SERVER_URL_KEY);
-  } catch { /* ignore */ }
+  try { localStorage.removeItem(LS_SERVER_URL_KEY); } catch { /* ignore */ }
 }
 
-/**
- * Returns true when this browser tab is operating as a LAN client.
- * True if: manually configured server URL exists, OR auto-detected non-localhost host.
- */
-export function isLanClientMode(): boolean {
-  return Boolean(getBaseUrl());
-}
-
-/**
- * Ping the server's health endpoint.
- */
-export async function testLanConnection(
-  ip: string
-): Promise<{ ok: boolean; error?: string }> {
-  const url = `http://${ip}:${LAN_PORT}/api/ping`;
+export async function testLanConnection(ip: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch(url, {
-      method: "GET",
+    const res = await fetch(`http://${ip}:${LAN_PORT}/api/ping`, {
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return { ok: false, error: `Server responded with HTTP ${res.status}` };
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
     const json = await res.json();
-    if (json?.ok || json?.status === "ok") return { ok: true };
-    return { ok: false, error: "Unexpected server response" };
+    return json?.ok ? { ok: true } : { ok: false, error: 'Unexpected response' };
   } catch (err: any) {
-    return { ok: false, error: err?.message || "Cannot reach server" };
+    return { ok: false, error: err?.message || 'Cannot reach server' };
   }
 }
 
 /**
- * Read a single key.
- * - LAN mode   → GET /api/shard/:key
- * - Local mode → localStorage
+ * LAN login — POST /api/auth/login with pre-hashed password.
+ * Returns { success, user, token?, mustChangePassword? } or { success: false, error }.
  */
+export async function lanLogin(
+  username: string,
+  passwordHash: string
+): Promise<{ success: boolean; user?: any; mustChangePassword?: boolean; error?: string }> {
+  if (!isLanClientMode()) return { success: false, error: 'Not in LAN client mode' };
+  try {
+    const res = await fetch(buildUrl('/api/auth/login'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, passwordHash }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const json = await res.json();
+    if (res.status === 401) return { success: false, error: 'Invalid username or password.' };
+    if (!res.ok) return { success: false, error: json?.error || `Server error ${res.status}` };
+    if (json.token) setToken(json.token);
+    return { success: true, user: json.user, mustChangePassword: json.mustChangePassword };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Cannot reach server' };
+  }
+}
+
+/**
+ * Re-authenticate from stored JWT on page reload.
+ * Returns the user if still valid, null if token is expired/invalid.
+ */
+export async function revalidateSession(): Promise<{ user: any; mustChangePassword?: boolean } | null> {
+  if (!isLanClientMode()) return null;
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(buildUrl('/api/auth/me'), {
+      headers: { 'Authorization': `Bearer ${token}` },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) { if (res.status === 401) _triggerForceLogout(); else clearToken(); return null; }
+    const json = await res.json();
+    return json.success ? { user: json.user, mustChangePassword: json.mustChangePassword } : null;
+  } catch {
+    return null; // server unreachable — don't clear token, let user retry
+  }
+}
+
 export async function getItem<T>(key: string): Promise<T | null> {
+  if (isElectron()) {
+    const vault = await ipcLoadAll();
+    return (vault[key] ?? null) as T | null;
+  }
   if (isLanClientMode()) {
     try {
-      const res = await fetch(buildUrl(`/api/shard/${encodeURIComponent(key)}`), {
-        signal: AbortSignal.timeout(8000),
-      });
+      const res = await apiFetch(`/api/shard/${encodeURIComponent(key)}`);
       if (res.status === 404) return null;
+      if (res.status === 401) { _triggerForceLogout(); return null; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       return (json?.data ?? null) as T | null;
@@ -120,99 +219,81 @@ export async function getItem<T>(key: string): Promise<T | null> {
   try {
     const val = localStorage.getItem(key);
     return val ? (JSON.parse(val) as T) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-/**
- * Write a single key.
- * - LAN mode   → POST /api/shard  { key, data }
- * - Local mode → localStorage
- */
 export async function setItem<T>(key: string, value: T): Promise<void> {
+  if (isElectron()) { await ipcSaveShard(key, value); return; }
   if (isLanClientMode()) {
     try {
-      await fetch(buildUrl("/api/shard"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      await apiFetch('/api/shard', {
+        method: 'POST',
         body: JSON.stringify({ key, data: value }),
-        signal: AbortSignal.timeout(8000),
       });
-    } catch (err) {
-      console.warn(`[networkClient] setItem("${key}") failed:`, err);
-    }
+    } catch (err) { console.warn(`[networkClient] setItem("${key}") failed:`, err); }
     return;
   }
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch { /* storage full */ }
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* full */ }
 }
 
-/**
- * Fetch the entire vault in one shot.
- * - LAN mode   → GET /api/data
- * - Local mode → null
- */
 export async function getVaultSnapshot(): Promise<Record<string, unknown> | null> {
-  if (!isLanClientMode()) return null;
-  try {
-    const res = await fetch(buildUrl("/api/data"), {
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    return (json?.data ?? null) as Record<string, unknown> | null;
-  } catch (err) {
-    console.warn("[networkClient] getVaultSnapshot() failed:", err);
-    return null;
-  }
-}
-
-/**
- * Subscribe to real-time data pushes from the server via SSE.
- * Returns an unsubscribe function.
- */
-export function onDataPush(
-  callback: (key: string, data: unknown) => void
-): () => void {
-  if (!isLanClientMode()) return () => {};
-
-  let es: EventSource | null = null;
-  let closed = false;
-
-  function connect() {
-    if (closed) return;
+  if (isElectron()) return await ipcLoadAll();
+  if (isLanClientMode()) {
     try {
-      es = new EventSource(buildUrl("/api/events"));
-      es.addEventListener("shard", (e: MessageEvent) => {
-        try {
-          const { key, data } = JSON.parse(e.data);
-          callback(key, data);
-        } catch { /* malformed */ }
-      });
-      es.addEventListener("connected", () => {
-        callback("__connected__", null);
-      });
-      es.onerror = () => {
-        es?.close();
-        if (!closed) setTimeout(connect, 5000);
-      };
-    } catch {
-      // SSE not supported — ignore
+      const res = await apiFetch('/api/data');
+      if (res.status === 401) { _triggerForceLogout(); return null; }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      return (json?.data ?? null) as Record<string, unknown> | null;
+    } catch (err) {
+      console.warn('[networkClient] getVaultSnapshot failed:', err);
+      return null;
     }
   }
+  return null;
+}
 
-  connect();
-  setTimeout(() => callback("__connected__", null), 300);
-
-  return () => {
-    closed = true;
-    es?.close();
-  };
+export function onDataPush(callback: (key: string, data: unknown) => void): () => void {
+  if (isElectron()) {
+    const renderer = ipc();
+    if (!renderer) return () => {};
+    const handler = (_: any, { key, data }: { key: string; data: unknown }) => callback(key, data);
+    renderer.on('lan:data-push', handler);
+    return () => renderer.removeListener('lan:data-push', handler);
+  }
+  if (isLanClientMode()) {
+    // BUG 6 FIX: include JWT token in WS URL so server can verify auth
+    const wsBase = buildUrl('').replace(/^http/, 'ws');
+    let ws: WebSocket | null = null;
+    let closed = false;
+    function connect() {
+      if (closed) return;
+      try {
+        // Re-read token each reconnect in case it was refreshed
+        const _tok = getToken();
+        const _url = _tok ? `${wsBase}?token=${encodeURIComponent(_tok)}` : wsBase;
+        ws = new WebSocket(_url);
+        ws.onmessage = (e) => {
+          try {
+            const { type, key, data } = JSON.parse(e.data);
+            if (type === 'shard' && key) callback(key, data);
+            if (type === 'reconnect') callback('__connected__', null);
+          } catch { /* malformed */ }
+        };
+        ws.onopen  = () => callback('__connected__', null);
+        ws.onerror = () => ws?.close();
+        ws.onclose = () => { if (!closed) setTimeout(connect, 5000); };
+      } catch { /* WS not supported */ }
+    }
+    connect();
+    return () => { closed = true; ws?.close(); };
+  }
+  return () => {};
 }
 
 export async function clearVault(): Promise<void> {
+  _vaultCache = null;
+  clearToken();
   try { localStorage.clear(); } catch { /* ignore */ }
 }
 

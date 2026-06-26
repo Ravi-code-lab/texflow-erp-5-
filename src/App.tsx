@@ -169,6 +169,11 @@ import {
   hydrateFromNative,
   getVaultSnapshot,
   onDataPush,
+  isLanClientMode,
+  lanLogin,
+  revalidateSession,
+  clearToken,
+  onForceLogout,
 } from "./utils/networkClient";
 import {
   Loader2,
@@ -997,9 +1002,55 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    refreshData();
+    // On page reload, try to restore session from stored JWT (LAN client mode only).
+    // FIX: await refreshData so isLoading stays true until auth is known — prevents
+    // login screen flash for valid LAN sessions on page reload.
+    const init = async () => {
+      if (isLanClientMode()) {
+        const session = await revalidateSession();
+        if (session) {
+          setIsAuthenticated(true);
+          setCurrentUser(session.user as TeamMember);
+          if (session.mustChangePassword) setMustChangePassword(true);
+        }
+      }
+      await refreshData();
+    };
+    init();
   }, []);
 
+
+  // ── Session timeout enforcement ─────────────────────────────────────────────
+  // Enforces securityConfig.sessionTimeout (minutes). Resets on user activity.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const timeoutMins = securityConfig.sessionTimeout || 0;
+    if (timeoutMins <= 0) return; // 0 = disabled
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        clearToken();
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      }, timeoutMins * 60 * 1000);
+    };
+    const events = ["mousemove", "keydown", "pointerdown", "scroll", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset(); // start timer
+    return () => {
+      clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [isAuthenticated, securityConfig.sessionTimeout]);
+  // ── Force logout on 401 (JWT expired mid-session) ────────────────────────────
+  useEffect(() => {
+    const unsub = onForceLogout(() => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+    });
+    return unsub;
+  }, []);
 
   // ── Order Delay Reminder Scheduler ─────────────────────────────────────────
   // Uses refs so the scheduler reads latest state without restarting.
@@ -1559,6 +1610,8 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    // FIX: clear JWT so LAN clients don't auto-login on next page reload
+    clearToken();
     setIsAuthenticated(false);
     setCurrentUser(null);
   };
@@ -1987,34 +2040,43 @@ const App: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    // FIX #1: Credentials are validated against the team list stored in the vault.
-    // The seed admin account uses a stored password hash (SHA-256 of the password).
-    // The actual comparison happens here so the password never leaves as a plaintext literal.
+    // LOGIN: LAN clients authenticate server-side via JWT.
+    // Electron/local mode validates locally against vault data.
     const handleLogin = async (
       username: string,
       password: string,
     ): Promise<boolean> => {
       const hashHex = await hashPassword(password);
 
-      let currentTeam = team;
-      try {
-        const { getVaultSnapshot, getItem } =
-          await import("./utils/networkClient");
-        const snapshot = await getVaultSnapshot();
-        if (snapshot && snapshot.team) {
-          currentTeam = snapshot.team;
-        } else {
-          // Verify via indexedDB fallback in server/local mode just in case team is stale
-          const localTeam = await getItem("team");
-          if (localTeam) currentTeam = localTeam as TeamMember[];
+      // ── LAN client mode: server validates, returns JWT ──────────────────────
+      if (isLanClientMode()) {
+        const result = await lanLogin(username, hashHex);
+        if (result.success && result.user) {
+          setIsAuthenticated(true);
+          setCurrentUser(result.user as TeamMember);
+          if (result.mustChangePassword) setMustChangePassword(true);
+          refreshData();
+          return true;
         }
-      } catch (err) {
-        console.warn("Failed to update team list before login validation", err);
+        // Surface the server's error message (e.g. "Invalid username or password.")
+        if (result.error) throw new Error(result.error);
+        return false;
       }
 
-      // Check against team members who have a stored passwordHash
-      // FIX: match by id OR name so that 'admin' matches the admin member (id='admin', name='Administrator')
-      // FIX: also ensure member is ACTIVE and not soft-deleted
+      // ── Electron / local mode: validate against vault ───────────────────────
+      let currentTeam = team;
+      try {
+        const snapshot = await getVaultSnapshot();
+        if (snapshot && snapshot.team) {
+          currentTeam = snapshot.team as TeamMember[];
+        } else {
+          const localTeam = await getItem<TeamMember[]>("team");
+          if (localTeam) currentTeam = localTeam;
+        }
+      } catch (err) {
+        console.warn("Failed to load team before login", err);
+      }
+
       const member = currentTeam.find(
         (t) =>
           (t.username?.toLowerCase() === username.toLowerCase() ||
@@ -2031,10 +2093,9 @@ const App: React.FC = () => {
         return true;
       }
 
-      // Seed admin: only works when NO team members exist yet (first boot).
-      // Uses a well-known default — user is forced to change it immediately after.
+      // Seed admin — first boot only
       const SEED_HASH =
-        "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"; // admin123
+        "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
       const activeTeam = currentTeam.filter((t) => !t.deleted);
       if (
         username === "admin" &&
@@ -2060,7 +2121,7 @@ const App: React.FC = () => {
       <Login
         onLogin={handleLogin}
         companyInfo={companyInfo}
-        teamCount={team.length}
+        teamCount={team.filter((t) => !t.deleted).length}
       />
     );
   }
@@ -2946,6 +3007,7 @@ const App: React.FC = () => {
                 {currentView === "TEAM" && effectiveFeatures["TEAM"] !== false && (
                   <Employees
                     team={active(team)}
+                    currentUserId={currentUser?.id}
                     onAdd={teamMgr.add}
                     onUpdate={teamMgr.update}
                     onDelete={teamMgr.remove}
@@ -3036,6 +3098,8 @@ const App: React.FC = () => {
                     onAddSlip={packingSlipMgr.add}
                     onUpdateSlip={packingSlipMgr.update}
                     companyInfo={companyInfo}
+                    inventory={active(inventory)}
+                    onUpdateInventory={handleInventoryUpdate}
                   />
                 )}
 
@@ -3823,8 +3887,8 @@ const App: React.FC = () => {
               passwordHash: hashHex,
             } as TeamMember;
             await setItem("admin_seed_changed", true);
-            // FIX: persist the admin member with new password hash so it survives app restarts
-            await teamMgr.add(adminMember);
+            // FIX: use upsert (not add) so double-submit doesn't create two 'admin' entries
+            await teamMgr.upsert(adminMember);
             setCurrentUser(adminMember);
             setMustChangePassword(false);
           }}

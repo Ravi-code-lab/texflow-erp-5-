@@ -32126,7 +32126,7 @@ var require_websocket = __commonJS({
     var tls = require("tls");
     var { randomBytes, createHash } = require("crypto");
     var { Duplex, Readable } = require("stream");
-    var { URL } = require("url");
+    var { URL: URL2 } = require("url");
     var PerMessageDeflate = require_permessage_deflate();
     var Receiver = require_receiver();
     var Sender = require_sender();
@@ -32627,11 +32627,11 @@ var require_websocket = __commonJS({
         );
       }
       let parsedUrl;
-      if (address instanceof URL) {
+      if (address instanceof URL2) {
         parsedUrl = address;
       } else {
         try {
-          parsedUrl = new URL(address);
+          parsedUrl = new URL2(address);
         } catch {
           throw new SyntaxError(`Invalid URL: ${address}`);
         }
@@ -32768,7 +32768,7 @@ var require_websocket = __commonJS({
           req.abort();
           let addr;
           try {
-            addr = new URL(location, address);
+            addr = new URL2(location, address);
           } catch (e) {
             const err = new SyntaxError(`Invalid URL: ${location}`);
             emitErrorAndClose(websocket, err);
@@ -33704,19 +33704,104 @@ async function startLanServer(win) {
     if (req.method === "OPTIONS") return res.sendStatus(200);
     next();
   });
+  const crypto = require("crypto");
+  const JWT_SECRET = crypto.createHash("sha256").update(VAULT_FILE + "texflow-jwt-v1").digest("hex");
+  const JWT_EXPIRY_SECONDS = 60 * 60 * 12;
+  function base64url(buf) {
+    return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function signToken(payload) {
+    const header = base64url(Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+    const body = base64url(Buffer.from(JSON.stringify(payload)));
+    const sig = base64url(
+      crypto.createHmac("sha256", JWT_SECRET).update(`${header}.${body}`).digest()
+    );
+    return `${header}.${body}.${sig}`;
+  }
+  function verifyToken(token) {
+    try {
+      const [header, body, sig] = token.split(".");
+      const expected = base64url(
+        crypto.createHmac("sha256", JWT_SECRET).update(`${header}.${body}`).digest()
+      );
+      if (sig !== expected) return null;
+      const payload = JSON.parse(Buffer.from(body, "base64").toString());
+      if (payload.exp && Date.now() / 1e3 > payload.exp) return null;
+      return payload;
+    } catch {
+      return null;
+    }
+  }
+  function requireAuth(req, res, next) {
+    const auth = req.headers["authorization"] || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    const payload = verifyToken(token);
+    if (!payload) return res.status(401).json({ error: "Unauthorized" });
+    req.user = payload;
+    next();
+  }
   expressApp.get("/api/ping", (req, res) => {
     res.json({ ok: true, ts: Date.now(), version: app.getVersion() });
   });
-  expressApp.get("/api/data", (req, res) => {
+  expressApp.post("/api/auth/login", (req, res) => {
+    const { username, passwordHash } = req.body;
+    if (!username || !passwordHash)
+      return res.status(400).json({ error: "username and passwordHash required" });
+    const vault = readVault();
+    const team = Array.isArray(vault.team) ? vault.team : [];
+    const member = team.find(
+      (t) => (t.username?.toLowerCase() === username.toLowerCase() || t.name?.toLowerCase() === username.toLowerCase() || t.id?.toLowerCase() === username.toLowerCase()) && t.passwordHash === passwordHash && t.status === "ACTIVE" && !t.deleted
+    );
+    if (member) {
+      const token = signToken({
+        sub: member.id,
+        name: member.name,
+        role: member.role,
+        iat: Math.floor(Date.now() / 1e3),
+        exp: Math.floor(Date.now() / 1e3) + JWT_EXPIRY_SECONDS
+      });
+      return res.json({ success: true, token, user: member });
+    }
+    const SEED_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
+    const activeTeam = team.filter((t) => !t.deleted);
+    if (username === "admin" && passwordHash === SEED_HASH && activeTeam.length === 0) {
+      const adminUser = { id: "admin", name: "Administrator", role: "ADMIN", status: "ACTIVE" };
+      const token = signToken({
+        sub: "admin",
+        name: "Administrator",
+        role: "ADMIN",
+        seedAdmin: true,
+        iat: Math.floor(Date.now() / 1e3),
+        exp: Math.floor(Date.now() / 1e3) + JWT_EXPIRY_SECONDS
+      });
+      return res.json({ success: true, token, user: adminUser, mustChangePassword: true });
+    }
+    return res.status(401).json({ error: "Invalid credentials" });
+  });
+  expressApp.get("/api/auth/me", (req, res) => {
+    const auth = req.headers["authorization"] || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    const payload = verifyToken(token);
+    if (!payload) return res.status(401).json({ error: "Token expired or invalid" });
+    const vault = readVault();
+    const team = Array.isArray(vault.team) ? vault.team : [];
+    const member = team.find((t) => t.id === payload.sub && t.status === "ACTIVE" && !t.deleted);
+    if (member) return res.json({ success: true, user: member });
+    if (payload.seedAdmin) return res.json({ success: true, user: { id: "admin", name: "Administrator", role: "ADMIN", status: "ACTIVE" }, mustChangePassword: true });
+    return res.status(401).json({ error: "User not found or inactive" });
+  });
+  expressApp.get("/api/data", requireAuth, (req, res) => {
     res.json({ success: true, data: readVault() });
   });
-  expressApp.get("/api/shard/:key", (req, res) => {
+  expressApp.get("/api/shard/:key", requireAuth, (req, res) => {
     const vault = readVault();
     const key = req.params.key;
     if (!(key in vault)) return res.status(404).json({ error: "key not found" });
     res.json({ success: true, key, data: vault[key] });
   });
-  expressApp.post("/api/shard", async (req, res) => {
+  expressApp.post("/api/shard", requireAuth, async (req, res) => {
     const { key, data } = req.body;
     if (!key) return res.status(400).json({ error: "key required" });
     await writeVault({ [key]: data });
@@ -33724,7 +33809,7 @@ async function startLanServer(win) {
     if (win && !win.isDestroyed()) win.webContents.send("lan:data-push", { key, data });
     res.json({ success: true });
   });
-  expressApp.post("/api/shard/batch", async (req, res) => {
+  expressApp.post("/api/shard/batch", requireAuth, async (req, res) => {
     const { shards } = req.body;
     if (!Array.isArray(shards) || shards.length === 0)
       return res.status(400).json({ error: "shards array required" });
@@ -33759,6 +33844,22 @@ async function startLanServer(win) {
   wss = new WebSocketServer({ server: httpServer });
   wss.on("connection", (ws, req) => {
     const ip = req.socket.remoteAddress;
+    let tokenOk = false;
+    try {
+      const urlObj = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+      const tok = urlObj.searchParams.get("token");
+      if (tok && verifyToken(tok)) tokenOk = true;
+    } catch {
+    }
+    if (!tokenOk) {
+      console.log(`[LAN] WS rejected (no/invalid token): ${ip}`);
+      try {
+        ws.send(JSON.stringify({ type: "auth_error", message: "Unauthorized" }));
+      } catch {
+      }
+      ws.terminate();
+      return;
+    }
     console.log(`[LAN] Client connected: ${ip}`);
     try {
       ws.send(JSON.stringify({ type: "reconnect" }));
@@ -33929,6 +34030,18 @@ ipcMain.handle("storage:restore-zip", async () => {
 ipcMain.handle("storage:verify", async () => {
   const ok = fs.existsSync(VAULT_FILE);
   return { success: ok, shardCount: ok ? Object.keys(readVault()).length : 0 };
+});
+ipcMain.handle("storage:reset", async () => {
+  try {
+    vaultCache = {};
+    if (fs.existsSync(VAULT_FILE)) {
+      fs.writeFileSync(VAULT_FILE, JSON.stringify({}), "utf8");
+    }
+    appendLog("Factory reset: vault wiped");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 });
 ipcMain.handle("tally:sync", async (_, { host, port, xml }) => {
   return new Promise((resolve) => {

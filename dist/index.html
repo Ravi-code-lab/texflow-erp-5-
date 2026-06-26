@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TexFlow ERP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+              mono: ['"JetBrains Mono"', 'Menlo', 'monospace'],
+            },
+            colors: {
+              macos: {
+                bg: '#f5f5f7',
+                darkBg: '#0f0f11',
+                sidebar: 'rgba(255,255,255,0.82)',
+                darkSidebar: 'rgba(15,15,17,0.9)',
+                border: 'rgba(0,0,0,0.08)',
+                darkBorder: 'rgba(255,255,255,0.06)',
+                accent: '#6366f1',
+              },
+            },
+            boxShadow: {
+              'card': '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+              'card-hover': '0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04)',
+              'overlay': '0 20px 60px rgba(0,0,0,0.15)',
+            },
+          }
+        }
+      }
+    </script>
+    <style>
+      /* ============================================================
+         TexFlow ERP — Global Styles  (ERPNext-inspired, refined)
+      ============================================================ */
+
+      *, *::before, *::after { box-sizing: border-box; }
+
+      :root {
+        --color-accent: #6366f1;
+        --color-accent-dark: #4f46e5;
+        --color-bg: #f4f4f6;
+        --color-surface: #ffffff;
+        --color-border: rgba(0,0,0,0.07);
+        --color-text: #0f0f11;
+        --color-muted: #64748b;
+        --color-sidebar: rgba(255,255,255,0.85);
+        --radius-card: 14px;
+        --radius-btn: 10px;
+        --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+        --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+        --font-mono: 'JetBrains Mono', Menlo, monospace;
+      }
+
+      .dark {
+        --color-bg: #0f0f11;
+        --color-surface: #17171a;
+        --color-border: rgba(255,255,255,0.06);
+        --color-text: #f1f5f9;
+        --color-muted: #64748b;
+        --color-sidebar: rgba(15,15,17,0.9);
+      }
+
+      html { font-size: 16px; }
+
+      body {
+        font-family: var(--font-sans);
+        background-color: var(--color-bg);
+        color: var(--color-text);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        overflow: hidden;
+      }
+
+      /* Scrollbars */
+      ::-webkit-scrollbar { width: 5px; height: 5px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(0,0,0,0.12);
+        border-radius: 99px;
+      }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+      .dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+      .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .scrollbar-none::-webkit-scrollbar { display: none; }
+      .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* ERPNext-style module card hover */
+      .module-card {
+        transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+      }
+      .module-card:hover {
+        box-shadow: 0 4px 16px rgba(99,102,241,0.12), 0 1px 4px rgba(0,0,0,0.06);
+        border-color: rgba(99,102,241,0.25);
+        transform: translateY(-1px);
+      }
+
+      /* ERPNext-style workspace tab underline */
+      .workspace-tab-active {
+        border-bottom: 2px solid #6366f1;
+        color: #4f46e5;
+      }
+
+      /* Smooth page transition */
+      .page-enter { opacity: 0; transform: translateY(8px); }
+      .page-enter-active { opacity: 1; transform: translateY(0); transition: opacity 0.15s, transform 0.15s; }
+      .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+
+      /* Glass effect */
+      .glass {
+        background: rgba(255,255,255,0.8);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+      }
+      .dark .glass {
+        background: rgba(15,15,17,0.8);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+      }
+
+      /* Card component */
+      .card {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+      }
+      .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04); }
+
+      /* Primary button */
+      .btn-primary {
+        background: var(--color-accent);
+        color: white;
+        font-weight: 600;
+        padding: 7px 16px;
+        border-radius: var(--radius-btn);
+        transition: all 0.15s ease;
+        box-shadow: 0 1px 2px rgba(99,102,241,0.25);
+        font-size: 13px;
+      }
+      .btn-primary:hover { background: var(--color-accent-dark); box-shadow: 0 3px 8px rgba(99,102,241,0.35); }
+      .btn-primary:active { transform: scale(0.98); }
+
+      /* Input */
+      .input-base {
+        background: rgba(0,0,0,0.03);
+        border: 1px solid var(--color-border);
+        border-radius: 9px;
+        padding: 7px 12px;
+        font-size: 13px;
+        font-family: var(--font-sans);
+        outline: none;
+        transition: all 0.15s ease;
+        color: var(--color-text);
+        width: 100%;
+      }
+      .dark .input-base { background: rgba(255,255,255,0.04); }
+      .input-base:focus {
+        border-color: var(--color-accent);
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+        background: var(--color-surface);
+      }
+
+      /* Status badges */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+      .badge-success { background: #dcfce7; color: #15803d; }
+      .badge-warning { background: #fef9c3; color: #92400e; }
+      .badge-danger  { background: #fee2e2; color: #b91c1c; }
+      .badge-info    { background: #ede9fe; color: #6d28d9; }
+      .badge-neutral { background: #f1f5f9; color: #475569; }
+      .dark .badge-success { background: rgba(34,197,94,0.15); color: #86efac; }
+      .dark .badge-warning { background: rgba(234,179,8,0.15);  color: #fde68a; }
+      .dark .badge-danger  { background: rgba(239,68,68,0.15);  color: #fca5a5; }
+      .dark .badge-info    { background: rgba(139,92,246,0.15); color: #c4b5fd; }
+      .dark .badge-neutral { background: rgba(255,255,255,0.07); color: #94a3b8; }
+
+      /* DocType status colors (ERPNext-inspired) */
+      .docstatus-0 { color: #f59e0b; } /* Draft */
+      .docstatus-1 { color: #22c55e; } /* Submitted */
+      .docstatus-2 { color: #ef4444; } /* Cancelled */
+
+      /* Monospace values */
+      .font-tabular { font-family: var(--font-mono); }
+
+      /* ERPNext-style list item */
+      .list-row {
+        display: flex;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--color-border);
+        transition: background 0.1s ease;
+        cursor: pointer;
+      }
+      .list-row:last-child { border-bottom: none; }
+      .list-row:hover { background: rgba(99,102,241,0.03); }
+
+      /* Form section */
+      .form-section {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+      }
+      .form-section-title {
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-muted);
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--color-border);
+      }
+
+      /* Naming series label */
+      .naming-series {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--color-accent);
+        background: rgba(99,102,241,0.08);
+        padding: 2px 8px;
+        border-radius: 6px;
+      }
+
+      /* Print styles */
+      @media print {
+        .no-print, nav, aside, header, button, .shrink-0 { display: none !important; }
+        main, #main-content, .flex-1 { padding: 0 !important; margin: 0 !important; width: 100% !important; overflow: visible !important; }
+        .custom-scrollbar { overflow: visible !important; }
+        body { background: white !important; overflow: auto !important; }
+      }
+
+      /* Micro-animations */
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes slideUp { from { transform: translateY(6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      @keyframes shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+
+      .animate-fade-in { animation: fadeIn 0.2s ease forwards; }
+      .animate-slide-up { animation: slideUp 0.25s ease forwards; }
+
+      .skeleton {
+        background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 6px;
+      }
+      .dark .skeleton {
+        background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.03) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+      }
+    </style>
+
+    <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "recharts": "https://esm.sh/recharts@^3.5.1",
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "vite": "https://esm.sh/vite@^7.2.7",
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@^5.0.2",
+    "xlsx": "https://esm.sh/xlsx@^0.18.5",
+    "jspdf": "https://esm.sh/jspdf@^3.0.4",
+    "path": "https://esm.sh/path@^0.12.7",
+    "motion/react": "https://esm.sh/motion/react@^12.0.0"
+  }
+}
+</script>
+    <script type="module" crossorigin src="./assets/index-BT5XtiWE.js"></script>
+  </head>
+  <body class="text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden selection:bg-indigo-500/20">
+    <div id="root"></div>
+  </body>
+</html>

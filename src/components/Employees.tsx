@@ -52,6 +52,7 @@ interface EmployeesProps {
   onAdd: (m: TeamMember) => void;
   onUpdate: (m: TeamMember) => void;
   onDelete: (id: string) => void;
+  currentUserId?: string; // BUG 8 FIX: prevent self-delete and last-admin delete
   currency?: string;
   // newly added for tabs inside employee form
   records?: AttendanceRecord[];
@@ -73,7 +74,7 @@ interface EmployeesProps {
 }
 
 const Employees: React.FC<EmployeesProps> = (props) => {
-  const { team = [], onAdd, onUpdate, onDelete, currency = "₹" } = props;
+  const { team = [], onAdd, onUpdate, onDelete, currency = "₹", currentUserId } = props;
   const [viewMode, setViewMode] = useState<"LIST" | "FORM">("LIST");
   const [activeTab, setActiveTab] = useState<
     "DETAILS" | "ATTENDANCE" | "PAYROLL"
@@ -106,6 +107,14 @@ const Employees: React.FC<EmployeesProps> = (props) => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
+
+    // FIX: new employees must have a password so they can actually log in.
+    // Without a password, passwordHash stays undefined and login always fails.
+    const isNewMember = !formData.id;
+    if (isNewMember && !formData.password) {
+      alert("Please set a login password for the new employee.");
+      return;
+    }
 
     let passHash = (formData as any).passwordHash;
     if (formData.password) {
@@ -298,7 +307,15 @@ const Employees: React.FC<EmployeesProps> = (props) => {
               label: "Delete",
               icon: Trash2,
               danger: true,
-              onClick: (ids) => ids.forEach((id) => onDelete(id)),
+              onClick: (ids) => {
+                // BUG 8 FIX: block self-delete and last-admin deletion
+                const adminIds = team.filter(t => t.role === 'ADMIN' && !t.deleted).map(t => t.id);
+                ids.forEach((id) => {
+                  if (id === currentUserId) { return; } // cannot delete self
+                  if (adminIds.length <= 1 && adminIds.includes(id)) { return; } // last admin guard
+                  onDelete(id);
+                });
+              },
             },
           ];
           return (
@@ -336,7 +353,10 @@ const Employees: React.FC<EmployeesProps> = (props) => {
                 {formData.id && getStatusBadge(formData.status || "ACTIVE")}
               </div>
               <div className="flex items-center gap-2">
-                {formData.id && onDelete && (
+                {/* BUG 8 FIX: hide delete for self and last admin */}
+                {formData.id && onDelete &&
+                  formData.id !== currentUserId &&
+                  !(team.filter(t => t.role === 'ADMIN' && !t.deleted).length <= 1 && formData.role === 'ADMIN') && (
                   <button
                     type="button"
                     onClick={(e) => {
@@ -514,7 +534,7 @@ const Employees: React.FC<EmployeesProps> = (props) => {
                         </div>
                         <div className="space-y-1.5 flex flex-col">
                           <label className="text-xs text-[#525c66]">
-                            Password (Login)
+                            Password (Login){!formData.id && <span className="text-red-500 ml-1">*</span>}
                           </label>
                           <input
                             type="password"

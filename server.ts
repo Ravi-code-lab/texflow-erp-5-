@@ -5,6 +5,7 @@ import nodemailer from "nodemailer";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import crypto from "crypto";
+import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 
 // ── Simple in-memory rate limiter ────────────────────────────────────────────
@@ -14,26 +15,64 @@ function rateLimit(ip: string, maxPerMinute = 20): boolean {
   const entry = rateLimitMap.get(ip);
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
-    return true; // allowed
+    return true;
   }
-  if (entry.count >= maxPerMinute) return false; // blocked
+  if (entry.count >= maxPerMinute) return false;
   entry.count++;
   return true;
 }
 
-// ── API key auth middleware ───────────────────────────────────────────────────
-// On first startup an API key is generated and printed to the server console.
-// The Electron main process / LAN clients must send it as:
-//   Authorization: Bearer <API_KEY>
-// The key can also be set via env var TEXFLOW_API_KEY for reproducible deploys.
-const API_KEY: string =
-  process.env.TEXFLOW_API_KEY || crypto.randomBytes(24).toString("hex");
+// ── Vault (JSON file used in web/dev server mode) ────────────────────────────
+const DATA_DIR  = path.join(process.cwd(), ".texflow_data");
+const VAULT_FILE = path.join(DATA_DIR, "texflow_vault.json");
 
-if (!process.env.TEXFLOW_API_KEY) {
-  console.log("\n========================================");
-  console.log("  TexFlow Server API Key (save this!):");
-  console.log(`  ${API_KEY}`);
-  console.log("========================================\n");
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+function readVault(): Record<string, unknown> {
+  try {
+    if (fs.existsSync(VAULT_FILE))
+      return JSON.parse(fs.readFileSync(VAULT_FILE, "utf8"));
+  } catch { /* corrupt — start fresh */ }
+  return {};
+}
+
+function writeVault(vault: Record<string, unknown>): void {
+  fs.writeFileSync(VAULT_FILE, JSON.stringify(vault), "utf8");
+}
+
+// ── JWT (same algorithm as electron/main.cjs) ─────────────────────────────────
+const JWT_SECRET = crypto
+  .createHash("sha256")
+  .update(VAULT_FILE + "texflow-jwt-v1")
+  .digest("hex");
+const JWT_EXPIRY_SECONDS = 60 * 60 * 12; // 12 hours
+
+function base64url(s: string) {
+  return Buffer.from(s).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+function signToken(payload: Record<string, unknown>): string {
+  const header  = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body    = base64url(JSON.stringify(payload));
+  const sig     = crypto
+    .createHmac("sha256", JWT_SECRET)
+    .update(`${header}.${body}`)
+    .digest("base64")
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  return `${header}.${body}.${sig}`;
+}
+function verifyToken(token: string): Record<string, unknown> | null {
+  try {
+    const [header, body, sig] = token.split(".");
+    const expected = crypto
+      .createHmac("sha256", JWT_SECRET)
+      .update(`${header}.${body}`)
+      .digest("base64")
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+    if (sig !== expected) return null;
+    const payload = JSON.parse(Buffer.from(body, "base64").toString());
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch { return null; }
 }
 
 function requireAuth(
@@ -42,26 +81,107 @@ function requireAuth(
   next: express.NextFunction
 ) {
   const header = req.headers["authorization"] || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  // Constant-time comparison to avoid timing attacks
-  if (
-    token.length !== API_KEY.length ||
-    !crypto.timingSafeEqual(Buffer.from(token), Buffer.from(API_KEY))
-  ) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+  const token  = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: "Unauthorized" });
+  (req as any).jwtPayload = payload;
   next();
 }
 
 async function startServer() {
-  const app = express();
+  const app  = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
 
-  // Health check — no auth required (used by LAN clients to detect server)
-  app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok" });
+  // ── Public health/ping endpoints ─────────────────────────────────────────────
+  app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+  app.get("/api/ping",   (_req, res) => res.json({ ok: true }));
+
+  // ── Auth: login ──────────────────────────────────────────────────────────────
+  app.post("/api/auth/login", (req, res) => {
+    const { username, passwordHash } = req.body;
+    if (!username || !passwordHash)
+      return res.status(400).json({ error: "username and passwordHash required" });
+
+    const vault = readVault();
+    const team  = Array.isArray(vault.team) ? (vault.team as any[]) : [];
+
+    const member = team.find((t: any) =>
+      (t.username?.toLowerCase() === username.toLowerCase() ||
+       t.name?.toLowerCase()     === username.toLowerCase() ||
+       t.id?.toLowerCase()       === username.toLowerCase()) &&
+      t.passwordHash === passwordHash &&
+      t.status === "ACTIVE" &&
+      !t.deleted
+    );
+    if (member) {
+      const token = signToken({
+        sub: member.id, name: member.name, role: member.role,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + JWT_EXPIRY_SECONDS,
+      });
+      return res.json({ success: true, token, user: member });
+    }
+
+    // Seed admin — first boot only
+    const SEED_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
+    const activeTeam = team.filter((t: any) => !t.deleted);
+    if (username === "admin" && passwordHash === SEED_HASH && activeTeam.length === 0) {
+      const adminUser = { id: "admin", name: "Administrator", role: "ADMIN", status: "ACTIVE" };
+      const token = signToken({
+        sub: "admin", name: "Administrator", role: "ADMIN", seedAdmin: true,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + JWT_EXPIRY_SECONDS,
+      });
+      return res.json({ success: true, token, user: adminUser, mustChangePassword: true });
+    }
+
+    return res.status(401).json({ error: "Invalid credentials" });
+  });
+
+  // ── Auth: me (session revalidation) ─────────────────────────────────────────
+  app.get("/api/auth/me", (req, res) => {
+    const header = req.headers["authorization"] || "";
+    const token  = header.startsWith("Bearer ") ? header.slice(7) : null;
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    const payload = verifyToken(token);
+    if (!payload) return res.status(401).json({ error: "Unauthorized" });
+
+    const vault  = readVault();
+    const team   = Array.isArray(vault.team) ? (vault.team as any[]) : [];
+    const member = team.find((t: any) => t.id === payload.sub && t.status === "ACTIVE" && !t.deleted);
+
+    if (!member && !payload.seedAdmin)
+      return res.status(401).json({ error: "User not found or inactive" });
+
+    const user = member || { id: "admin", name: "Administrator", role: "ADMIN", status: "ACTIVE" };
+    const mustChangePassword = Boolean(payload.seedAdmin) && !vault.admin_seed_changed;
+    return res.json({ success: true, user, mustChangePassword });
+  });
+
+  // ── Data: full vault ─────────────────────────────────────────────────────────
+  app.get("/api/data", requireAuth, (_req, res) => {
+    res.json({ success: true, data: readVault() });
+  });
+
+  // ── Data: single shard read ──────────────────────────────────────────────────
+  app.get("/api/shard/:key", requireAuth, (req, res) => {
+    const vault = readVault();
+    const key   = req.params.key;
+    if (!(key in vault)) return res.status(404).json({ error: "key not found" });
+    res.json({ success: true, key, data: vault[key] });
+  });
+
+  // ── Data: shard write ────────────────────────────────────────────────────────
+  app.post("/api/shard", requireAuth, (req, res) => {
+    const { key, data } = req.body;
+    if (!key) return res.status(400).json({ error: "key required" });
+    const vault = readVault();
+    vault[key]  = data;
+    writeVault(vault);
+    res.json({ success: true });
   });
 
   // ── Email send ──────────────────────────────────────────────────────────────
